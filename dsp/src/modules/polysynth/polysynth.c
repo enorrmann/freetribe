@@ -44,7 +44,7 @@ under the terms of the GNU Affero General Public License as published by
 
 #include "aleph.h"
 
-#include "aleph_monovoice_single_osc.h"
+#include "custom_aleph_monovoice.h"
 
 void module_set_param_voice(uint16_t voice_index,uint16_t param_index, int32_t value);
 
@@ -61,7 +61,7 @@ void module_set_param_voice(uint16_t voice_index,uint16_t param_index, int32_t v
 
 // #define DEFAULT_CUTOFF 0x7f // Index in pitch LUT.
 #define DEFAULT_OSC_TYPE 2
-#define MAX_VOICES 6
+#define MAX_VOICES 12
 #define PARAM_VOICE_OFFSET(voice, param, paramCount) (param + (voice * paramCount))
 #define REMOVE_PARAM_OFFSET(param_index_with_offset,paramCount) ((param_index_with_offset) % paramCount)
 #define PARAM_VOICE_NUMBER(param_index_with_offset,paramCount) ((param_index_with_offset) / paramCount)
@@ -120,7 +120,7 @@ typedef enum {
 
 typedef struct {
 
-    Aleph_MonoVoice_single_osc voice[6];
+    Custom_Aleph_MonoVoice voice[MAX_VOICES];
     fract32 amp_level;
     fract32 velocity;
 
@@ -149,7 +149,7 @@ void module_init(void) {
 
     int i;
     for (i = 0; i < MAX_VOICES; i++) {
-        Aleph_MonoVoice_single_osc_init(&g_module.voice[i], &g_aleph);
+        Custom_Aleph_MonoVoice_init(&g_module.voice[i], &g_aleph);
     
         module_set_param_voice(i,PARAM_AMP_LEVEL, FR32_MAX);
         module_set_param_voice(i,PARAM_OSC_TYPE, 2);
@@ -174,12 +174,12 @@ void module_process(fract32 *in, fract32 *out) {
     fract32 output;
     fract32 amp_level_scaled = g_module.amp_level/MAX_VOICES;
 
-    output = mult_fr1x32x32(Aleph_MonoVoice_single_osc_next(&g_module.voice[0]), amp_level_scaled);
-    output += mult_fr1x32x32(Aleph_MonoVoice_single_osc_next(&g_module.voice[1]), amp_level_scaled);    
-    output += mult_fr1x32x32(Aleph_MonoVoice_single_osc_next(&g_module.voice[2]), amp_level_scaled);    
-    output += mult_fr1x32x32(Aleph_MonoVoice_single_osc_next(&g_module.voice[3]), amp_level_scaled);
-    output += mult_fr1x32x32(Aleph_MonoVoice_single_osc_next(&g_module.voice[4]), amp_level_scaled);
-    output += mult_fr1x32x32(Aleph_MonoVoice_single_osc_next(&g_module.voice[5]), amp_level_scaled);
+    output = mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[0]), amp_level_scaled);
+    output += mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[1]), amp_level_scaled);    
+    output += mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[2]), amp_level_scaled);    
+    output += mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[3]), amp_level_scaled);
+    output += mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[4]), amp_level_scaled);
+    output += mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[5]), amp_level_scaled);
 
 
     // Scale amplitude by level.
@@ -211,19 +211,19 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
     switch (param_index) {
 
     case PARAM_AMP:
-        Aleph_MonoVoice_single_osc_set_amp(&g_module.voice[voice_number], value);
+        Custom_Aleph_MonoVoice_set_amp(&g_module.voice[voice_number], value);
         break;
 
     case PARAM_FREQ:
-        Aleph_MonoVoice_single_osc_set_freq(&g_module.voice[voice_number], value);
+        Custom_Aleph_MonoVoice_set_freq(&g_module.voice[voice_number], value);
         break;
 
     case PARAM_OSC_PHASE:
-        Aleph_MonoVoice_single_osc_set_phase(&g_module.voice[voice_number], value);
+        Custom_Aleph_MonoVoice_set_phase(&g_module.voice[voice_number], value);
         break;
 
     case PARAM_TUNE:
-        Aleph_MonoVoice_single_osc_set_freq_offset(&g_module.voice[voice_number], value);
+        Custom_Aleph_MonoVoice_set_freq_offset(&g_module.voice[voice_number], value);
         break;
 
     case PARAM_AMP_LEVEL:
@@ -231,19 +231,19 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
         break;
 
     case PARAM_CUTOFF:
-        Aleph_MonoVoice_single_osc_set_cutoff(&g_module.voice[voice_number], value);
+        Custom_Aleph_MonoVoice_set_cutoff(&g_module.voice[voice_number], value);
         break;
 
     case PARAM_RES:
-        Aleph_MonoVoice_single_osc_set_res(&g_module.voice[voice_number], value);
+        Custom_Aleph_MonoVoice_set_res(&g_module.voice[voice_number], value);
         break;
 
     case PARAM_OSC_TYPE:
-        Aleph_MonoVoice_single_osc_set_shape(&g_module.voice[voice_number], value);
+        Custom_Aleph_MonoVoice_set_shape(&g_module.voice[voice_number], value);
         break;
 
     case PARAM_FILTER_TYPE:
-        Aleph_MonoVoice_single_osc_set_filter_type(&g_module.voice[voice_number], value);
+        Custom_Aleph_MonoVoice_set_filter_type(&g_module.voice[voice_number], value);
         break;
 
     default:

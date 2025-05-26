@@ -17,7 +17,7 @@
 ----------------------------------------------------------------------*/
 
 /**
- * @file    Aleph_MonoVoice_single_osc.c
+ * @file    Custom_Aleph_MonoVoice.c
  *
  * @brief   Monophonic synth voice module.
  */
@@ -33,7 +33,7 @@
 #include "aleph_oscillator.h"
 #include "aleph_waveform.h"
 
-#include "aleph_monovoice_single_osc.h"
+#include "custom_aleph_monovoice.h"
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -47,46 +47,46 @@
 
 /*----- Extern function implementations ------------------------------*/
 
-void Aleph_MonoVoice_single_osc_init(Aleph_MonoVoice_single_osc *const synth, t_Aleph *const aleph) {
+void Custom_Aleph_MonoVoice_init(Custom_Aleph_MonoVoice *const synth, t_Aleph *const aleph) {
 
-    Aleph_MonoVoice_single_osc_init_to_pool(synth, &aleph->mempool);
+    Custom_Aleph_MonoVoice_init_to_pool(synth, &aleph->mempool);
 }
 
-void Aleph_MonoVoice_single_osc_init_to_pool(Aleph_MonoVoice_single_osc *const synth,
+void Custom_Aleph_MonoVoice_init_to_pool(Custom_Aleph_MonoVoice *const synth,
                                   Mempool *const mempool) {
 
     t_Mempool *mp = *mempool;
 
-    t_Aleph_MonoVoice_single_osc *syn = *synth =
-        (t_Aleph_MonoVoice_single_osc *)mpool_alloc(sizeof(t_Aleph_MonoVoice_single_osc), mp);
+    t_Custom_Aleph_MonoVoice *syn = *synth =
+        (t_Custom_Aleph_MonoVoice *)mpool_alloc(sizeof(t_Custom_Aleph_MonoVoice), mp);
 
     syn->mempool = mp;
 
-    syn->freq_offset = Aleph_MonoVoice_single_osc_DEFAULT_FREQ_OFFSET;
-    syn->filter_type = Aleph_MonoVoice_single_osc_DEFAULT_FILTER_TYPE;
+    syn->freq_offset = Custom_Aleph_MonoVoice_DEFAULT_FREQ_OFFSET;
+    syn->filter_type = Custom_Aleph_MonoVoice_DEFAULT_FILTER_TYPE;
 
-    Aleph_Waveform_init_to_pool(&syn->waveform, mempool);
+    Aleph_WaveformDual_init_to_pool(&syn->waveform, mempool);
 
     Aleph_FilterSVF_init_to_pool(&syn->filter, mempool);
 
     Aleph_HPF_init_to_pool(&syn->dc_block, mempool);
 
     Aleph_LPFOnePole_init_to_pool(&syn->freq_slew, mempool);
-    Aleph_LPFOnePole_set_output(&syn->freq_slew, Aleph_MonoVoice_single_osc_DEFAULT_FREQ);
+    Aleph_LPFOnePole_set_output(&syn->freq_slew, Custom_Aleph_MonoVoice_DEFAULT_FREQ);
 
     Aleph_LPFOnePole_init_to_pool(&syn->cutoff_slew, mempool);
     Aleph_LPFOnePole_set_output(&syn->cutoff_slew,
-                                Aleph_MonoVoice_single_osc_DEFAULT_CUTOFF);
+                                Custom_Aleph_MonoVoice_DEFAULT_CUTOFF);
 
     Aleph_LPFOnePole_init_to_pool(&syn->amp_slew, mempool);
-    Aleph_LPFOnePole_set_output(&syn->amp_slew, Aleph_MonoVoice_single_osc_DEFAULT_AMP);
+    Aleph_LPFOnePole_set_output(&syn->amp_slew, Custom_Aleph_MonoVoice_DEFAULT_AMP);
 }
 
-void Aleph_MonoVoice_single_osc_free(Aleph_MonoVoice_single_osc *const synth) {
+void Custom_Aleph_MonoVoice_free(Custom_Aleph_MonoVoice *const synth) {
 
-    t_Aleph_MonoVoice_single_osc *syn = *synth;
+    t_Custom_Aleph_MonoVoice *syn = *synth;
 
-    Aleph_Waveform_free(&syn->waveform);
+    Aleph_WaveformDual_free(&syn->waveform);
 
     Aleph_FilterSVF_free(&syn->filter);
 
@@ -98,9 +98,9 @@ void Aleph_MonoVoice_single_osc_free(Aleph_MonoVoice_single_osc *const synth) {
     mpool_free((char *)syn, syn->mempool);
 }
 
-fract32 Aleph_MonoVoice_single_osc_next(Aleph_MonoVoice_single_osc *const synth) {
+fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
 
-    t_Aleph_MonoVoice_single_osc *syn = *synth;
+    t_Custom_Aleph_MonoVoice *syn = *synth;
 
     fract32 output;
 
@@ -114,11 +114,12 @@ fract32 Aleph_MonoVoice_single_osc_next(Aleph_MonoVoice_single_osc *const synth)
     /// TODO: Set oscillator type (Dual, Unison, etc...).
 
     // Set oscillator frequency.
-    //Aleph_Waveform_set_freq_a(&syn->waveform, freq);
-        Aleph_Waveform_set_freq(&syn->waveform,fix16_mul_fract(freq, syn->freq_offset));
+    Aleph_WaveformDual_set_freq_a(&syn->waveform, freq);
+    Aleph_WaveformDual_set_freq_b(&syn->waveform,
+                                  fix16_mul_fract(freq, syn->freq_offset));
 
     // Generate waveforms.
-    output = Aleph_Waveform_next(&syn->waveform);
+    output = Aleph_WaveformDual_next(&syn->waveform);
 
     // Shift right to prevent clipping.
     output = shr_fr1x32(output, 1);
@@ -139,108 +140,106 @@ fract32 Aleph_MonoVoice_single_osc_next(Aleph_MonoVoice_single_osc *const synth)
     switch (syn->filter_type) {
 
     case ALEPH_FILTERSVF_TYPE_LPF:
-        output = Aleph_FilterSVF_sc_os_lpf_next(&syn->filter, output);
+        output = Aleph_FilterSVF_lpf_next(&syn->filter, output);
         break;
 
     case ALEPH_FILTERSVF_TYPE_BPF:
-        output = Aleph_FilterSVF_sc_os_bpf_next(&syn->filter, output);
+        output = Aleph_FilterSVF_bpf_next(&syn->filter, output);
         break;
 
     case ALEPH_FILTERSVF_TYPE_HPF:
-        output = Aleph_FilterSVF_sc_os_hpf_next(&syn->filter, output);
+        output = Aleph_FilterSVF_hpf_next(&syn->filter, output);
         break;
 
     default:
         // Default to LPF.
-        output = Aleph_FilterSVF_sc_os_lpf_next(&syn->filter, output);
+        output = Aleph_FilterSVF_lpf_next(&syn->filter, output);
         break;
-    }
-
-    // Block DC.
+    }    // Block DC.
     output = Aleph_HPF_dc_block(&syn->dc_block, output);
 
     return output;
 }
 
-void Aleph_MonoVoice_single_osc_set_shape(Aleph_MonoVoice_single_osc *const synth,
+void Custom_Aleph_MonoVoice_set_shape(Custom_Aleph_MonoVoice *const synth,
                                e_Aleph_Waveform_shape shape) {
 
-    t_Aleph_MonoVoice_single_osc *syn = *synth;
+    t_Custom_Aleph_MonoVoice *syn = *synth;
 
-    Aleph_Waveform_set_shape(&syn->waveform, shape);
+    Aleph_WaveformDual_set_shape(&syn->waveform, shape);
 }
 
-void Aleph_MonoVoice_single_osc_set_amp(Aleph_MonoVoice_single_osc *const synth, fract32 amp) {
+void Custom_Aleph_MonoVoice_set_amp(Custom_Aleph_MonoVoice *const synth, fract32 amp) {
 
-    t_Aleph_MonoVoice_single_osc *syn = *synth;
+    t_Custom_Aleph_MonoVoice *syn = *synth;
 
     Aleph_LPFOnePole_set_target(&syn->amp_slew, amp);
 }
 
-void Aleph_MonoVoice_single_osc_set_phase(Aleph_MonoVoice_single_osc *const synth, fract32 phase) {
+void Custom_Aleph_MonoVoice_set_phase(Custom_Aleph_MonoVoice *const synth, fract32 phase) {
 
-    t_Aleph_MonoVoice_single_osc *syn = *synth;
+    t_Custom_Aleph_MonoVoice *syn = *synth;
 
-    Aleph_Waveform_set_phase(&syn->waveform, phase);
+    Aleph_WaveformDual_set_phase(&syn->waveform, phase);
 }
 
-void Aleph_MonoVoice_single_osc_set_freq(Aleph_MonoVoice_single_osc *const synth, fract32 freq) {
+void Custom_Aleph_MonoVoice_set_freq(Custom_Aleph_MonoVoice *const synth, fract32 freq) {
 
-    t_Aleph_MonoVoice_single_osc *syn = *synth;
+    t_Custom_Aleph_MonoVoice *syn = *synth;
 
     Aleph_LPFOnePole_set_target(&syn->freq_slew, freq);
 }
 
-void Aleph_MonoVoice_single_osc_set_freq_offset(Aleph_MonoVoice_single_osc *const synth,
+void Custom_Aleph_MonoVoice_set_freq_offset(Custom_Aleph_MonoVoice *const synth,
                                      fract32 freq_offset) {
 
-    t_Aleph_MonoVoice_single_osc *syn = *synth;
+    t_Custom_Aleph_MonoVoice *syn = *synth;
 
     syn->freq_offset = freq_offset;
 }
 
-void Aleph_MonoVoice_single_osc_set_filter_type(Aleph_MonoVoice_single_osc *const synth,
+void Custom_Aleph_MonoVoice_set_filter_type(Custom_Aleph_MonoVoice *const synth,
                                      e_Aleph_FilterSVF_type type) {
 
-    t_Aleph_MonoVoice_single_osc *syn = *synth;
+    t_Custom_Aleph_MonoVoice *syn = *synth;
 
     syn->filter_type = type;
 }
 
-void Aleph_MonoVoice_single_osc_set_cutoff(Aleph_MonoVoice_single_osc *const synth, fract32 cutoff) {
+void Custom_Aleph_MonoVoice_set_cutoff(Custom_Aleph_MonoVoice *const synth, fract32 cutoff) {
 
-    t_Aleph_MonoVoice_single_osc *syn = *synth;
+    t_Custom_Aleph_MonoVoice *syn = *synth;
 
     Aleph_LPFOnePole_set_target(&syn->cutoff_slew, cutoff);
 }
 
-void Aleph_MonoVoice_single_osc_set_res(Aleph_MonoVoice_single_osc *const synth, fract32 res) {
+void Custom_Aleph_MonoVoice_set_res(Custom_Aleph_MonoVoice *const synth, fract32 res) {
 
-    t_Aleph_MonoVoice_single_osc *syn = *synth;
+    t_Custom_Aleph_MonoVoice *syn = *synth;
 
     Aleph_FilterSVF_set_rq(&syn->filter, res);
 }
 
-void Aleph_MonoVoice_single_osc_set_amp_slew(Aleph_MonoVoice_single_osc *const synth,
+void Custom_Aleph_MonoVoice_set_amp_slew(Custom_Aleph_MonoVoice *const synth,
                                   fract32 amp_slew) {
 
-    t_Aleph_MonoVoice_single_osc *syn = *synth;
+    t_Custom_Aleph_MonoVoice *syn = *synth;
 
     Aleph_LPFOnePole_set_coeff(&syn->amp_slew, amp_slew);
 }
 
-void Aleph_MonoVoice_single_osc_set_freq_slew(Aleph_MonoVoice_single_osc *const synth,
+void Custom_Aleph_MonoVoice_set_freq_slew(Custom_Aleph_MonoVoice *const synth,
                                    fract32 freq_slew) {
 
-    t_Aleph_MonoVoice_single_osc *syn = *synth;
+    t_Custom_Aleph_MonoVoice *syn = *synth;
 
     Aleph_LPFOnePole_set_coeff(&syn->freq_slew, freq_slew);
 }
 
-void Aleph_MonoVoice_single_osc_set_cutoff_slew(Aleph_MonoVoice_single_osc *const synth,
+void Custom_Aleph_MonoVoice_set_cutoff_slew(Custom_Aleph_MonoVoice *const synth,
                                      fract32 cutoff_slew) {
 
-    t_Aleph_MonoVoice_single_osc *syn = *synth;
+    t_Custom_Aleph_MonoVoice *syn = *synth;
 
     Aleph_LPFOnePole_set_coeff(&syn->cutoff_slew, cutoff_slew);
 }

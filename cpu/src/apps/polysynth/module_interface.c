@@ -129,8 +129,7 @@ void module_init(LEAF *leaf) {
         tADSRT_init(&g_module[voice_index].filter_env, 0, 1024, 1, 1024, g_exp_buffer,
                     EXP_BUFFER_SIZE, leaf);
 
-        tADSRT_init(&g_module[voice_index].pitch_env, 0, 1024, 1, 1024, g_exp_buffer,
-                    EXP_BUFFER_SIZE, leaf);
+        tADSRT_init(&g_module[voice_index].pitch_env, 200, 0, 1, 0, g_exp_buffer,EXP_BUFFER_SIZE, leaf);
 
         tTriLFO_init(&g_module[voice_index].amp_lfo, leaf);
         tTriLFO_init(&g_module[voice_index].filter_lfo, leaf);
@@ -138,7 +137,7 @@ void module_init(LEAF *leaf) {
 
         tTriLFO_setFreq(&g_module[voice_index].amp_lfo, 10);
         tTriLFO_setFreq(&g_module[voice_index].filter_lfo, 10);
-        tTriLFO_setFreq(&g_module[voice_index].pitch_lfo, 10);
+        tTriLFO_setFreq(&g_module[voice_index].pitch_lfo, 0);
     }
 }
 
@@ -201,7 +200,7 @@ void module_process(void) {
 
         // Pitch modulation.
         //
-       /* pitch_mod = g_module[voice_index].osc_freq;
+        pitch_mod = g_module[voice_index].osc_freq;
 
         /// TODO: Add control for pitch envelope.
         //
@@ -212,7 +211,7 @@ void module_process(void) {
         if (_cv_update(&g_module[voice_index].pitch_cv, pitch_mod)) {
 
             module_set_param_voice(voice_index,PARAM_FREQ, clamp_value(pitch_mod));
-        }*/
+        }
     }
 }
 
