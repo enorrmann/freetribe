@@ -10,3 +10,6 @@
 [submodule "cpu/lib/LEAF"]
 	path = cpu/lib/LEAF
 	url = ../LEAF.git
+[submodule "cpu/lib/--force"]
+	path = cpu/lib/--force
+	url = https://github.com/enorrmann/am1802-csl

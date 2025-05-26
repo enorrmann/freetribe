@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "module_interface.h": "c",
+        "aleph_monovoice_single_osc.h": "c"
+    }
+}
