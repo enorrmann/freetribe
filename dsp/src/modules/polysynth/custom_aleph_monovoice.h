@@ -105,8 +105,6 @@ void Custom_Aleph_MonoVoice_set_freq_slew(Custom_Aleph_MonoVoice *const synth,
 
 void Custom_Aleph_MonoVoice_set_cutoff_slew(Custom_Aleph_MonoVoice *const synth,
                                      fract32 cutoff_slew);
-void _Aleph_WaveformDual_set_shape_a(Aleph_WaveformDual *const wave, e_Aleph_Waveform_shape shape) ;
-void _Aleph_WaveformDual_set_shape_b(Aleph_WaveformDual *const wave, e_Aleph_Waveform_shape shape) ;
 #ifdef __cplusplus
 }
 #endif
