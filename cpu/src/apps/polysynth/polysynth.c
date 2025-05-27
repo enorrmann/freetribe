@@ -323,8 +323,14 @@ static void _encoder_callback(uint8_t index, uint8_t value) {
                 osc_type = OSC_TYPE_MAX;
             }
         }
-        module_set_param_all_voices(PARAM_OSC_TYPE, (1.0 / OSC_TYPE_COUNT) * osc_type);
-        gui_post_param("Osc Type: ", osc_type);
+        if (g_shift_held) {
+            module_set_param_all_voices(PARAM_OSC_2_TYPE, (1.0 / OSC_TYPE_COUNT) * osc_type);
+            gui_post_param("Osc 2 Type: ", osc_type);
+        } else {
+            module_set_param_all_voices(PARAM_OSC_TYPE, (1.0 / OSC_TYPE_COUNT) * osc_type);
+            gui_post_param("Osc 1 Type: ", osc_type);
+        }
+        
 
         break;
 

@@ -81,8 +81,8 @@ void Custom_Aleph_MonoVoice_free(Custom_Aleph_MonoVoice *const synth);
 
 fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth);
 
-void Custom_Aleph_MonoVoice_set_shape(Custom_Aleph_MonoVoice *const synth,
-                               e_Aleph_Waveform_shape shape);
+void Custom_Aleph_MonoVoice_set_shape_a(Custom_Aleph_MonoVoice *const synth, e_Aleph_Waveform_shape shape);
+void Custom_Aleph_MonoVoice_set_shape_b(Custom_Aleph_MonoVoice *const synth, e_Aleph_Waveform_shape shape);
 
 void Custom_Aleph_MonoVoice_set_amp(Custom_Aleph_MonoVoice *const synth, fract32 amp);
 void Custom_Aleph_MonoVoice_set_phase(Custom_Aleph_MonoVoice *const synth, fract32 phase);
@@ -105,7 +105,8 @@ void Custom_Aleph_MonoVoice_set_freq_slew(Custom_Aleph_MonoVoice *const synth,
 
 void Custom_Aleph_MonoVoice_set_cutoff_slew(Custom_Aleph_MonoVoice *const synth,
                                      fract32 cutoff_slew);
-
+void _Aleph_WaveformDual_set_shape_a(Aleph_WaveformDual *const wave, e_Aleph_Waveform_shape shape) ;
+void _Aleph_WaveformDual_set_shape_b(Aleph_WaveformDual *const wave, e_Aleph_Waveform_shape shape) ;
 #ifdef __cplusplus
 }
 #endif

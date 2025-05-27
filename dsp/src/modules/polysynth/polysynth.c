@@ -103,6 +103,7 @@ typedef enum {
     PARAM_RES,
     PARAM_TUNE,
     PARAM_OSC_TYPE,
+    PARAM_OSC_2_TYPE,
     PARAM_FILTER_TYPE,
     PARAM_AMP_LFO_DEPTH,
     PARAM_AMP_LFO_SPEED,
@@ -153,6 +154,7 @@ void module_init(void) {
     
         module_set_param_voice(i,PARAM_AMP_LEVEL, FR32_MAX);
         module_set_param_voice(i,PARAM_OSC_TYPE, 2);
+        module_set_param_voice(i,PARAM_OSC_2_TYPE, 2);
         module_set_param_voice(i,PARAM_FREQ, 220 << 16);
         module_set_param_voice(i,PARAM_TUNE, FIX16_ONE);
         module_set_param_voice(i,PARAM_CUTOFF, 0x326f6abb);
@@ -239,7 +241,11 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
         break;
 
     case PARAM_OSC_TYPE:
-        Custom_Aleph_MonoVoice_set_shape(&g_module.voice[voice_number], value);
+        Custom_Aleph_MonoVoice_set_shape_a(&g_module.voice[voice_number], value);
+        break;
+
+    case PARAM_OSC_2_TYPE:
+        Custom_Aleph_MonoVoice_set_shape_b(&g_module.voice[voice_number], value);
         break;
 
     case PARAM_FILTER_TYPE:

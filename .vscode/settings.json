@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "module_interface.h": "c",
-        "aleph_monovoice_single_osc.h": "c"
+        "aleph_monovoice_single_osc.h": "c",
+        "custom_aleph_monovoice.h": "c"
     }
 }

@@ -355,6 +355,7 @@ void module_set_param_voice(uint16_t voice_index,uint16_t param_index_without_of
         break;
 
     case PARAM_OSC_TYPE:
+    case PARAM_OSC_2_TYPE:
         ft_set_module_param(0, param_index, value * OSC_TYPE_COUNT);
         break;
 
