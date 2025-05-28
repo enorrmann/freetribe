@@ -173,8 +173,6 @@ void module_process(void) {
             float clampled_amp = clamp_value(amp_mod);
             
             if (clampled_amp <= 0.3f && voice_manager_is_voice_in_release_stage(voice_index)) {
-                ft_print("clampled_amp es menor: ");
-               
                 voice_manager_release_voice(voice_index);
             
             }

@@ -366,7 +366,6 @@ static void process_note_event(uint8_t note, uint8_t vel, bool state) {
         /* Check if note is already active (prevent retriggering) */
         voice_idx = voice_manager_get_voice_by_note(note);
         if (voice_idx != INVALID_VOICE) {
-            ft_print("Voice already active");
                //return;
             // Note already active, just retrigger envelope 
             module_set_param_voice(voice_idx, PARAM_VEL, 1.0);

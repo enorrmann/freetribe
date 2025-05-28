@@ -161,17 +161,34 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
     return output;
 }
 
-void Custom_Aleph_MonoVoice_set_shape_a(Custom_Aleph_MonoVoice *const synth, e_Aleph_Waveform_shape shape) {
-    t_Custom_Aleph_MonoVoice *syn = *synth;
-    t_Aleph_WaveformDual *wv = &syn->waveform;
+
+void _Aleph_WaveformDual_set_shape_a(Aleph_WaveformDual *const wave, e_Aleph_Waveform_shape shape) {
+
+    t_Aleph_WaveformDual *wv = *wave;
+
     wv->shape_a = shape;
+
 }
 
-void Custom_Aleph_MonoVoice_set_shape_b(Custom_Aleph_MonoVoice *const synth, e_Aleph_Waveform_shape shape) {
-    t_Custom_Aleph_MonoVoice *syn = *synth;
-    t_Aleph_WaveformDual *wv = &syn->waveform;
+void _Aleph_WaveformDual_set_shape_b(Aleph_WaveformDual *const wave, e_Aleph_Waveform_shape shape) {
+
+    t_Aleph_WaveformDual *wv = *wave;
+
     wv->shape_b = shape;
+
 }
+
+void Custom_Aleph_MonoVoice_set_shape_a(Custom_Aleph_MonoVoice *const synth, e_Aleph_Waveform_shape shape) {
+
+    t_Custom_Aleph_MonoVoice *syn = *synth;
+    _Aleph_WaveformDual_set_shape_a(&syn->waveform, shape);
+}
+void Custom_Aleph_MonoVoice_set_shape_b(Custom_Aleph_MonoVoice *const synth, e_Aleph_Waveform_shape shape) {
+
+    t_Custom_Aleph_MonoVoice *syn = *synth;
+    _Aleph_WaveformDual_set_shape_b(&syn->waveform, shape);
+}
+
 
 
 void Custom_Aleph_MonoVoice_set_amp(Custom_Aleph_MonoVoice *const synth, fract32 amp) {
