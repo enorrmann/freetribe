@@ -61,7 +61,7 @@ void module_set_param_voice(uint16_t voice_index,uint16_t param_index, int32_t v
 
 // #define DEFAULT_CUTOFF 0x7f // Index in pitch LUT.
 #define DEFAULT_OSC_TYPE 2
-#define MAX_VOICES 12
+#define MAX_VOICES 8
 #define PARAM_VOICE_OFFSET(voice, param, paramCount) (param + (voice * paramCount))
 #define REMOVE_PARAM_OFFSET(param_index_with_offset,paramCount) ((param_index_with_offset) % paramCount)
 #define PARAM_VOICE_NUMBER(param_index_with_offset,paramCount) ((param_index_with_offset) / paramCount)
@@ -173,19 +173,15 @@ void module_init(void) {
  */
 void module_process(fract32 *in, fract32 *out) {
 
+    
     fract32 output;
     fract32 amp_level_scaled = g_module.amp_level/MAX_VOICES;
 
     output = mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[0]), amp_level_scaled);
-    output += mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[1]), amp_level_scaled);    
-    output += mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[2]), amp_level_scaled);    
-    output += mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[3]), amp_level_scaled);
-    output += mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[4]), amp_level_scaled);
-    output += mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[5]), amp_level_scaled);
-
-
-    // Scale amplitude by level.
-    //output = mult_fr1x32x32(output, g_module.amp_level);
+    int i;
+    for (i = 1; i < MAX_VOICES; i++) {
+        output += mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[i]), amp_level_scaled);    
+    }
 
     // Set output.
     out[0] = output;
