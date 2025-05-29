@@ -55,7 +55,7 @@ void module_set_param_voice(uint16_t voice_index, uint16_t param_index,
 #define MEMPOOL_SIZE (0x2000)
 #define FRACT32_MAX ((fract32)0x7fffffff) /* max value of a fract32 */
 #define SDRAM_ADDRESS 0x00000000
-//__attribute__((section(".l3")))
+
 static const fract32 wavtab[WAVE_SHAPE_NUM][WAVE_TAB_SIZE] = {
 #include "wavtab_data_inc.data"
 };
@@ -478,12 +478,12 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
         /*   filter_svf_set_notch(&(g_module.voice[0].svf), trunc_fr1x32(v)); */
         /*   break; */
 
-    case eParam_mode0:
+/*    case eParam_mode0:
         svf_mode[0] = v >> 16;
         break;
     case eParam_mode1:
         svf_mode[1] = v >> 16;
-        break;
+        break;*/
 
         // filter balance
     case eParam_fwet0:
