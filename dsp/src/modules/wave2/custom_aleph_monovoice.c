@@ -105,29 +105,7 @@ void Custom_Aleph_MonoVoice_free(Custom_Aleph_MonoVoice *const synth) {
 }
 
 
-/**
- * @brief Versión simplificada sin interpolación (más rápida, menos calidad)
- * @param p Fase actual
- * @param dp Delta de fase (no usado en esta versión)
- * @param wave_shape Índice de la forma de onda
- * @return Muestra directa de 16-bit fractional
- */
-fract16 wavetable_lookup_simple(fract32 p, fract32 dp, uint8_t wave_shape) {
-    // Limitar el índice de forma de onda
-    if (wave_shape >= WAVE_SHAPE_NUM) {
-        wave_shape = 0;
-    }
-    
-    // Convertir fase a índice
-    uint32_t phase_norm = (uint32_t)(p + FR32_MAX);
-    uint32_t index = (phase_norm >> (32 - 10)) & (WAVE_TAB_SIZE - 1);
-    
-    // Leer directamente de la tabla
-    fract32 sample = wavtab[wave_shape][index];
-    
-    // Convertir a 16-bit y retornar
-    return (fract16)shr_fr1x32(sample, 16);
-}
+
 fract32 custom_Aleph_Waveform_next(Aleph_Waveform *const wave) {
 
     t_Aleph_Waveform *wv = *wave;
@@ -135,7 +113,8 @@ fract32 custom_Aleph_Waveform_next(Aleph_Waveform *const wave) {
     fract32 next;
 
     Aleph_Phasor_next(&wv->phasor);
-    next =  wavetable_lookup_simple(wv->phasor->phase, wv->phasor->freq,1);
+    //next =  wavetable_lookup_simple(wv->phasor->phase, wv->phasor->freq,1);
+    next =  wavetable_lookup(wv->phasor->phase, wv->phasor->freq,1);
     return shl_fr1x32(next, 16);
 }
 fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
