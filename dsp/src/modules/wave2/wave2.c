@@ -47,6 +47,7 @@ under the terms of the GNU Affero General Public License as published by
 #include "aleph.h"
 
 #include "custom_aleph_monovoice.h"
+#include "wave_generator.h"
 
 void module_set_param_voice(uint16_t voice_index,uint16_t param_index, int32_t value);
 
@@ -126,6 +127,7 @@ typedef struct {
     Custom_Aleph_MonoVoice voice[MAX_VOICES];
     fract32 amp_level;
     fract32 velocity;
+    fract16 morph_amount;
 
 } t_module;
 
@@ -145,62 +147,13 @@ static t_module g_module;
 float random_float() {
     return (float)rand() / (float)RAND_MAX;
 }
-// Genera onda cuadrada suavizada directamente en wavtab
-void generate_soft_square(int wave_index) {
-    if (wave_index >= WAVE_SHAPE_NUM) return;
-    
-    float duty_cycle = 0.3f + random_float() * 0.4f; // 0.3 - 0.7
-    float softness = 0.05f + random_float() * 0.1f;  // suavizado
-    int i;
-    for (i = 0; i < WAVE_TAB_SIZE; i++) {
-        float phase = (float)i / WAVE_TAB_SIZE;
-        float sample;
-        
-        if (phase < duty_cycle) {
-            float edge_dist = fminf(phase, duty_cycle - phase) / softness;
-            sample = tanhf(edge_dist * 3.0f);
-        } else {
-            float edge_dist = fminf(phase - duty_cycle, 1.0f - phase + duty_cycle) / softness;
-            sample = -tanhf(edge_dist * 3.0f);
-        }
-        
-        // Convertir directamente a fract32 y almacenar en wavtab global
-        wavtab[wave_index][i] = float_to_fract32(sample * 0.95f); // 0.95f para headroom
-    }
-}
-// Genera diente de sierra suave directamente en wavtab
-void generate_soft_sawtooth(int wave_index) {
-    if (wave_index >= WAVE_SHAPE_NUM) return;
-    
-    float direction = (rand() % 2) ? 1.0f : -1.0f; // ascendente o descendente
-    float softness = 0.02f + random_float() * 0.08f;
-    
-    int i;
-    for (i = 0; i < WAVE_TAB_SIZE; i++) {
-        float phase = (float)i / WAVE_TAB_SIZE;
-        float raw_saw = (phase * 2.0f - 1.0f) * direction;
-        
-        // Suavizar los extremos
-        float soft_factor = 1.0f;
-        if (phase < softness) {
-            soft_factor = phase / softness;
-        } else if (phase > (1.0f - softness)) {
-            soft_factor = (1.0f - phase) / softness;
-        }
-        
-        float sample = raw_saw * soft_factor;
-        
-        // Convertir directamente a fract32 y almacenar en wavtab global
-        wavtab[wave_index][i] = float_to_fract32(sample * 0.95f); // 0.95f para headroom
-    }
-}
-
 /**
  * @brief   Initialise module.
  */
 void module_init(void) {
-generate_soft_square(0);
-generate_soft_sawtooth(1);
+
+generate_soft_sawtooth(0);
+generate_soft_square(1);
     Aleph_init(&g_aleph, SAMPLERATE, g_mempool, MEMPOOL_SIZE, NULL);
 
     int i;
@@ -276,17 +229,17 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
         break;
 
     case PARAM_TUNE:
-        //Custom_Aleph_MonoVoice_set_freq_offset(&g_module.voice[voice_number], value);
-        generate_soft_sawtooth(0);
+        Custom_Aleph_MonoVoice_set_freq_offset(&g_module.voice[voice_number], value);
+        //Custom_Aleph_MonoVoice_set_morph_amount(&g_module.voice[voice_number], value);
         break;
 
     case PARAM_AMP_LEVEL:
         g_module.amp_level = value;
-        generate_soft_square(0);
         break;
 
     case PARAM_CUTOFF:
-        Custom_Aleph_MonoVoice_set_cutoff(&g_module.voice[voice_number], value);
+        //Custom_Aleph_MonoVoice_set_cutoff(&g_module.voice[voice_number], value);
+        Custom_Aleph_MonoVoice_set_morph_amount(&g_module.voice[voice_number], value);
         break;
 
     case PARAM_RES:

@@ -69,6 +69,7 @@ typedef struct {
     Aleph_LPFOnePole cutoff_slew;
 
     Aleph_HPF dc_block;
+    fract32 morph_amount;
 
 } t_Custom_Aleph_MonoVoice;
 
@@ -110,6 +111,8 @@ void Custom_Aleph_MonoVoice_set_cutoff_slew(Custom_Aleph_MonoVoice *const synth,
                                      fract32 cutoff_slew);
 
 void Custom_Aleph_MonoVoice_set_shape(Custom_Aleph_MonoVoice *const synth, e_Aleph_Waveform_shape shape) ;
+
+void Custom_Aleph_MonoVoice_set_morph_amount(Custom_Aleph_MonoVoice *const synth,fract32 morph_amount) ;
 #ifdef __cplusplus
 }
 #endif

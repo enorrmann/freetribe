@@ -34,6 +34,7 @@
 #include "aleph_waveform.h"
 
 #include "custom_aleph_monovoice.h"
+#include "wave_lookup.h"
 
 
 /*----- Macros -------------------------------------------------------*/
@@ -106,16 +107,16 @@ void Custom_Aleph_MonoVoice_free(Custom_Aleph_MonoVoice *const synth) {
 
 
 
-fract32 custom_Aleph_Waveform_next(Aleph_Waveform *const wave) {
+fract32 custom_Aleph_Waveform_next(Aleph_Waveform *const wave, fract32 morph_amount) {
 
     t_Aleph_Waveform *wv = *wave;
 
     fract32 next;
 
     Aleph_Phasor_next(&wv->phasor);
-    next =  wavetable_lookup_simple(wv->phasor->phase, wv->phasor->freq,1);
+    //next =  wavetable_lookup_simple(wv->phasor->phase, wv->phasor->freq,1);
     //next =  wavetable_lookup(wv->phasor->phase, wv->phasor->freq,1);
-    //next = wavetable_morph(wv->phasor->phase, wv->phasor->freq, 0, 1, FR16_MAX/2);
+    next = wavetable_morph(wv->phasor->phase, wv->phasor->freq, 0, 1, morph_amount);
     return shl_fr1x32(next, 16);
 }
 fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
@@ -137,7 +138,7 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
     Aleph_Waveform_set_freq(&syn->waveform, freq);
 
     // Generate waveforms.
-    output = custom_Aleph_Waveform_next(&syn->waveform);
+    output = custom_Aleph_Waveform_next(&syn->waveform,syn->morph_amount);
 
     // Shift right to prevent clipping.
     output = shr_fr1x32(output, 1);
@@ -217,6 +218,12 @@ void Custom_Aleph_MonoVoice_set_freq_offset(Custom_Aleph_MonoVoice *const synth,
     syn->freq_offset = freq_offset;
 }
 
+void Custom_Aleph_MonoVoice_set_morph_amount(Custom_Aleph_MonoVoice *const synth,fract32 morph_amount) {
+
+    t_Custom_Aleph_MonoVoice *syn = *synth;
+
+    syn->morph_amount = morph_amount;
+}
 void Custom_Aleph_MonoVoice_set_filter_type(Custom_Aleph_MonoVoice *const synth,
                                      e_Aleph_FilterSVF_type type) {
 
