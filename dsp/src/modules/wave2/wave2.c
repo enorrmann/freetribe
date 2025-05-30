@@ -229,8 +229,8 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
         break;
 
     case PARAM_TUNE:
-        Custom_Aleph_MonoVoice_set_freq_offset(&g_module.voice[voice_number], value);
-        //Custom_Aleph_MonoVoice_set_morph_amount(&g_module.voice[voice_number], value);
+        //Custom_Aleph_MonoVoice_set_freq_offset(&g_module.voice[voice_number], value);
+        Custom_Aleph_MonoVoice_set_morph_amount(&g_module.voice[voice_number], value);
         break;
 
     case PARAM_AMP_LEVEL:
@@ -238,8 +238,7 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
         break;
 
     case PARAM_CUTOFF:
-        //Custom_Aleph_MonoVoice_set_cutoff(&g_module.voice[voice_number], value);
-        Custom_Aleph_MonoVoice_set_morph_amount(&g_module.voice[voice_number], value);
+        Custom_Aleph_MonoVoice_set_cutoff(&g_module.voice[voice_number], value);
         break;
 
     case PARAM_RES:

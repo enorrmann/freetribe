@@ -72,7 +72,7 @@ fract16 wavetable_lookup_simple(fract32 p, fract32 dp, uint8_t wave_shape) {
  * @param dp Delta de fase
  * @param wave_shape1 Primera forma de onda
  * @param wave_shape2 Segunda forma de onda
- * @param morph_amount Cantidad de morfing int32 (0 = solo shape1, 255 = solo shape2)
+ * @param morph_amount Cantidad de morfing fract32 (0 = solo shape1, FR32_MAX = solo shape2)
  * @return Muestra mezclada de 16-bit fractional
  */
 fract16 wavetable_morph(fract32 p, fract32 dp, uint8_t wave_shape1, uint8_t wave_shape2, fract32 morph_amount) {
@@ -80,22 +80,24 @@ fract16 wavetable_morph(fract32 p, fract32 dp, uint8_t wave_shape1, uint8_t wave
     fract16 sample1 = wavetable_lookup(p, dp, wave_shape1);
     fract16 sample2 = wavetable_lookup(p, dp, wave_shape2);
     
-    // Convertir morph_amount (int32_t rango 0-255) a fract16
-    // Escalar de [0,255] a [0,FR16_MAX] con saturación
-    fract16 morph_fract16;
-    
-    if (morph_amount <= 0) {
-        morph_fract16 = 0;
-    } else if (morph_amount >= 255) {
-        morph_fract16 = FR16_MAX;
-    } else {
-        // Escalar: (morph_amount * FR16_MAX) / 255
-        morph_fract16 = (fract16)((morph_amount * FR16_MAX) / 255);
+    // Limitar morph_amount al rango válido [0, FR32_MAX]
+    if (morph_amount < 0) {
+        morph_amount = 0;
+    } else if (morph_amount > FR32_MAX) {
+        morph_amount = FR32_MAX;
     }
     
-    // Mezclar las muestras usando funciones fract16
-    fract16 diff = sub_fr1x16(sample2, sample1);
-    fract16 morphed = add_fr1x16(sample1, mult_fr1x16(diff, morph_fract16));
+    // Método 1: Usando interpolación lineal con aritmética fract32
+    // Convertir samples a fract32 para mayor precisión en el cálculo
+    fract32 sample1_32 = (fract32)sample1 << 16;  // Extender fract16 a fract32
+    fract32 sample2_32 = (fract32)sample2 << 16;  // Extender fract16 a fract32
+    
+    // Interpolación: result = sample1 + (sample2 - sample1) * morph_amount
+    fract32 diff_32 = sample2_32 - sample1_32;
+    fract32 morphed_32 = sample1_32 + mult_fr1x32(diff_32, morph_amount);
+    
+    // Convertir de vuelta a fract16
+    fract16 morphed = (fract16)(morphed_32 >> 16);
     
     return morphed;
 }
