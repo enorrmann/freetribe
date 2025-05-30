@@ -114,7 +114,9 @@ fract32 custom_Aleph_Waveform_next(Aleph_Waveform *const wave) {
 
     Aleph_Phasor_next(&wv->phasor);
     //next =  wavetable_lookup_simple(wv->phasor->phase, wv->phasor->freq,1);
-    next =  wavetable_lookup(wv->phasor->phase, wv->phasor->freq,1);
+    //next =  wavetable_lookup(wv->phasor->phase, wv->phasor->freq,1);
+    //next = wavetable_morph(wv->phasor->phase, wv->phasor->freq, 0, 1, wv->phasor->morph_amount);
+    next = wavetable_morph(wv->phasor->phase, wv->phasor->freq, 0, 1, FR16_MAX/2);
     return shl_fr1x32(next, 16);
 }
 fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
