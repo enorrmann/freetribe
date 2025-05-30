@@ -78,12 +78,12 @@ fract16 wavetable_lookup_simple(fract32 p, fract32 dp, uint8_t wave_shape) {
  */
 fract16 wavetable_morph(fract32 p, fract32 dp, uint8_t wave_shape1, uint8_t wave_shape2, fract16 morph_amount) {
     // Obtener muestras de ambas formas de onda
-    fract16 sample1 = wavetable_lookup(p, dp, wave_shape1);
-    fract16 sample2 = wavetable_lookup(p, dp, wave_shape2);
+    uint32_t sample1 = wavetable_lookup(p, dp, wave_shape1);
+    uint32_t sample2 = wavetable_lookup(p, dp, wave_shape2);
     
     // Mezclar las muestras
-    fract16 diff = sub_fr1x16(sample2, sample1);
-    fract16 morphed = add_fr1x16(sample1, multr_fr1x16(diff, morph_amount));
+    uint32_t diff = sub_fr1x16(sample2, sample1);
+    uint32_t morphed = add_fr1x16(sample1, multr_fr1x16(diff, morph_amount));
     
     return morphed;
 }
