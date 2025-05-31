@@ -48,7 +48,7 @@
 /*----- Static function prototypes -----------------------------------*/
 //static const 
 fract32 wavtab[WAVE_SHAPE_NUM][WAVE_TAB_SIZE] = {
-    #include "util/j8saw.data"
+    #include "util/thewave.data"
 };
 
 

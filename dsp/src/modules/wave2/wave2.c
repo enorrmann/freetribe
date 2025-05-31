@@ -64,7 +64,7 @@ void module_set_param_voice(uint16_t voice_index,uint16_t param_index, int32_t v
 
 // #define DEFAULT_CUTOFF 0x7f // Index in pitch LUT.
 #define DEFAULT_OSC_TYPE 2
-#define MAX_VOICES 4
+#define MAX_VOICES 6
 #define PARAM_VOICE_OFFSET(voice, param, paramCount) (param + (voice * paramCount))
 #define REMOVE_PARAM_OFFSET(param_index_with_offset,paramCount) ((param_index_with_offset) % paramCount)
 #define PARAM_VOICE_NUMBER(param_index_with_offset,paramCount) ((param_index_with_offset) / paramCount)
