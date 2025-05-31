@@ -48,7 +48,7 @@ extern "C" {
 #define Custom_Aleph_MonoVoice_DEFAULT_RES (FR32_MAX)
 #define Custom_Aleph_MonoVoice_DEFAULT_FILTER_TYPE ALEPH_FILTERSVF_TYPE_LPF
 
-#define WAVE_SHAPE_NUM 2
+#define WAVE_SHAPE_NUM 1
 #define WAVE_TAB_SIZE 1024
 
 

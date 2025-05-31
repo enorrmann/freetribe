@@ -75,7 +75,7 @@ fract16 wavetable_lookup_simple(fract32 p, fract32 dp, uint8_t wave_shape) {
  * @param morph_amount Cantidad de morfing fract32 (0 = solo shape1, FR32_MAX = solo shape2)
  * @return Muestra mezclada de 16-bit fractional
  */
-fract16 wavetable_morph(fract32 p, fract32 dp, uint8_t wave_shape1, uint8_t wave_shape2, fract32 morph_amount) {
+fract16 _wavetable_morph(fract32 p, fract32 dp, uint8_t wave_shape1, uint8_t wave_shape2, fract32 morph_amount) {
     // Obtener muestras de ambas formas de onda
     fract16 sample1 = wavetable_lookup(p, dp, wave_shape1);
     fract16 sample2 = wavetable_lookup(p, dp, wave_shape2);
@@ -100,4 +100,40 @@ fract16 wavetable_morph(fract32 p, fract32 dp, uint8_t wave_shape1, uint8_t wave
     fract16 morphed = (fract16)(morphed_32 >> 16);
     
     return morphed;
+}
+
+fract16 wavetable_morph(fract32 p, fract32 dp, uint8_t wave_shape1, uint8_t wave_shape2, fract32 morph_amount) {
+    // Obtener muestras de ambas formas de onda
+    fract16 sample1 = wavetable_lookup(p, dp, wave_shape1);
+    fract16 sample2 = wavetable_lookup(p, dp, wave_shape2);
+    
+    // DEBUG: Imprimir valores para diagnosticar
+    // printf("sample1: %d, sample2: %d, morph: %ld\n", sample1, sample2, morph_amount);
+    
+    // Verificar que tenemos muestras diferentes
+    if (sample1 == sample2) {
+        return sample1; // Si son iguales, no hay nada que morphear
+    }
+    
+    // Limitar morph_amount al rango válido [0, FR32_MAX]
+    if (morph_amount <= 0) {
+        return sample1;  // 100% forma de onda 1
+    }
+    if (morph_amount >= FR32_MAX) {
+        return sample2;  // 100% forma de onda 2
+    }
+    
+    // VERSIÓN SIMPLE: Interpolación lineal usando solo enteros
+    // Convertir morph_amount de [0, FR32_MAX] a [0, 32767] para simplificar
+    int32_t morph_scaled = morph_amount >> 16; // Tomar los 16 bits superiores
+    
+    // Interpolación: result = sample1 + ((sample2 - sample1) * morph_scaled) / 32767
+    int32_t diff = (int32_t)sample2 - (int32_t)sample1;
+    int32_t morphed_temp = (int32_t)sample1 + ((diff * morph_scaled) / 32767);
+    
+    // Saturar el resultado al rango fract16
+    if (morphed_temp > 32767) morphed_temp = 32767;
+    if (morphed_temp < -32768) morphed_temp = -32768;
+    
+    return (fract16)morphed_temp;
 }

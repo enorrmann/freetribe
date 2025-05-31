@@ -152,8 +152,8 @@ float random_float() {
  */
 void module_init(void) {
 
-generate_soft_sawtooth(0);
-generate_soft_square(1);
+//generate_soft_sawtooth(0);
+//generate_soft_square(1);
     Aleph_init(&g_aleph, SAMPLERATE, g_mempool, MEMPOOL_SIZE, NULL);
 
     int i;
