@@ -458,7 +458,7 @@ static void process_note_event(uint8_t note, uint8_t vel, bool state) {
                 voice_manager_is_voice_in_release_stage(voice_idx);
             if (in_release_stage) {
                 /* Voice is already in release stage, do nothing */
-                ft_print("Voice already in release stage");
+                //ft_print("Voice already in release stage");
                 return;
             }
             /* Turn off gate (start release phase) */
