@@ -55,9 +55,9 @@ typedef struct {
 
     Mempool mempool;
 
-    Aleph_WaveformDual waveformDual;
     Aleph_Waveform  waveformSingle [MAX_UNISON_VOICES];
     fract32 freq_offset;
+    bool unison_active; // Flag to indicate if unison is active
 
     Aleph_FilterSVF filter;
     e_Aleph_FilterSVF_type filter_type;

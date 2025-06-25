@@ -36,6 +36,8 @@
 #include "custom_aleph_monovoice.h"
 #include "common/config.h"
 
+#define WAVEFORM_SHAPE_COUNT WAVEFORM_SHAPE_SQUARE + 1 // the last so far
+
 /*----- Macros -------------------------------------------------------*/
 
 /*----- Typedefs -----------------------------------------------------*/
@@ -111,44 +113,45 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
     fract32 output = 0;
     fract32 amp;
     fract32 freq;
+    
+
+    // calculate amp first to skip processing if amp is 0
+    // Get slewed amplitude.
+    amp = Aleph_LPFOnePole_next(&syn->amp_slew);
+    if (!amp){
+            return 0;
+    }
 
     // Get slewed frequency.
     freq = Aleph_LPFOnePole_next(&syn->freq_slew);
     fract32 freq_with_offset = freq; // no offset for first voice
 
-    int i;
-    for (i = 0; i < MAX_UNISON_VOICES; i++) {
+    int i = 0;
+    Aleph_Waveform_set_freq(&syn->waveformSingle[i], freq_with_offset);
+    fract32 next = Aleph_Waveform_next(&syn->waveformSingle[i]);
+    output = add_fr1x32(output, next);
+
+    //if unison NOT active
+    //int up_to_osc = 2;
+    // if unison active 
+    int up_to_osc = MAX_UNISON_VOICES;
+    
+    for (i = 1; i < up_to_osc; i++) {
+        freq_with_offset = fix16_mul_fract(freq_with_offset, syn->freq_offset);
+        if (syn->waveformSingle[i]->shape >= WAVEFORM_SHAPE_COUNT) continue;
         // Set oscillator frequency.
         Aleph_Waveform_set_freq(&syn->waveformSingle[i], freq_with_offset);
-        
-        fract32 next = Aleph_Waveform_next(&syn->waveformSingle[i]);
+        next = Aleph_Waveform_next(&syn->waveformSingle[i]);
         output = add_fr1x32(output, next);
 
-        freq_with_offset = fix16_mul_fract(freq_with_offset, syn->freq_offset);
     }
 
-
-    
-    
-    
-    // a frequency in the middle of original and offset
-    //fract32 freq_with_offset_2 = add_fr1x32(freq_with_offset>>1 , freq>>1);
-    
-
-//    Aleph_Waveform_set_freq(&syn->waveformSingle[1], freq_with_offset_2);
-  //  Aleph_Waveform_set_freq(&syn->waveformSingle[2], freq_with_offset);
-
-    
-   // output = add_fr1x32(next_0, next_1);
-    //output = next_a + next_b; // ring modulation? 
-    
-
+    //output = next_a + next_b; // "ring"  glitchy modulation
 
     // Shift right to prevent clipping.
     output = shr_fr1x32(output, 4);
+    
 
-    // Get slewed amplitude.
-    amp = Aleph_LPFOnePole_next(&syn->amp_slew);
     // Apply amp modulation.
     output = mult_fr1x32x32(output, amp);
 
