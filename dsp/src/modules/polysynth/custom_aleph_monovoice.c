@@ -109,7 +109,6 @@ int i;
 fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
 
     t_Custom_Aleph_MonoVoice *syn = *synth;
-    fract32 output = 0;
     fract32 amp;
     fract32 freq;
     
@@ -127,8 +126,7 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
 
     int i = 0;
     Aleph_Waveform_set_freq(&syn->waveformSingle[i], freq_with_offset);
-    fract32 next = Aleph_Waveform_next(&syn->waveformSingle[i]);
-    output = add_fr1x32(output, next);
+    fract32 output = Aleph_Waveform_next(&syn->waveformSingle[i]);
 
 
     int up_to_osc = 2;
@@ -143,12 +141,11 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
 
         // Set oscillator frequency.
         Aleph_Waveform_set_freq(&syn->waveformSingle[i], freq_with_offset);
-        next = Aleph_Waveform_next(&syn->waveformSingle[i]);
-        output = add_fr1x32(output, next);
+        fract32 next = Aleph_Waveform_next(&syn->waveformSingle[i]);
+        output = add_fr1x32(output, next); // correct way of adding oscillators
 
     }
 
-    //output = next_a + next_b; // "ring"  glitchy modulation
 
     // Shift right to prevent clipping.
     output = shr_fr1x32(output, 4);
