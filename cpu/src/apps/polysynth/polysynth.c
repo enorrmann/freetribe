@@ -235,7 +235,8 @@ static void _knob_callback(uint8_t index, uint8_t value) {
             module_set_param_all_voices(PARAM_TUNE, 1 - (value * 0.02f / 255.0f));
             gui_post_param("U. Detune: ", value);
         } else {
-            module_set_param_all_voices(PARAM_TUNE, g_octave_tune_lut[value] );
+            module_set_param_all_voices(PARAM_TUNE, g_octave_tune_lut[value]); 
+            //module_set_param_all_voices(PARAM_TUNE, 1 - (value * 1.5f / 255.0f));  // sync testing
             gui_post_param("Pitch: ", value);
 
         }

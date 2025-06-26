@@ -81,11 +81,14 @@ void Custom_Aleph_MonoVoice_init_to_pool(Custom_Aleph_MonoVoice *const synth,
     Aleph_LPFOnePole_set_output(&syn->freq_slew, Custom_Aleph_MonoVoice_DEFAULT_FREQ);
 
     Aleph_LPFOnePole_init_to_pool(&syn->cutoff_slew, mempool);
-    Aleph_LPFOnePole_set_output(&syn->cutoff_slew,
-                                Custom_Aleph_MonoVoice_DEFAULT_CUTOFF);
+    Aleph_LPFOnePole_set_output(&syn->cutoff_slew, Custom_Aleph_MonoVoice_DEFAULT_CUTOFF);
 
     Aleph_LPFOnePole_init_to_pool(&syn->amp_slew, mempool);
     Aleph_LPFOnePole_set_output(&syn->amp_slew, Custom_Aleph_MonoVoice_DEFAULT_AMP);
+
+
+    syn->cutoff_slew->coeff = SLEW_10MS; // 10ms slew time for cutoff
+    syn->freq_slew->coeff = SLEW_10MS; // 10ms slew time for cutoff
 }
 
 void Custom_Aleph_MonoVoice_free(Custom_Aleph_MonoVoice *const synth) {
@@ -137,11 +140,21 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
     for (i = 1; i < up_to_osc; i++) {
         freq_with_offset = fix16_mul_fract(freq_with_offset, syn->freq_offset);
         
-        if (syn->waveformSingle[i]->shape == OSC_TYPE_OFF) continue;
+        if (syn->waveformSingle[i]->shape == OSC_TYPE_OFF) {
+            continue;
+        }
 
         // Set oscillator frequency.
         Aleph_Waveform_set_freq(&syn->waveformSingle[i], freq_with_offset);
+
+        //int32_t osc_2_prev_phase = syn->waveformSingle[i]->phasor->phase; // testing sync to osc 2
         fract32 next = Aleph_Waveform_next(&syn->waveformSingle[i]);
+        /*if (osc_2_prev_phase > syn->waveformSingle[i]->phasor->phase){
+            syn->waveformSingle[0]->phasor->phase = 0;
+        }*/
+
+
+
         output = add_fr1x32(output, next); // correct way of adding oscillators
 
     }
