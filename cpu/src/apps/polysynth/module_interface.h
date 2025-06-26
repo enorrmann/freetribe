@@ -59,33 +59,9 @@ extern "C" {
 #define OSC_TYPE_MAX (OSC_TYPE_COUNT - 1)
 
 /*----- Typedefs -----------------------------------------------------*/
+// SEE COMMON PARAMS
 
 
-typedef enum {
-    OSC_TYPE_SINE,
-    OSC_TYPE_TRI,
-    OSC_TYPE_SAW,
-    OSC_TYPE_SQUARE,
-    OSC_TYPE_NONE,
-
-    OSC_TYPE_COUNT
-} e_osc_type;
-
-typedef enum {
-    FILTER_TYPE_LPF,
-    FILTER_TYPE_HPF,
-    FILTER_TYPE_BPF,
-
-    FILTER_TYPE_COUNT
-} e_filter_type;
-
-typedef enum {
-    MOD_AMP_LFO,
-    MOD_FILTER_LFO,
-    MOD_PITCH_LFO,
-
-    MOD_TYPE_COUNT
-} e_mod_type;
 
 /*----- Extern variable declarations ---------------------------------*/
 

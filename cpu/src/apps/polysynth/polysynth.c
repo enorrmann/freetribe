@@ -49,6 +49,7 @@ under the terms of the GNU Affero General Public License as published by
 #include "gui_task.h"
 
 #include "leaf.h"
+#include "module_interface.h"
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -229,10 +230,16 @@ static void _knob_callback(uint8_t index, uint8_t value) {
     switch (index) {
 
     case KNOB_PITCH:
-        // module_set_param_all_voices(PARAM_TUNE, g_octave_tune_lut[value] );
-        //  if osc type is unison attenuate unison detune
-        module_set_param_all_voices(PARAM_TUNE, 1 - (value * 0.02f / 255.0f));
-        gui_post_param("U. Detune: ", value);
+        //  if osc type is unison attenuate unison detune 
+        if (module_get_param(PARAM_OSC_TYPE) == OSC_TYPE_SUPERSAW) {
+            module_set_param_all_voices(PARAM_TUNE, 1 - (value * 0.02f / 255.0f));
+            gui_post_param("U. Detune: ", value);
+        } else {
+            module_set_param_all_voices(PARAM_TUNE, g_octave_tune_lut[value] );
+            gui_post_param("Pitch: ", value);
+
+        }
+
         break;
 
     case KNOB_ATTACK:
@@ -369,12 +376,16 @@ static void _encoder_callback(uint8_t index, uint8_t value) {
             }
         }
         if (g_shift_held) {
-            module_set_param_all_voices(PARAM_OSC_2_TYPE,
-                                        (1.0 / OSC_TYPE_COUNT) * osc_type);
-            gui_show_osc_type(2, osc_type);
+            if (osc_type != OSC_TYPE_SUPERSAW && module_get_param(PARAM_OSC_TYPE) != OSC_TYPE_SUPERSAW) { 
+                 // Supersaw is not available for osc 2
+                 // and cant change if osc 1 is super saw
+                module_set_param_all_voices(PARAM_OSC_2_TYPE, (1.0 / OSC_TYPE_COUNT) * osc_type);
+                gui_show_osc_type(2, osc_type);
+            } else {
+                gui_post("Not available");
+            }
         } else {
-            module_set_param_all_voices(PARAM_OSC_TYPE,
-                                        (1.0 / OSC_TYPE_COUNT) * osc_type);
+            module_set_param_all_voices(PARAM_OSC_TYPE, (1.0 / OSC_TYPE_COUNT) * osc_type);
             gui_show_osc_type(1, osc_type);
         }
 

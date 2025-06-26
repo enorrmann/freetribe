@@ -35,8 +35,7 @@
 
 #include "custom_aleph_monovoice.h"
 #include "common/config.h"
-
-#define WAVEFORM_SHAPE_COUNT WAVEFORM_SHAPE_SQUARE + 1 // the last so far
+#include "common/params.h"
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -131,14 +130,17 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
     fract32 next = Aleph_Waveform_next(&syn->waveformSingle[i]);
     output = add_fr1x32(output, next);
 
-    //if unison NOT active
-    //int up_to_osc = 2;
-    // if unison active 
-    int up_to_osc = MAX_UNISON_VOICES;
+
+    int up_to_osc = 2;
+    if (syn->unison_active){
+        up_to_osc = MAX_UNISON_VOICES;
+    }    
     
     for (i = 1; i < up_to_osc; i++) {
         freq_with_offset = fix16_mul_fract(freq_with_offset, syn->freq_offset);
-        if (syn->waveformSingle[i]->shape >= WAVEFORM_SHAPE_COUNT) continue;
+        
+        if (syn->waveformSingle[i]->shape == OSC_TYPE_OFF) continue;
+
         // Set oscillator frequency.
         Aleph_Waveform_set_freq(&syn->waveformSingle[i], freq_with_offset);
         next = Aleph_Waveform_next(&syn->waveformSingle[i]);
@@ -185,9 +187,16 @@ fract32 Custom_Aleph_MonoVoice_apply_filter(Custom_Aleph_MonoVoice *const synth,
 
 void Custom_Aleph_MonoVoice_set_shape_a(Custom_Aleph_MonoVoice *const synth, e_Aleph_Waveform_shape shape) {
     t_Custom_Aleph_MonoVoice *syn = *synth;
-    int i;
-    for (i = 0; i < MAX_UNISON_VOICES; i++) {
-        Aleph_Waveform_set_shape(&syn->waveformSingle[i], shape);
+    if (shape==OSC_TYPE_SUPERSAW){
+        syn->unison_active = true;
+        int i;
+        for (i = 0; i < MAX_UNISON_VOICES; i++) {
+            Aleph_Waveform_set_shape(&syn->waveformSingle[i], OSC_TYPE_SAW);
+        }
+
+    }  else {
+        syn->unison_active = false;
+        Aleph_Waveform_set_shape(&syn->waveformSingle[0], shape);
     }
 }
 

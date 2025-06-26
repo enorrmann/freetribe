@@ -368,8 +368,11 @@ void  gui_show_osc_type(uint8_t osc_number, uint8_t osc_type) {
                 case OSC_TYPE_SAW:
                     gui_post("O1: Saw");
                     break;
-                case OSC_TYPE_NONE:
+                case OSC_TYPE_OFF:
                     gui_post("O1: Off");
+                    break;
+                case OSC_TYPE_SUPERSAW:
+                    gui_post("O1: SuperSaw");
                     break;
             }
             break;
@@ -388,8 +391,11 @@ void  gui_show_osc_type(uint8_t osc_number, uint8_t osc_type) {
                 case OSC_TYPE_SAW:
                     gui_post("O2: Saw");
                     break;
-                case OSC_TYPE_NONE:
+                case OSC_TYPE_OFF:
                     gui_post("O2: Off");
+                    break;
+                case OSC_TYPE_SUPERSAW:
+                    gui_post("O2: SuperSaw");
                     break;
             }
             break;

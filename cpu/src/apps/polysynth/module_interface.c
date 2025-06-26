@@ -48,6 +48,7 @@ under the terms of the GNU Affero General Public License as published by
 #include "module_interface.h"
 #include "voice_manager.h"
 #include "common/config.h"
+#include "common/params.h"
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -98,6 +99,8 @@ typedef struct {
     bool gate;
     bool retrigger;
     bool reset_phase;
+
+    e_osc_type osc_type;
 
 } t_module;
 
@@ -347,12 +350,13 @@ void module_set_param_voice(uint16_t voice_index,uint16_t param_index_without_of
         break;
 
     case PARAM_OSC_TYPE:
+        g_module[voice_index].osc_type = value * OSC_TYPE_COUNT;
     case PARAM_OSC_2_TYPE:
         ft_set_module_param(0, param_index, value * OSC_TYPE_COUNT);
         break;
 
     case PARAM_FILTER_TYPE:
-        ft_set_module_param(0, PARAM_FILTER_TYPE, value * OSC_TYPE_COUNT);
+        ft_set_module_param(0, PARAM_FILTER_TYPE, value * FILTER_TYPE_COUNT);
         break;
 
     case PARAM_AMP_LFO_DEPTH:
@@ -410,6 +414,10 @@ float module_get_param(uint16_t param_index) {
     float value = 0;
 
     switch (param_index) {
+
+        case PARAM_OSC_TYPE:
+        return g_module[0].osc_type;
+        break;
 
     default:
         break;
