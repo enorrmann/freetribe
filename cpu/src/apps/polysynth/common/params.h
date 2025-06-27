@@ -15,6 +15,7 @@ typedef enum {
     PARAM_GATE,
     PARAM_VEL,
     PARAM_AMP_LEVEL,
+    PARAM_AMP_2_LEVEL,
     PARAM_AMP_ENV_ATTACK,
     PARAM_AMP_ENV_DECAY,
     PARAM_AMP_ENV_SUSTAIN,
@@ -56,7 +57,6 @@ typedef enum {
     OSC_TYPE_SAW,
     OSC_TYPE_SQUARE,
     OSC_TYPE_SUPERSAW,
-    OSC_TYPE_OFF,
 
     OSC_TYPE_COUNT
 } e_osc_type;

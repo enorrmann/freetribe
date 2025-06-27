@@ -278,6 +278,7 @@ void module_set_param_voice(uint16_t voice_index,uint16_t param_index_without_of
         break;
 
     case PARAM_AMP_LEVEL:
+    case PARAM_AMP_2_LEVEL:
         ft_set_module_param(0, param_index, float_to_fract32(value));
         break;
 

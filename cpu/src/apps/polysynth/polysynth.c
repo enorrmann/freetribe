@@ -302,8 +302,15 @@ static void _knob_callback(uint8_t index, uint8_t value) {
         break;
 
     case KNOB_LEVEL:
-        module_set_param_all_voices(PARAM_AMP_LEVEL, g_amp_cv_lut[value]);
-        gui_post_param("Amp Level: ", value);
+        if (g_shift_held) {
+            module_set_param_all_voices(PARAM_AMP_2_LEVEL, g_amp_cv_lut[value]);
+            gui_post_param("Amp2 Level: ", value);
+            
+        } else {
+            module_set_param_all_voices(PARAM_AMP_LEVEL, g_amp_cv_lut[value]);
+            gui_post_param("Amp Level: ", value);
+            
+        }
         break;
 
     case KNOB_RES:

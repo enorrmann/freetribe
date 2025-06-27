@@ -76,7 +76,6 @@ void module_set_param_voice(uint16_t voice_index, uint16_t param_index,
 typedef struct {
 
     Custom_Aleph_MonoVoice voice[MAX_VOICES];
-    fract32 amp_level;
     fract32 velocity;
 
 } t_module;
@@ -130,20 +129,12 @@ void module_process(fract32 *in, fract32 *out) {
     int i;
     for (i = 0; i < BLOCK_SIZE; i++) {
 
-        // fract32 amp_level_scaled = ;///MAX_VOICES; // already scaled in _next
-
-        outl[i] =
-            mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[0]),
-                           g_module.amp_level);
+        outl[i] = Custom_Aleph_MonoVoice_next(&g_module.voice[0]);
         int j;
         for (j = 1; j < MAX_VOICES; j++) {
             outl[i] = add_fr1x32(
                 outl[i],
-                mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[j]),
-                               g_module.amp_level));
-            // outl[i] +=
-            // mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[j]),
-            // g_module.amp_level);
+                Custom_Aleph_MonoVoice_next(&g_module.voice[j]));
         }
 
 // if global filter, use the first voice's filter.
@@ -196,8 +187,12 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
                                                value);
         break;
 
-    case PARAM_AMP_LEVEL:
-        g_module.amp_level = value;
+    case PARAM_AMP_LEVEL: 
+        g_module.voice[voice_number]->amp_level[0] = value;
+        break;
+
+    case PARAM_AMP_2_LEVEL: 
+        g_module.voice[voice_number]->amp_level[1] = value;
         break;
 
     case PARAM_CUTOFF:

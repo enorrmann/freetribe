@@ -68,6 +68,7 @@ typedef struct {
     Aleph_LPFOnePole cutoff_slew;
 
     Aleph_HPF dc_block;
+    fract32 amp_level[2];
 
 } t_Custom_Aleph_MonoVoice;
 

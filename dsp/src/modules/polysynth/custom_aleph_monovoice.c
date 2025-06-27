@@ -109,6 +109,7 @@ int i;
     mpool_free((char *)syn, syn->mempool);
 }
 
+
 fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
 
     t_Custom_Aleph_MonoVoice *syn = *synth;
@@ -130,25 +131,30 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
     int i = 0;
     Aleph_Waveform_set_freq(&syn->waveformSingle[i], freq_with_offset);
     fract32 output = Aleph_Waveform_next(&syn->waveformSingle[i]);
+    output = mult_fr1x32x32(output, syn->amp_level[0]);
 
 
     int up_to_osc = 2;
+    fract32 amp2level = syn->amp_level[1];
     if (syn->unison_active){
         up_to_osc = MAX_UNISON_VOICES;
+        amp2level = syn->amp_level[0]; // use first voice amp level for unison
     }    
     
     for (i = 1; i < up_to_osc; i++) {
-        freq_with_offset = fix16_mul_fract(freq_with_offset, syn->freq_offset);
-        
-        if (syn->waveformSingle[i]->shape == OSC_TYPE_OFF) {
-            continue;
+
+        if (amp2level == 0) {
+            break; // skip processing if amp2level is 0
         }
+
+        freq_with_offset = fix16_mul_fract(freq_with_offset, syn->freq_offset);
 
         // Set oscillator frequency.
         Aleph_Waveform_set_freq(&syn->waveformSingle[i], freq_with_offset);
 
         //int32_t osc_2_prev_phase = syn->waveformSingle[i]->phasor->phase; // testing sync to osc 2
         fract32 next = Aleph_Waveform_next(&syn->waveformSingle[i]);
+        next = mult_fr1x32x32(next, amp2level);
         /*if (osc_2_prev_phase > syn->waveformSingle[i]->phasor->phase){
             syn->waveformSingle[0]->phasor->phase = 0;
         }*/
