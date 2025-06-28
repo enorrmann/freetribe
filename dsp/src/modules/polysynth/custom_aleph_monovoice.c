@@ -37,6 +37,7 @@
 #include "common/config.h"
 #include "common/params.h"
 #include "filter_ladder.h"
+#include "noise.h"
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -91,6 +92,10 @@ void Custom_Aleph_MonoVoice_init_to_pool(Custom_Aleph_MonoVoice *const synth,
     syn->cutoff_slew->coeff = SLEW_10MS; // 10ms slew time for cutoff
     syn->freq_slew->coeff = SLEW_10MS; // 10ms slew time for cutoff
     filter_ladder_init_to_pool(&syn->v_filter_ladder, mempool);
+    Noise  n = (Noise)mpool_alloc(sizeof(lcprng), mp);
+    lcprng_reset(n, 0x12345678); // Initialize noise generator with a seed
+    syn->noise = n;
+
 }
 
 void Custom_Aleph_MonoVoice_free(Custom_Aleph_MonoVoice *const synth) {
@@ -133,6 +138,9 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
     int i = 0;
     Aleph_Waveform_set_freq(&syn->waveformSingle[i], freq_with_offset);
     fract32 output = Aleph_Waveform_next(&syn->waveformSingle[i]);
+    output = mult_fr1x32x32(output, syn->amp_level[0]);
+
+    output = lcprng_next(syn->noise); // use noise as first voice output
     output = mult_fr1x32x32(output, syn->amp_level[0]);
 
 

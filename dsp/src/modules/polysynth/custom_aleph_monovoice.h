@@ -38,6 +38,7 @@ extern "C" {
 #include "aleph_lpf_one_pole.h"
 #include "aleph_waveform.h"
 #include "filter_ladder.h"
+#include "noise.h"
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -71,6 +72,8 @@ typedef struct {
 
     Aleph_HPF dc_block;
     fract32 amp_level[2];
+    Noise noise;
+
 
 } t_Custom_Aleph_MonoVoice;
 
