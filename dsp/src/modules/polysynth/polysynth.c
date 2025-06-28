@@ -192,7 +192,11 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
         break;
 
     case PARAM_AMP_2_LEVEL: 
-        g_module.voice[voice_number]->amp_level[1] = value;
+        g_module.voice[voice_number]->amp_level[2] = value;
+        break;
+
+    case PARAM_AMP_NOISE_LEVEL: 
+        g_module.voice[voice_number]->amp_level[2] = value;
         break;
 
     case PARAM_CUTOFF:

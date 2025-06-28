@@ -16,6 +16,7 @@ typedef enum {
     PARAM_VEL,
     PARAM_AMP_LEVEL,
     PARAM_AMP_2_LEVEL,
+    PARAM_AMP_NOISE_LEVEL,
     PARAM_AMP_ENV_ATTACK,
     PARAM_AMP_ENV_DECAY,
     PARAM_AMP_ENV_SUSTAIN,
@@ -65,6 +66,7 @@ typedef enum {
     FILTER_TYPE_LPF,
     FILTER_TYPE_HPF,
     FILTER_TYPE_BPF,
+    FILTER_TYPE_NOTCH,
 
     FILTER_TYPE_COUNT
 } e_filter_type;
@@ -78,3 +80,5 @@ typedef enum {
 } e_mod_type;
 
 #endif // PARAMS_H
+
+

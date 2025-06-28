@@ -140,8 +140,6 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
     fract32 output = Aleph_Waveform_next(&syn->waveformSingle[i]);
     output = mult_fr1x32x32(output, syn->amp_level[0]);
 
-    output = lcprng_next(syn->noise); // use noise as first voice output
-    output = mult_fr1x32x32(output, syn->amp_level[0]);
 
 
     int up_to_osc = 2;
@@ -175,6 +173,11 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
 
     }
 
+    //if noise level is not zero, add noise to output
+    if (syn->amp_level[2]>0){
+        output = add_fr1x32(output, mult_fr1x32x32(lcprng_next(syn->noise), syn->amp_level[2])); 
+    }
+
 
     // Shift right to prevent clipping.
     output = shr_fr1x32(output, 4);
@@ -204,11 +207,11 @@ fract32 Custom_Aleph_MonoVoice_apply_filter(Custom_Aleph_MonoVoice *const synth,
     cutoff = Aleph_LPFOnePole_next(&syn->cutoff_slew);
 
     // Set filter cutoff.
-    //Aleph_FilterSVF_set_coeff(&syn->filter, cutoff);
-    filter_ladder_set_freq(&syn->v_filter_ladder, cutoff);
-    output = filter_ladder_lpf_next(&syn->v_filter_ladder, input_signal);
+    Aleph_FilterSVF_set_coeff(&syn->filter, cutoff);
+    output = syn->filter_function(&syn->filter, input_signal);
+    //filter_ladder_set_freq(&syn->v_filter_ladder, cutoff);
+    //output = filter_ladder_lpf_next(&syn->v_filter_ladder, input_signal);
 
-    //output = syn->filter_function(&syn->filter, input_signal);
     
     return output;
 }

@@ -571,6 +571,8 @@ static void _button_callback(uint8_t index, bool state) {
 
 static void _set_filter_type(uint8_t filter_type) {
 
+        module_set_param_all_voices(PARAM_FILTER_TYPE, (1.0 / FILTER_TYPE_COUNT) * filter_type);
+
     switch (filter_type) {
 
     case FILTER_TYPE_LPF:
@@ -578,8 +580,6 @@ static void _set_filter_type(uint8_t filter_type) {
         ft_set_led(LED_BPF, 0);
         ft_set_led(LED_HPF, 0);
 
-        module_set_param_all_voices(PARAM_FILTER_TYPE,
-                                    (1.0 / OSC_TYPE_COUNT) * FILTER_TYPE_LPF);
         break;
 
     case FILTER_TYPE_BPF:
@@ -587,8 +587,6 @@ static void _set_filter_type(uint8_t filter_type) {
         ft_set_led(LED_BPF, 1);
         ft_set_led(LED_HPF, 0);
 
-        module_set_param_all_voices(PARAM_FILTER_TYPE,
-                                    (1.0 / OSC_TYPE_COUNT) * FILTER_TYPE_BPF);
         break;
 
     case FILTER_TYPE_HPF:
@@ -596,8 +594,6 @@ static void _set_filter_type(uint8_t filter_type) {
         ft_set_led(LED_BPF, 0);
         ft_set_led(LED_HPF, 1);
 
-        module_set_param_all_voices(PARAM_FILTER_TYPE,
-                                    (1.0 / OSC_TYPE_COUNT) * FILTER_TYPE_HPF);
         break;
 
     default:

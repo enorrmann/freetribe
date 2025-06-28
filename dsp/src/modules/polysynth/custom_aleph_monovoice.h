@@ -71,7 +71,7 @@ typedef struct {
     Aleph_LPFOnePole cutoff_slew;
 
     Aleph_HPF dc_block;
-    fract32 amp_level[2];
+    fract32 amp_level[3]; // 0: ocs1 , 1: ocs2, 2: noise
     Noise noise;
 
 
