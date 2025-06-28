@@ -37,6 +37,7 @@ extern "C" {
 #include "aleph_filter_svf.h"
 #include "aleph_lpf_one_pole.h"
 #include "aleph_waveform.h"
+#include "filter_ladder.h"
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -60,6 +61,7 @@ typedef struct {
     bool unison_active; // Flag to indicate if unison is active
 
     Aleph_FilterSVF filter;
+    filter_ladder * v_filter_ladder;
     e_Aleph_FilterSVF_type filter_type;
     fract32 (*filter_function)(Aleph_FilterSVF *const filter, fract32 in); // pointer to filter function
 

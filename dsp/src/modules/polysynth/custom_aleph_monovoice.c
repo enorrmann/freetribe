@@ -36,6 +36,7 @@
 #include "custom_aleph_monovoice.h"
 #include "common/config.h"
 #include "common/params.h"
+#include "filter_ladder.h"
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -89,6 +90,7 @@ void Custom_Aleph_MonoVoice_init_to_pool(Custom_Aleph_MonoVoice *const synth,
 
     syn->cutoff_slew->coeff = SLEW_10MS; // 10ms slew time for cutoff
     syn->freq_slew->coeff = SLEW_10MS; // 10ms slew time for cutoff
+    filter_ladder_init_to_pool(&syn->v_filter_ladder, mempool);
 }
 
 void Custom_Aleph_MonoVoice_free(Custom_Aleph_MonoVoice *const synth) {
@@ -194,9 +196,11 @@ fract32 Custom_Aleph_MonoVoice_apply_filter(Custom_Aleph_MonoVoice *const synth,
     cutoff = Aleph_LPFOnePole_next(&syn->cutoff_slew);
 
     // Set filter cutoff.
-    Aleph_FilterSVF_set_coeff(&syn->filter, cutoff);
+    //Aleph_FilterSVF_set_coeff(&syn->filter, cutoff);
+    filter_ladder_set_freq(&syn->v_filter_ladder, cutoff);
+    output = filter_ladder_lpf_next(&syn->v_filter_ladder, input_signal);
 
-    output = syn->filter_function(&syn->filter, input_signal);
+    //output = syn->filter_function(&syn->filter, input_signal);
     
     return output;
 }
@@ -295,6 +299,7 @@ void Custom_Aleph_MonoVoice_set_res(Custom_Aleph_MonoVoice *const synth, fract32
     t_Custom_Aleph_MonoVoice *syn = *synth;
 
     Aleph_FilterSVF_set_rq(&syn->filter, res);
+    filter_ladder_set_feedback(&syn->v_filter_ladder, res);
 }
 
 
