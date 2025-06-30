@@ -62,7 +62,7 @@ typedef struct {
     bool unison_active; // Flag to indicate if unison is active
 
     Aleph_FilterSVF filter;
-    filter_ladder * v_filter_ladder;
+    FilterLadder filter_ladder;
 
     Aleph_LPFOnePole amp_slew;
     Aleph_LPFOnePole freq_slew;

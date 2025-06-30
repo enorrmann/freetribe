@@ -45,7 +45,7 @@
 
 /*----- Static variable definitions ----------------------------------*/
 static e_Aleph_FilterSVF_type filter_type;
-static fract32 (*filter_function)(void *const filter, fract32 in); // pointer to filter function
+// static fract32 (*output)(void *const filter, fract32 in); // pointer to filter function, too complicated
 
 
 /*----- Extern variable definitions ----------------------------------*/
@@ -55,7 +55,6 @@ static fract32 (*filter_function)(void *const filter, fract32 in); // pointer to
 /*----- Extern function implementations ------------------------------*/
 
 void Custom_Aleph_MonoVoice_init(Custom_Aleph_MonoVoice *const synth, t_Aleph *const aleph) {
-
     Custom_Aleph_MonoVoice_init_to_pool(synth, &aleph->mempool);
 }
 
@@ -71,7 +70,6 @@ void Custom_Aleph_MonoVoice_init_to_pool(Custom_Aleph_MonoVoice *const synth,
 
     syn->freq_offset = Custom_Aleph_MonoVoice_DEFAULT_FREQ_OFFSET;
     filter_type = Custom_Aleph_MonoVoice_DEFAULT_FILTER_TYPE;
-    filter_function = &Aleph_FilterSVF_lpf_next;
 
     int i;
     for (i = 0; i < MAX_UNISON_VOICES; i++) {
@@ -94,7 +92,7 @@ void Custom_Aleph_MonoVoice_init_to_pool(Custom_Aleph_MonoVoice *const synth,
 
     syn->cutoff_slew->coeff = SLEW_10MS; // 10ms slew time for cutoff
     syn->freq_slew->coeff = SLEW_10MS; // 10ms slew time for cutoff
-    filter_ladder_init_to_pool(&syn->v_filter_ladder, mempool);
+    filter_ladder_init_to_pool(&syn->filter_ladder, mempool);
     Noise  n = (Noise)mpool_alloc(sizeof(lcprng), mp);
     lcprng_reset(n, 0x12345678); // Initialize noise generator with a seed
     syn->noise = n;
@@ -211,14 +209,46 @@ fract32 Custom_Aleph_MonoVoice_apply_filter(Custom_Aleph_MonoVoice *const synth,
 
     // Set filter cutoff.
     Aleph_FilterSVF_set_coeff(&syn->filter, cutoff);
-    filter_ladder_set_freq(&syn->v_filter_ladder, cutoff);
+    filter_ladder_set_freq(&syn->filter_ladder, cutoff);
 
-    if (filter_type >= 4) {
-        output = filter_ladder_lpf_next(&syn->v_filter_ladder, input_signal);    
-    } else {
-        output = filter_function(&syn->filter, input_signal);
-    }
+    switch (filter_type) {
+
+        case ALEPH_FILTERSVF_TYPE_LPF:
+            output = Aleph_FilterSVF_lpf_next(&syn->filter, input_signal);
+            break;
+
+        case ALEPH_FILTERSVF_TYPE_HPF:
+            output = Aleph_FilterSVF_hpf_next(&syn->filter, input_signal);
+            break;
+
+        case ALEPH_FILTERSVF_TYPE_BPF:
+            output = Aleph_FilterSVF_bpf_next(&syn->filter, input_signal);
+            break;
+
+        case ALEPH_FILTERSVF_TYPE_NOTCH:
+            output = Aleph_FilterSVF_notch_next(&syn->filter, input_signal);
+            break;
+
+        case 4:
+            output = filter_ladder_lpf_next(&syn->filter_ladder, input_signal);
+            break;
+
+        case 5:
+            output = filter_ladder_hpf_next(&syn->filter_ladder, input_signal);
+            break;
+
+        case 6:
+            output = Aleph_FilterSVF_bpf_next(&syn->filter, input_signal);
+            break;
+
+
+        default:
+            // Default to LPF.
+            output = Aleph_FilterSVF_lpf_next(&syn->filter, input_signal);
+            break;
+    }    
     
+
     return output;
 }
 
@@ -281,42 +311,7 @@ void Custom_Aleph_MonoVoice_set_filter_type(Custom_Aleph_MonoVoice *const synth,
     t_Custom_Aleph_MonoVoice *syn = *synth;
      
     filter_type = type; 
-    switch (filter_type) {
 
-    case ALEPH_FILTERSVF_TYPE_LPF:
-        filter_function = &Aleph_FilterSVF_lpf_next;
-        break;
-
-    case ALEPH_FILTERSVF_TYPE_HPF:
-        filter_function = &Aleph_FilterSVF_hpf_next;
-        break;
-
-    case ALEPH_FILTERSVF_TYPE_BPF:
-        filter_function = &Aleph_FilterSVF_bpf_next;
-        break;
-
-    case ALEPH_FILTERSVF_TYPE_NOTCH:
-        filter_function = &Aleph_FilterSVF_notch_next;
-        break;
-
-    case 4:
-        filter_function = &filter_ladder_lpf_next;
-        break;
-
-    case 5:
-        filter_function = &filter_ladder_hpf_next;
-        break;
-
-    case 6:
-        filter_function = &Aleph_FilterSVF_bpf_next;
-        break;
-
-
-    default:
-        // Default to LPF.
-        filter_function = &Aleph_FilterSVF_lpf_next;
-        break;
-    }    
 
 
 }
@@ -333,7 +328,7 @@ void Custom_Aleph_MonoVoice_set_res(Custom_Aleph_MonoVoice *const synth, fract32
     t_Custom_Aleph_MonoVoice *syn = *synth;
 
     Aleph_FilterSVF_set_rq(&syn->filter, res);
-    filter_ladder_set_feedback(&syn->v_filter_ladder, res);
+    filter_ladder_set_feedback(&syn->filter_ladder, res);
 }
 
 
