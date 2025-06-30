@@ -44,6 +44,9 @@
 /*----- Typedefs -----------------------------------------------------*/
 
 /*----- Static variable definitions ----------------------------------*/
+static e_Aleph_FilterSVF_type filter_type;
+static fract32 (*filter_function)(void *const filter, fract32 in); // pointer to filter function
+
 
 /*----- Extern variable definitions ----------------------------------*/
 
@@ -67,8 +70,8 @@ void Custom_Aleph_MonoVoice_init_to_pool(Custom_Aleph_MonoVoice *const synth,
     syn->mempool = mp;
 
     syn->freq_offset = Custom_Aleph_MonoVoice_DEFAULT_FREQ_OFFSET;
-    syn->filter_type = Custom_Aleph_MonoVoice_DEFAULT_FILTER_TYPE;
-    syn->filter_function = &Aleph_FilterSVF_lpf_next;
+    filter_type = Custom_Aleph_MonoVoice_DEFAULT_FILTER_TYPE;
+    filter_function = &Aleph_FilterSVF_lpf_next;
 
     int i;
     for (i = 0; i < MAX_UNISON_VOICES; i++) {
@@ -208,10 +211,13 @@ fract32 Custom_Aleph_MonoVoice_apply_filter(Custom_Aleph_MonoVoice *const synth,
 
     // Set filter cutoff.
     Aleph_FilterSVF_set_coeff(&syn->filter, cutoff);
-    output = syn->filter_function(&syn->filter, input_signal);
-    //filter_ladder_set_freq(&syn->v_filter_ladder, cutoff);
-    //output = filter_ladder_lpf_next(&syn->v_filter_ladder, input_signal);
+    filter_ladder_set_freq(&syn->v_filter_ladder, cutoff);
 
+    if (filter_type >= 4) {
+        output = filter_ladder_lpf_next(&syn->v_filter_ladder, input_signal);    
+    } else {
+        output = filter_function(&syn->filter, input_signal);
+    }
     
     return output;
 }
@@ -273,25 +279,42 @@ void Custom_Aleph_MonoVoice_set_filter_type(Custom_Aleph_MonoVoice *const synth,
                                      e_Aleph_FilterSVF_type type) {
 
     t_Custom_Aleph_MonoVoice *syn = *synth;
-
-    syn->filter_type = type; //filter function pointer
-    switch (syn->filter_type) {
+     
+    filter_type = type; 
+    switch (filter_type) {
 
     case ALEPH_FILTERSVF_TYPE_LPF:
-        syn->filter_function = &Aleph_FilterSVF_lpf_next;
-        break;
-
-    case ALEPH_FILTERSVF_TYPE_BPF:
-        syn->filter_function = &Aleph_FilterSVF_bpf_next;
+        filter_function = &Aleph_FilterSVF_lpf_next;
         break;
 
     case ALEPH_FILTERSVF_TYPE_HPF:
-        syn->filter_function = &Aleph_FilterSVF_hpf_next;
+        filter_function = &Aleph_FilterSVF_hpf_next;
         break;
+
+    case ALEPH_FILTERSVF_TYPE_BPF:
+        filter_function = &Aleph_FilterSVF_bpf_next;
+        break;
+
+    case ALEPH_FILTERSVF_TYPE_NOTCH:
+        filter_function = &Aleph_FilterSVF_notch_next;
+        break;
+
+    case 4:
+        filter_function = &filter_ladder_lpf_next;
+        break;
+
+    case 5:
+        filter_function = &filter_ladder_hpf_next;
+        break;
+
+    case 6:
+        filter_function = &Aleph_FilterSVF_bpf_next;
+        break;
+
 
     default:
         // Default to LPF.
-        syn->filter_function = &Aleph_FilterSVF_lpf_next;
+        filter_function = &Aleph_FilterSVF_lpf_next;
         break;
     }    
 

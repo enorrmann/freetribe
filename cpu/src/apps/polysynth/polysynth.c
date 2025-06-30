@@ -571,7 +571,14 @@ static void _button_callback(uint8_t index, bool state) {
 
 static void _set_filter_type(uint8_t filter_type) {
 
-        module_set_param_all_voices(PARAM_FILTER_TYPE, (1.0 / FILTER_TYPE_COUNT) * filter_type);
+    static uint8_t filter_variation = 0;
+    filter_variation++;
+    if (filter_variation >1){
+        filter_variation = 0;
+    }
+    uint8_t ft = filter_type + ( FILTER_TYPE_COUNT * filter_variation);
+    //uint8_t ft = filter_type ;
+    module_set_param_all_voices(PARAM_FILTER_TYPE, (1.0 / FILTER_TYPE_COUNT) * ft);
 
     switch (filter_type) {
 
@@ -599,7 +606,7 @@ static void _set_filter_type(uint8_t filter_type) {
     default:
         break;
     }
-    gui_post_param("Fil Type: ", filter_type);
+    gui_post_param("Fil Type: ", ft);
 }
 
 static void _set_mod_depth(uint32_t mod_depth) {

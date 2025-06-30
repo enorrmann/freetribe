@@ -63,8 +63,6 @@ typedef struct {
 
     Aleph_FilterSVF filter;
     filter_ladder * v_filter_ladder;
-    e_Aleph_FilterSVF_type filter_type;
-    fract32 (*filter_function)(Aleph_FilterSVF *const filter, fract32 in); // pointer to filter function
 
     Aleph_LPFOnePole amp_slew;
     Aleph_LPFOnePole freq_slew;
