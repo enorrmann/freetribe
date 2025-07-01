@@ -554,7 +554,11 @@ static void _button_callback(uint8_t index, bool state) {
 
     case BUTTON_BPF:
         if (state) {
-            _set_filter_type(FILTER_TYPE_BPF);
+            if (g_shift_held){
+                _set_filter_type(FILTER_TYPE_NOTCH);
+            } else {
+                _set_filter_type(FILTER_TYPE_BPF);
+            }
         }
         break;
 

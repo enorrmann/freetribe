@@ -87,30 +87,8 @@ extern fract32 filter_ladder_lpf_next (FilterLadder * const filter, fract32 in) 
 // LTI version of 4-stage hpf ladder topology
 // NOTE: not sure this actually works, leaving it here anyway...
 extern fract32 filter_ladder_hpf_next (FilterLadder * const filter, fract32 in) {
-  filter_ladder *f = *filter;
-  int i;
-
-  fract32 outDel = add_fr1x32(shr_fr1x32(f->filterStageOuts[3], 1),
-			      shr_fr1x32(f->lastOutput, 1));
-  outDel = shr_fr1x32(mult_fr1x32x32(f->feedback, outDel),
-		      2 - f->fbShift);
-  fract32 in_scaled = sub_fr1x32(shr_fr1x32(in, 3), outDel);
-  f->filterStageOuts[0]
-    = mult_fr1x32x32(add_fr1x32(in_scaled,
-				sub_fr1x32(f->filterStageOuts[0],
-					   f->filterStageLastIns[0])),
-		     f->alpha);
-  f->filterStageLastIns[0] = in_scaled;
-  f->lastOutput = f->filterStageOuts[3];
-  for(i=1; i < 4; i++) {
-  f->filterStageOuts[i]
-    = mult_fr1x32x32(add_fr1x32(f->filterStageOuts[i-1],
-				sub_fr1x32(f->filterStageOuts[i],
-					   f->filterStageLastIns[i])),
-		     f->alpha);
-  f->filterStageLastIns[i] = in_scaled;
-  }
-  return shl_fr1x32(f->filterStageOuts[3], 3);
+  fract32 lpf_out = filter_ladder_lpf_next(filter, in);
+  return sub_fr1x32(in, lpf_out); 
 }
 
 // oversampling version of the 4-stage LTI ladder
