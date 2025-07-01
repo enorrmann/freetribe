@@ -590,14 +590,13 @@ static void _set_filter_type(uint8_t filter_type) {
         ft_set_led(LED_LPF, 1);
         ft_set_led(LED_BPF, 0);
         ft_set_led(LED_HPF, 0);
-
         break;
 
     case FILTER_TYPE_BPF:
+    case FILTER_TYPE_NOTCH:
         ft_set_led(LED_LPF, 0);
         ft_set_led(LED_BPF, 1);
         ft_set_led(LED_HPF, 0);
-
         break;
 
     case FILTER_TYPE_HPF:
