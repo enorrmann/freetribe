@@ -59,7 +59,7 @@ typedef struct {
 
     Aleph_Waveform  waveformSingle [MAX_UNISON_VOICES];
     fract32 freq_offset;
-    bool unison_active; // Flag to indicate if unison is active
+    bool unison_active ; // Flag to indicate if unison is active
 
     Aleph_FilterSVF filter;
     FilterLadder filter_ladder;

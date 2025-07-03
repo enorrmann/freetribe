@@ -47,6 +47,7 @@ under the terms of the GNU Affero General Public License as published by
 #include "common/config.h"
 #include "common/params.h"
 #include "custom_aleph_monovoice.h"
+#include "chorus.h"
 
 void module_set_param_voice(uint16_t voice_index, uint16_t param_index,
                             int32_t value);
@@ -87,6 +88,7 @@ __attribute__((aligned(32))) static char g_mempool[MEMPOOL_SIZE];
 
 static t_Aleph g_aleph;
 static t_module g_module;
+static bool g_ifx = false; // Global effect on/off state
 
 /*----- Extern variable definitions ----------------------------------*/
 
@@ -113,6 +115,7 @@ void module_init(void) {
         module_set_param_voice(i, PARAM_CUTOFF, 0x326f6abb);
         module_set_param_voice(i, PARAM_RES, FR32_MAX);
     }
+    chorus_init();
 }
 
 /**
@@ -142,9 +145,15 @@ void module_process(fract32 *in, fract32 *out) {
         outl[i] =
             Custom_Aleph_MonoVoice_apply_filter(&g_module.voice[0], outl[i]);
 #endif
-
-        // Set output.
-        outr[i] = outl[i];
+        if (g_ifx){
+            outr[i] = outl[i];     
+            outl[i] = chorus_process_L(outl[i]);
+            outr[i] = chorus_process_R(outr[i]);
+        } else {
+            // Set output.
+            outr[i] = outl[i];     
+        }
+        
     }
 }
 
@@ -220,6 +229,10 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
     case PARAM_FILTER_TYPE:
         Custom_Aleph_MonoVoice_set_filter_type(&g_module.voice[voice_number],
                                                value);
+        break;
+    
+    case PARAM_IFX:
+        g_ifx = value;
         break;
 
     default:

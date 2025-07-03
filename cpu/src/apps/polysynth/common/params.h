@@ -48,6 +48,8 @@ typedef enum {
     PARAM_FILTER_BASE_CUTOFF,
     PARAM_PHASE_RESET,
     PARAM_RETRIGGER,
+    PARAM_IFX,
+    PARAM_UNISON,
 
     PARAM_COUNT
 } e_param;
@@ -57,7 +59,6 @@ typedef enum {
     OSC_TYPE_TRI,
     OSC_TYPE_SAW,
     OSC_TYPE_SQUARE,
-    OSC_TYPE_SUPERSAW,
 
     OSC_TYPE_COUNT
 } e_osc_type;

@@ -76,6 +76,8 @@ under the terms of the GNU Affero General Public License as published by
 #define BUTTON_HPF 0x14
 #define BUTTON_BPF 0x16
 #define BUTTON_EXIT 0x0d
+#define BUTTON_IFX_ON 0x21
+
 
 #define DEFAULT_SCALE_NOTES NOTES_PHRYGIAN_DOMINANT
 #define DEFAULT_SCALE_TONES 12
@@ -231,7 +233,7 @@ static void _knob_callback(uint8_t index, uint8_t value) {
 
     case KNOB_PITCH:
         //  if osc type is unison attenuate unison detune 
-        if (module_get_param(PARAM_OSC_TYPE) == OSC_TYPE_SUPERSAW) {
+        if (module_get_param(PARAM_UNISON) == 1) {
             module_set_param_all_voices(PARAM_TUNE, 1 - (value * 0.02f / 255.0f));
             gui_post_param("U. Detune: ", value);
         } else {
@@ -384,14 +386,8 @@ static void _encoder_callback(uint8_t index, uint8_t value) {
             }
         }
         if (g_shift_held) {
-            if (osc_type != OSC_TYPE_SUPERSAW && module_get_param(PARAM_OSC_TYPE) != OSC_TYPE_SUPERSAW) { 
-                 // Supersaw is not available for osc 2
-                 // and cant change if osc 1 is super saw
-                module_set_param_all_voices(PARAM_OSC_2_TYPE, (1.0 / OSC_TYPE_COUNT) * osc_type);
-                gui_show_osc_type(2, osc_type);
-            } else {
-                gui_post("Not available");
-            }
+            module_set_param_all_voices(PARAM_OSC_2_TYPE, (1.0 / OSC_TYPE_COUNT) * osc_type);
+            gui_show_osc_type(2, osc_type);
         } else {
             module_set_param_all_voices(PARAM_OSC_TYPE, (1.0 / OSC_TYPE_COUNT) * osc_type);
             gui_show_osc_type(1, osc_type);
@@ -515,9 +511,18 @@ static void _trigger_callback_2(uint8_t pad, uint8_t vel, bool state) {
  * @param[in]   state   State of button.
  */
 static void _button_callback(uint8_t index, bool state) {
+    static bool ifx_on = false;
 
     switch (index) {
-    case BUTTON_EXIT:
+
+    case BUTTON_IFX_ON:
+        if (state == 1) {
+            ifx_on = !ifx_on;
+            ft_set_led(LED_IFX, ifx_on);
+            ft_set_module_param(0, PARAM_IFX, ifx_on);
+        }
+        break;
+        case BUTTON_EXIT:
         if (state == 1) {
             ft_shutdown();
         }

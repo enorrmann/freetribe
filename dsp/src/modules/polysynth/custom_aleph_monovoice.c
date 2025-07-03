@@ -96,6 +96,7 @@ void Custom_Aleph_MonoVoice_init_to_pool(Custom_Aleph_MonoVoice *const synth,
     Noise  n = (Noise)mpool_alloc(sizeof(lcprng), mp);
     lcprng_reset(n, 0x12345678); // Initialize noise generator with a seed
     syn->noise = n;
+    syn->unison_active = false;
 
 }
 
@@ -199,6 +200,8 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
 }
 
 fract32 Custom_Aleph_MonoVoice_apply_filter(Custom_Aleph_MonoVoice *const synth, fract32 input_signal) {
+
+    
     t_Custom_Aleph_MonoVoice *syn = *synth;
 
     fract32 output;
@@ -254,15 +257,13 @@ fract32 Custom_Aleph_MonoVoice_apply_filter(Custom_Aleph_MonoVoice *const synth,
 
 void Custom_Aleph_MonoVoice_set_shape_a(Custom_Aleph_MonoVoice *const synth, e_Aleph_Waveform_shape shape) {
     t_Custom_Aleph_MonoVoice *syn = *synth;
-    if (shape==OSC_TYPE_SUPERSAW){
-        syn->unison_active = true;
+    if (syn->unison_active){
         int i;
         for (i = 0; i < MAX_UNISON_VOICES; i++) {
-            Aleph_Waveform_set_shape(&syn->waveformSingle[i], OSC_TYPE_SAW);
+            Aleph_Waveform_set_shape(&syn->waveformSingle[i], shape);
         }
 
     }  else {
-        syn->unison_active = false;
         Aleph_Waveform_set_shape(&syn->waveformSingle[0], shape);
     }
 }
