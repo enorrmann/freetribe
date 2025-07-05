@@ -185,7 +185,18 @@ void module_process(void) {
         #endif
         // Filter cutoff modulation.
         filter_mod = g_module[voice_index].filter_cutoff;
+        int stage_pre_tick =  g_module[voice_index].filter_env->whichStage;
         filter_mod += tADSRT_tick(&g_module[voice_index].filter_env) * g_module[voice_index].filter_env_depth;
+        int stage_now =  g_module[voice_index].filter_env->whichStage;
+
+        // if envelope ends, loop envelope,
+        // todo looping envelope dont have sustain stage
+        if (stage_now == env_sustain){
+            tADSRT_off(&g_module[voice_index].filter_env);
+        }
+        if (stage_pre_tick == env_release && stage_now == env_idle) {
+            tADSRT_on(&g_module[voice_index].filter_env, 1);
+        }
         filter_mod += tTriLFO_tick(&g_module[voice_index].filter_lfo) * g_module[voice_index].filter_lfo_depth;
         if (_cv_update(&g_module[voice_index].filter_cv, filter_mod)) {
             module_set_param_voice(voice_index,PARAM_CUTOFF, clamp_value(filter_mod));
