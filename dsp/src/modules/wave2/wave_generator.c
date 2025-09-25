@@ -1,6 +1,7 @@
 
 
 #include "wave_generator.h"
+#include "custom_aleph_monovoice.h"
 
 
 // Genera onda cuadrada suave usando square_polyblep (todo en fract32)
@@ -60,8 +61,8 @@ void generate_soft_square(int wave_index) {
         // Aplicar headroom (0.95f)
         sample = mult_fr1x32x32(sample, float_to_fract32(0.95f));
         
-        // Almacenar en wavtab global
-        wavtab[i] = sample;
+        // Almacenar en data_sdram global
+        data_sdram[i] = sample;
     }
 }
 // Genera diente de sierra suave usando saw_polyblep (todo en fract32)
@@ -106,7 +107,7 @@ void generate_soft_sawtooth(int wave_index) {
         // Aplicar headroom (0.95f)
         sample = mult_fr1x32x32(sample, float_to_fract32(0.95f));
         
-        // Almacenar en wavtab global
-        wavtab[i] = sample;
+        // Almacenar en data_sdram global
+        data_sdram[i] = sample;
     }
 }

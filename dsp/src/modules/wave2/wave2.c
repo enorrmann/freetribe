@@ -29,9 +29,9 @@ under the terms of the GNU Affero General Public License as published by
 ----------------------------------------------------------------------*/
 
 /**
- * @file    monosynth.c
+ * @file    wave2.c
  *
- * @brief   A monophonic synth module for Freetribe.
+ * @brief   A wavetable synth module for Freetribe.
  */
 
 /*----- Includes -----------------------------------------------------*/
@@ -43,11 +43,11 @@ under the terms of the GNU Affero General Public License as published by
 #include "types.h"
 #include "utils.h"
 #include <math.h>
+#include "common/sample.h"
 
 #include "aleph.h"
 
 #include "custom_aleph_monovoice.h"
-
 
 void module_set_param_voice(uint16_t voice_index, uint16_t param_index,
                             int32_t value);
@@ -56,12 +56,6 @@ void module_set_param_voice(uint16_t voice_index, uint16_t param_index,
 
 #define MEMPOOL_SIZE (0x2000)
 
-/// TODO: Struct for parameter type.
-///         scaler,
-///         range,
-///         default,
-///         display,
-///         etc...,
 
 // #define DEFAULT_CUTOFF 0x7f // Index in pitch LUT.
 #define DEFAULT_OSC_TYPE 2
@@ -72,8 +66,6 @@ void module_set_param_voice(uint16_t voice_index, uint16_t param_index,
     ((param_index_with_offset) % paramCount)
 #define PARAM_VOICE_NUMBER(param_index_with_offset, paramCount)                \
     ((param_index_with_offset) / paramCount)
-
-
 
 /// TODO: Move to common location.
 /**
@@ -125,11 +117,12 @@ typedef enum {
     PARAM_RETRIGGER,
     SAMPLE_LOAD,
     SAMPLE_RECORD_START,
+    SAMPLE_RECORD_STOP,
     PARAM_MORPH_AMOUNT,
     PARAM_BASE_MORPH_AMOUNT,
     PARAM_MORPH_LFO_DEPTH,
     PARAM_MORPH_LFO_SPEED,
-
+    PARAM_PLAYBACK_RATE,
 
     PARAM_COUNT
 } e_param;
@@ -140,6 +133,8 @@ typedef struct {
     fract32 amp_level;
     fract32 velocity;
     fract16 morph_amount;
+    int active_sample_slot;
+    Sample  samples[150];
 
 } t_module;
 
@@ -150,20 +145,17 @@ __attribute__((aligned(32))) static char g_mempool[MEMPOOL_SIZE];
 
 static t_Aleph g_aleph;
 static t_module g_module;
-
+static int recording = 0;
 
 /*----- Extern variable definitions ----------------------------------*/
 
 /*----- Static function prototypes -----------------------------------*/
 /*----- Extern function implementations ------------------------------*/
 
-
-
 #define FOUR_MB (440 * 1024 * 1024)   // 40 Megabytes en bytes
 #define FRACT32_BYTES sizeof(fract32) // Tamaño de un fract32 en bytes
-#define NUM_FRACT32_ELEMENTS  (FOUR_MB / FRACT32_BYTES) // Cantidad de elementos fract32
-
-
+#define NUM_FRACT32_ELEMENTS                                                   \
+    (FOUR_MB / FRACT32_BYTES) // Cantidad de elementos fract32
 
 /**
  * @brief   Initialise module.
@@ -171,14 +163,12 @@ static t_module g_module;
 void module_init(void) {
 
     // generate_soft_sawtooth(0);
-    // generate_soft_square(1);
+    //  generate_soft_square(1);
 
-    
-
-    
     // write_to_sdram_4mb();
     // wavtab_big_counter = 0;
     Aleph_init(&g_aleph, SAMPLERATE, g_mempool, MEMPOOL_SIZE, NULL);
+    g_module.active_sample_slot  = 0;
 
     int i;
     for (i = 0; i < MAX_VOICES; i++) {
@@ -194,6 +184,61 @@ void module_init(void) {
     }
 }
 
+#include <stdbool.h>
+#include <stdint.h>
+
+
+#define WINDOW_SIZE 4096 // nº de samples por ventana para decidir
+
+
+void _threshold_test_module_process(fract32 *in, fract32 *out) {
+
+    static uint32_t peak_accum = 0; // almacena máximo absoluto en la ventana
+    static int sample_count = 0;    // contador de muestras en ventana
+    static bool gate_open = false;  // estado actual de la puerta
+
+    fract32 *outl = out;
+    fract32 *outr = out + BLOCK_SIZE;
+    fract32 *inl = in;
+    fract32 *inr = in + BLOCK_SIZE;
+
+    // Threshold entero 0..1024 convertido a fract32
+    uint16_t thr_int = (uint16_t)g_module.voice[0]->playback_rate;
+    fract32 threshold_fract =
+        (thr_int >= 1024) ? 0x7FFFFFFF
+                          : (fract32)(((int64_t)thr_int * 0x7FFFFFFF) >> 10);
+    int i;
+    for (i = 0; i < BLOCK_SIZE; ++i) {
+        // Magnitud absoluta de la muestra izquierda
+        uint32_t mag =
+            (uint32_t)(inl[i] < 0 ? -(int64_t)inl[i] : (int64_t)inl[i]);
+
+        // Actualizar máximo de la ventana
+        if (mag > peak_accum) {
+            peak_accum = mag;
+        }
+
+        sample_count++;
+
+        // Al final de la ventana decidimos estado del gate
+        if (sample_count >= WINDOW_SIZE) {
+            gate_open = (peak_accum > (uint32_t)threshold_fract);
+            // reset para siguiente ventana
+            sample_count = 0;
+            peak_accum = 0;
+        }
+
+        // Aplicar decisión de la ventana completa
+        if (gate_open) {
+            outl[i] = inl[i];
+            outr[i] = inr[i];
+        } else {
+            outl[i] = 0;
+            outr[i] = 0;
+        }
+    }
+}
+
 /**
  * @brief   Process audio.
  *
@@ -202,29 +247,37 @@ void module_init(void) {
  */
 void module_process(fract32 *in, fract32 *out) {
 
-    /*if (record){
-        Custom_Aleph_MonoVoice_record(in[0]);
-        out[0] = in[0]; // Copy input to output if input is not null
-        out[1] = in[1]; // Copy input to output if input is not null
+    fract32 *outl = out;
+    fract32 *outr = out + BLOCK_SIZE;
+
+    fract32 *inl = in;
+    fract32 *inr = in + BLOCK_SIZE;
+
+     if (recording) {
+            int i;
+            for (i = 0; i < BLOCK_SIZE; i++) {
+                // record the sum of l+r
+                fract32 to_record = add_fr1x32(inl[i]>>1,-1*(inr[i]>>1)); // x -1 to record balanced
+                Custom_Aleph_MonoVoice_record(to_record); 
+                outl[i] = to_record; // Canal izquierdo
+                outr[i] = to_record; // Canal derecho
+            }
+
         return;
-    }*/
-
-        
-
-    fract32 output;
-    fract32 amp_level_scaled = g_module.amp_level / MAX_VOICES;
-
-    output = mult_fr1x32x32(Custom_Aleph_MonoVoice_next(&g_module.voice[0]),
-                            amp_level_scaled);
-    int i;
-    for (i = 1; i < MAX_VOICES; i++) {
-        output += mult_fr1x32x32(
-            Custom_Aleph_MonoVoice_next(&g_module.voice[i]), amp_level_scaled);
     }
 
-    // Set output.
-    out[0] = output;
-    out[1] = output;
+    int i;
+    for (i = 0; i < BLOCK_SIZE; i++) {
+
+        outl[i] = Custom_Aleph_MonoVoice_next(&g_module.voice[0]);
+        int j;
+        for (j = 1; j < MAX_VOICES; j++) {
+            outl[i] = add_fr1x32(
+                outl[i], Custom_Aleph_MonoVoice_next(&g_module.voice[j]));
+        }
+
+        outr[i] = outl[i];
+    }
 }
 
 void module_set_param_voice(uint16_t voice_index, uint16_t param_index,
@@ -249,12 +302,31 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
     switch (param_index) {
 
     case SAMPLE_RECORD_START:
-        Custom_Aleph_MonoVoice_record_reset();
-        break;  
+        recording = 1;
+         Custom_Aleph_MonoVoice_record_reset(); // dont reset, keep recording after
+/*        if (g_module.active_sample_slot==0){
+            wavtab_index = 0;
+        }
+        else {
+            wavtab_index = g_module.samples[g_module.active_sample_slot-1]->end_position;
+        }
+        if (wavtab_index<0){
+            wavtab_index = 0;
+        }*/
+        g_module.samples[g_module.active_sample_slot]->start_position = wavtab_index;
 
-        case SAMPLE_LOAD:
+        break;
+
+    case SAMPLE_RECORD_STOP:
+        recording = 0;
+        g_module.samples[g_module.active_sample_slot]->end_position = wavtab_index;
+        g_module.active_sample_slot ++;
+        break;
+
+    // called from sysex manager and or input sample recorder
+    case SAMPLE_LOAD:
         Custom_Aleph_MonoVoice_record(value);
-        break;  
+        break;
 
     case PARAM_AMP:
         Custom_Aleph_MonoVoice_set_amp(&g_module.voice[voice_number], value);
@@ -269,7 +341,8 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
         break;
 
     case PARAM_MORPH_AMOUNT:
-        Custom_Aleph_MonoVoice_set_morph_amount(&g_module.voice[voice_number], value);
+        Custom_Aleph_MonoVoice_set_morph_amount(&g_module.voice[voice_number],
+                                                value);
         break;
 
     case PARAM_AMP_LEVEL:
@@ -291,6 +364,11 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
     case PARAM_FILTER_TYPE:
         Custom_Aleph_MonoVoice_set_filter_type(&g_module.voice[voice_number],
                                                value);
+        break;
+
+    case PARAM_PLAYBACK_RATE:
+        Custom_Aleph_MonoVoice_set_playback_rate(&g_module.voice[voice_number],
+                                                 value);
         break;
 
     default:

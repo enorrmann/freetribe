@@ -14,6 +14,8 @@
 #define FRACT32_ZERO    0x00000000  // 0.0
 #define FRACT32_TWENTIETH 0x06666666  // 0.05 (aproximado)
 
+#define WAVE_TAB_SIZE 44100 // in samples
+
 void generate_soft_square(int wave_index) ;
 void generate_soft_sawtooth(int wave_index) ;
 

@@ -47,12 +47,13 @@ extern "C" {
 #define Custom_Aleph_MonoVoice_DEFAULT_CUTOFF (20000 << 16)
 #define Custom_Aleph_MonoVoice_DEFAULT_RES (FR32_MAX)
 #define Custom_Aleph_MonoVoice_DEFAULT_FILTER_TYPE ALEPH_FILTERSVF_TYPE_LPF
+#define SAMPLE_QUALITY 0 // 0 HI, 1 MED ,2 LOW, ETC .. AS LOW AS YOU WANT 
 
 
 
 
 
-#define WAVE_TAB_CYCLE_IN_SAMPLES 1024
+//#define WAVE_TAB_CYCLE_IN_SAMPLES 1024
 #define SDRAM_ADDRESS 0x00000000
 
 
@@ -64,6 +65,7 @@ typedef struct {
 
     Aleph_Waveform waveform;
     fract32 freq_offset;
+    int32_t playback_rate;
 
     Aleph_FilterSVF filter;
     e_Aleph_FilterSVF_type filter_type;
@@ -82,8 +84,8 @@ typedef t_Custom_Aleph_MonoVoice *Custom_Aleph_MonoVoice;
 
 /*----- Extern variable declarations ---------------------------------*/
 
-extern fract32 *data_sdram;
-extern int wavtab_index;
+extern fract16 *data_sdram;
+extern uint32_t wavtab_index;
 
 /*----- Extern function prototypes -----------------------------------*/
 
@@ -122,7 +124,7 @@ void Custom_Aleph_MonoVoice_set_shape(Custom_Aleph_MonoVoice *const synth, e_Ale
 void Custom_Aleph_MonoVoice_set_morph_amount(Custom_Aleph_MonoVoice *const synth,fract32 morph_amount) ;
 void Custom_Aleph_MonoVoice_record(fract32 data) ;
 void Custom_Aleph_MonoVoice_record_reset();
-
+void Custom_Aleph_MonoVoice_set_playback_rate(Custom_Aleph_MonoVoice *const synth,int32_t rate) ;
 #ifdef __cplusplus
 }
 #endif

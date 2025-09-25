@@ -48,9 +48,10 @@
 /*----- Static function prototypes -----------------------------------*/
 //static const 
 
-fract32 *data_sdram;
+//fract32 *data_sdram;
+fract16 *data_sdram;
 
-int wavtab_index = 0;
+uint32_t wavtab_index = 0;
 
 /*----- Extern function implementations ------------------------------*/
 
@@ -58,7 +59,7 @@ void Custom_Aleph_MonoVoice_init(Custom_Aleph_MonoVoice *const synth, t_Aleph *c
 
     Custom_Aleph_MonoVoice_init_to_pool(synth, &aleph->mempool);
     wavtab_index = 0;
-    data_sdram = (fract32 *)SDRAM_ADDRESS;
+    data_sdram = (fract16 *)SDRAM_ADDRESS;
 }
 
 void Custom_Aleph_MonoVoice_init_to_pool(Custom_Aleph_MonoVoice *const synth,
@@ -115,14 +116,32 @@ void Custom_Aleph_MonoVoice_free(Custom_Aleph_MonoVoice *const synth) {
 
 
 
-fract32 custom_Aleph_Waveform_next(Aleph_Waveform *const wave, fract32 morph_amount) {
+fract32 custom_Aleph_Waveform_next(Aleph_Waveform *const wave, fract32 rate) {
 
     t_Aleph_Waveform *wv = *wave;
 
     fract32 next;
 
-    Aleph_Phasor_next(&wv->phasor);
-        next =  wavetable_lookup_delta(wv->phasor->phase, morph_amount);
+    
+    //Aleph_Phasor_next(&wv->phasor); // en vez de sumar frecuencia, incrementar de a 1
+    // this works for sample frequency  
+    //wv->phasor->phase += rate;  // test trunca sample
+    wv->phasor->phase += 1; 
+    next =  sample_playback_delta(wv->phasor->phase, rate); 
+     
+     /* test for wavemorph
+     int loop_size_in_samples = 1024;
+     int loop_start_point = rate;
+    wv->phasor->phase += 1; 
+    if (wv->phasor->phase>loop_start_point+loop_size_in_samples){
+        wv->phasor->phase = loop_start_point;
+    }
+
+     next =  sample_playback_delta(wv->phasor->phase, rate);  
+     */
+
+     //next =  wavetable_lookup_delta(wv->phasor->phase, morph_amount);
+        
     
     return shl_fr1x32(next, 16);
 }
@@ -150,7 +169,8 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
 
     morph_amount = Aleph_LPFOnePole_next(&syn->morph_slew);
     // Generate waveforms.
-    output = custom_Aleph_Waveform_next(&syn->waveform,morph_amount);
+    output = custom_Aleph_Waveform_next(&syn->waveform,syn->playback_rate); // was morph_amount
+    
 
 
     // Shift right to prevent clipping.
@@ -260,12 +280,22 @@ void Custom_Aleph_MonoVoice_set_res(Custom_Aleph_MonoVoice *const synth, fract32
 
 
 void Custom_Aleph_MonoVoice_record(fract32 data) {
-    wavtab_index++;
-        data_sdram[wavtab_index] = data;
+        wavtab_index++;
+        data_sdram[wavtab_index>>SAMPLE_QUALITY] = (fract16)shr_fr1x32(data, 16); // ADJUST RECORDING FOR SELECTED QUALITY
+        
 }
 void Custom_Aleph_MonoVoice_record_reset() {
     wavtab_index = 0;
 }
+
+void Custom_Aleph_MonoVoice_set_playback_rate(Custom_Aleph_MonoVoice *const synth,
+                                     int32_t rate) {
+
+    t_Custom_Aleph_MonoVoice *syn = *synth;
+
+    syn->playback_rate = rate;
+}
+
 /*----- Static function implementations ------------------------------*/
 
 /*----- End of file --------------------------------------------------*/

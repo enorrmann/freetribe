@@ -12,4 +12,5 @@ fi
 MODULE_NAME="$1"
 
 # Execute the command with the specified module
+#sudo docker-compose exec freetribe make clean
 sudo docker-compose exec freetribe make APP="$MODULE_NAME" MODULE="$MODULE_NAME" && python ../hacktribe/scripts/execute_freetribe.py cpu/build/cpu.bin -p 2

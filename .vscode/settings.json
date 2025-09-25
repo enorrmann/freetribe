@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "custom_aleph_monovoice.h": "c",
+        "types.h": "c",
+        "wave_lookup.h": "c",
+        "wave_generator.h": "c",
+        "stdint.h": "c",
+        "sample.h": "c"
+    }
+}

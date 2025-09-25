@@ -438,6 +438,7 @@ void module_set_param_voice(uint16_t voice_index,uint16_t param_index_without_of
         break;
 
     default:
+        ft_set_module_param(0, param_index,  value); // por default transmito el parametro sin cambios
         break;
     }
 }

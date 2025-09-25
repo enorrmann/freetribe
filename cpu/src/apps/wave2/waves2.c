@@ -81,7 +81,12 @@ under the terms of the GNU Affero General Public License as published by
 #define BUTTON_BPF 0x16
 #define BUTTON_EXIT 0x0d
 
-#define DEFAULT_SCALE_NOTES NOTES_PHRYGIAN_DOMINANT
+#define BUTTON_RECORD 0x00
+#define BUTTON_STOP 0x01
+#define BUTTON_PLAY 0x02
+#define BUTTON_TAP 0x03
+
+#define DEFAULT_SCALE_NOTES NOTES_IONIAN // MAJOR SCALE
 #define DEFAULT_SCALE_TONES 12
 #define DEFAULT_SCALE_MODE 0
 
@@ -109,6 +114,11 @@ static float g_knob_cv_lut[256];
 static float g_midi_hz_lut[128];
 static float g_octave_tune_lut[256];
 static float g_filter_res_lut[256];
+
+#define MULTIPLYER  4096
+static int32_t tet_decimal_values[12] = {
+    1.000000*MULTIPLYER, 1.059463*MULTIPLYER, 1.122462*MULTIPLYER, 1.189207*MULTIPLYER, 1.259921*MULTIPLYER, 1.334840*MULTIPLYER, 1.414214*MULTIPLYER, 1.498307*MULTIPLYER, 1.587401*MULTIPLYER, 1.681793*MULTIPLYER, 1.781797*MULTIPLYER, 1.887749*MULTIPLYER
+};
 
 /*----- Extern variable definitions ----------------------------------*/
 
@@ -292,7 +302,7 @@ static void _encoder_callback(uint8_t index, uint8_t value) {
     static uint8_t cutoff = DEFAULT_CUTOFF;
     static int8_t osc_type = DEFAULT_OSC_TYPE;
     static int8_t mod_type;
-    static int16_t morph_amount,amt = 0;
+    static int32_t morph_amount,amt = 0;
 
     switch (index) {
 
@@ -300,14 +310,14 @@ static void _encoder_callback(uint8_t index, uint8_t value) {
         amt = 1;
         if (g_shift_held) {
             // Shift held, adjust morph amount instead of cutoff
-            amt = 100; // Adjust morph amount by 100 when shift is held   
+            amt = 10; // Adjust morph amount by 100 when shift is held   
         }
 
         if (value == 0x01) {
-            if (morph_amount + amt < (loaded_samples-1024)){ 
+            //if (morph_amount + amt < (loaded_samples-1024)){ 
             morph_amount+=amt;
 
-            }
+            //}
             if (cutoff < 0x7f) {
                 cutoff++;
             }
@@ -323,8 +333,9 @@ static void _encoder_callback(uint8_t index, uint8_t value) {
                 cutoff--;
             }
         }
-        if (g_shift_held) {
-            module_set_param_all_voices(PARAM_BASE_MORPH_AMOUNT, morph_amount*0.00001f); // also ok
+        if ( 1 || g_shift_held) { // test
+            //module_set_param_all_voices(PARAM_BASE_MORPH_AMOUNT, morph_amount*0.00001f); // also ok
+            module_set_param_all_voices(PARAM_PLAYBACK_RATE, morph_amount); // test
             gui_post_param("m: ", morph_amount);
         } else {
             gui_post_param("Cutoff: ", cutoff);
@@ -420,7 +431,24 @@ static void process_note_event(uint8_t note, uint8_t vel, bool state) {
         module_set_param_voice(voice_idx, PARAM_GATE, true);
         module_set_param_voice(voice_idx, PARAM_OSC_BASE_FREQ, g_midi_pitch_cv_lut[note]);
         module_set_param_voice(voice_idx, PARAM_FREQ, g_midi_pitch_cv_lut[note]);
-        module_set_param_voice(voice_idx, PARAM_PHASE_RESET, true);
+        
+        int note_index = note % 12;
+        int sample_root_note = 62; // the note in which the sample was sampled
+        int scale_offset = sample_root_note % 12;
+        module_set_param_voice(voice_idx, PARAM_PHASE_RESET, true); // sets phase to zero
+
+        if (scale_offset<=note_index){
+            note_index-=scale_offset;
+            // this method allows only addressing 23 seconds of samples becasue we are wasting 12 bits of 32
+            // so max table index would be 1048576 (2**20) / (48000 sample rate)
+            module_set_param_voice(voice_idx, PARAM_PLAYBACK_RATE, tet_decimal_values[note_index]);
+        } else {
+            note_index=note_index+12-scale_offset;
+            module_set_param_voice(voice_idx, PARAM_PLAYBACK_RATE, tet_decimal_values[note_index]>>1); // lower octave
+        }
+
+        
+        gui_post_param("note ", note);
         
         
     } else {  
@@ -437,8 +465,10 @@ static void process_note_event(uint8_t note, uint8_t vel, bool state) {
                 return;
             }
             /* Turn off gate (start release phase) */
+
             module_set_param_voice(voice_idx, PARAM_GATE, false);
             voice_manager_set_voice_in_release_stage(voice_idx,true);
+
             
             /* Release note allocation */
            // voice_manager_release_voice(voice_idx);
@@ -494,16 +524,23 @@ void polyphonic_system_init(void) {
 static void _button_callback(uint8_t index, bool state) {
 
     switch (index) {
-case BUTTON_EXIT:
+    case BUTTON_EXIT:
         if (state == 1) {
             ft_shutdown();
         }
         break;
-    case BUTTON_MENU:
+    case BUTTON_RECORD:
         // donesnt matter wich voice, send voice 0
         ft_set_module_param(0, SAMPLE_RECORD_START, 1);
         loaded_samples = 0;
         gui_post_param("recording ", 1);
+        g_menu_held = state;
+        break;
+
+    case BUTTON_STOP:
+        // donesnt matter wich voice, send voice 0
+        ft_set_module_param(0, SAMPLE_RECORD_STOP, 1);
+        gui_post_param("recording ", 0);
         g_menu_held = state;
         break;
 
