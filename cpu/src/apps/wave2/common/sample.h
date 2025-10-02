@@ -1,21 +1,25 @@
+#ifndef SAMPLE_H
+#define SAMPLE_H
 
-// this order is important
-enum t_sample_quality {
-    SAMPLE_QUALITY_HIGH,
-    SAMPLE_QUALITY_MEDIUM,
-    SAMPLE_QUALITY_LOW
+
+enum t_sample_parameter {
+    SAMPLE_PLAYBACK_RATE,
+    SAMPLE_START_POINT,
+    SAMPLE_START_asds,
+    SAMPLE_START_as,
+    SAMPLE_PARAM_QUALITY,
+    SAMPLE_PARAM_COUNT
 };
 
-typedef enum t_sample_quality SampleQuality;
 
 typedef struct {
 
     int root_note;
     int low_note;
     int hi_note;
-    SampleQuality quality; // 0 hi, 1 med, 2 low
-    uint32_t start_position;
-    uint32_t end_position;
+    int quality; 
+    int start_position;
+    int end_position;
     // etc
 
 
@@ -23,3 +27,6 @@ typedef struct {
 
 
 typedef t_sample *Sample;
+
+
+#endif

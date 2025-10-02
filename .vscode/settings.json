@@ -5,6 +5,12 @@
         "wave_lookup.h": "c",
         "wave_generator.h": "c",
         "stdint.h": "c",
-        "sample.h": "c"
+        "sample.h": "c",
+        "parameters.h": "c",
+        "module_interface.h": "c",
+        "aleph.h": "c",
+        "fix.h": "c",
+        "sample_manager.h": "c",
+        "fix16_fract.h": "c"
     }
 }

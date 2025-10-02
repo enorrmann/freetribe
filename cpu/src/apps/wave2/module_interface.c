@@ -44,8 +44,11 @@ under the terms of the GNU Affero General Public License as published by
 #include "leaf-oscillators.h"
 
 #include "param_scale.h"
+#include "common/parameters.h"
+#include "common/sample.h"
 
 #include "module_interface.h"
+
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -55,9 +58,6 @@ under the terms of the GNU Affero General Public License as published by
 #define GATE_CLOSED (0)
 #define GATE_THRESHOLD (0.2)
 
-#define PARAM_VOICE_OFFSET(voice, param, paramCount) (param + (voice * paramCount))
-#define REMOVE_PARAM_OFFSET(param_index_with_offset,paramCount) ((param_index_with_offset) % paramCount)
-#define PARAM_VOICE_NUMBER(param_index_with_offset,paramCount) ((param_index_with_offset) / paramCount)
 
 /*----- Typedefs -----------------------------------------------------*/
 
@@ -248,7 +248,7 @@ void module_set_param_all_voices(uint16_t param_index_without_offset, float valu
  */
 void module_set_param_voice(uint16_t voice_index,uint16_t param_index_without_offset, float value) {
 
-    uint16_t param_index = PARAM_VOICE_OFFSET(voice_index, param_index_without_offset, PARAM_COUNT);
+    uint16_t param_index = APPLY_PARAM_OFFSET(voice_index, param_index_without_offset, PARAM_COUNT);
 
     switch (param_index_without_offset) {
 
@@ -436,12 +436,18 @@ void module_set_param_voice(uint16_t voice_index,uint16_t param_index_without_of
             g_module[voice_index].retrigger = false;
         }
         break;
-
     default:
         ft_set_module_param(0, param_index,  value); // por default transmito el parametro sin cambios
         break;
     }
 }
+
+void module_set_param_sample(uint16_t sample_index,uint16_t param_index_without_offset, int32_t value) {
+    // 0 To param count x voices are voice parameters, then sample parameters start
+    uint16_t param_index = SAMPLE_PARAMETER_OFFSET + APPLY_PARAM_OFFSET(sample_index, param_index_without_offset, SAMPLE_PARAM_COUNT);
+    ft_set_module_param(0, param_index, value);
+}
+
 
 float module_get_param(uint16_t param_index) {
 

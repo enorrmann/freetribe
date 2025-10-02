@@ -1,7 +1,7 @@
 
 
 #include "wave_generator.h"
-#include "custom_aleph_monovoice.h"
+#include "sample_manager.h"
 
 
 // Genera onda cuadrada suave usando square_polyblep (todo en fract32)

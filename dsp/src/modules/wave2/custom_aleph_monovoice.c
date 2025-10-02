@@ -49,17 +49,12 @@
 //static const 
 
 //fract32 *data_sdram;
-fract16 *data_sdram;
-
-uint32_t wavtab_index = 0;
 
 /*----- Extern function implementations ------------------------------*/
 
 void Custom_Aleph_MonoVoice_init(Custom_Aleph_MonoVoice *const synth, t_Aleph *const aleph) {
 
     Custom_Aleph_MonoVoice_init_to_pool(synth, &aleph->mempool);
-    wavtab_index = 0;
-    data_sdram = (fract16 *)SDRAM_ADDRESS;
 }
 
 void Custom_Aleph_MonoVoice_init_to_pool(Custom_Aleph_MonoVoice *const synth,
@@ -279,14 +274,6 @@ void Custom_Aleph_MonoVoice_set_res(Custom_Aleph_MonoVoice *const synth, fract32
 }
 
 
-void Custom_Aleph_MonoVoice_record(fract32 data) {
-        wavtab_index++;
-        data_sdram[wavtab_index>>SAMPLE_QUALITY] = (fract16)shr_fr1x32(data, 16); // ADJUST RECORDING FOR SELECTED QUALITY
-        
-}
-void Custom_Aleph_MonoVoice_record_reset() {
-    wavtab_index = 0;
-}
 
 void Custom_Aleph_MonoVoice_set_playback_rate(Custom_Aleph_MonoVoice *const synth,
                                      int32_t rate) {

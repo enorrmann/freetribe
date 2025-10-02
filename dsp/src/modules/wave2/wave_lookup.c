@@ -1,6 +1,7 @@
 #include "wave_lookup.h"
-#include "custom_aleph_monovoice.h"
 #include "types.h"
+#include "aleph.h"
+#include "sample_manager.h"
 
 #define FRACT32_MAX ((fract32)0x7fffffff) /* max value of a fract32 */
 
@@ -33,7 +34,9 @@ fract16 sample_playback_delta(int32_t phase, fract32 freq) {
     
 
     //int32_t index = (phase>>12); // 10 1024 12 4096 cant address full range
-    int32_t index = (phase>>SAMPLE_QUALITY); // ADJUST SAMPLE PLAYBACK
+    int32_t index = phase >> (samples[0]->quality); // ADJUST SAMPLE PLAYBACK
+    // index+= 48000;// 1 segundo;  test ok
+     index+= (samples[0]->start_position);
 
     fract32 sample0 = data_sdram[index];
     return sample0;

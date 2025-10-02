@@ -44,6 +44,8 @@ under the terms of the GNU Affero General Public License as published by
 #include "utils.h"
 #include <math.h>
 #include "common/sample.h"
+#include "common/parameters.h"
+#include "sample_manager.h"
 
 #include "aleph.h"
 
@@ -76,56 +78,6 @@ void module_set_param_voice(uint16_t voice_index, uint16_t param_index,
 
 /*----- Typedefs -----------------------------------------------------*/
 
-typedef enum {
-    PARAM_AMP,
-    PARAM_FREQ,
-    PARAM_OSC_PHASE,
-    PARAM_LFO_PHASE,
-    PARAM_GATE,
-    PARAM_VEL,
-    PARAM_AMP_LEVEL,
-    PARAM_AMP_ENV_ATTACK,
-    PARAM_AMP_ENV_DECAY,
-    PARAM_AMP_ENV_SUSTAIN,
-    PARAM_AMP_ENV_RELEASE,
-    PARAM_AMP_ENV_DEPTH,
-    PARAM_FILTER_ENV_DEPTH,
-    PARAM_FILTER_ENV_ATTACK,
-    PARAM_FILTER_ENV_DECAY,
-    PARAM_FILTER_ENV_SUSTAIN,
-    PARAM_FILTER_ENV_RELEASE,
-    PARAM_PITCH_ENV_DEPTH,
-    PARAM_PITCH_ENV_ATTACK,
-    PARAM_PITCH_ENV_DECAY,
-    PARAM_PITCH_ENV_SUSTAIN,
-    PARAM_PITCH_ENV_RELEASE,
-    PARAM_CUTOFF,
-    PARAM_RES,
-    PARAM_TUNE,
-    PARAM_OSC_TYPE,
-    PARAM_OSC_2_TYPE,
-    PARAM_FILTER_TYPE,
-    PARAM_AMP_LFO_DEPTH,
-    PARAM_AMP_LFO_SPEED,
-    PARAM_FILTER_LFO_DEPTH,
-    PARAM_FILTER_LFO_SPEED,
-    PARAM_PITCH_LFO_DEPTH,
-    PARAM_PITCH_LFO_SPEED,
-    PARAM_OSC_BASE_FREQ,
-    PARAM_FILTER_BASE_CUTOFF,
-    PARAM_PHASE_RESET,
-    PARAM_RETRIGGER,
-    SAMPLE_LOAD,
-    SAMPLE_RECORD_START,
-    SAMPLE_RECORD_STOP,
-    PARAM_MORPH_AMOUNT,
-    PARAM_BASE_MORPH_AMOUNT,
-    PARAM_MORPH_LFO_DEPTH,
-    PARAM_MORPH_LFO_SPEED,
-    PARAM_PLAYBACK_RATE,
-
-    PARAM_COUNT
-} e_param;
 
 typedef struct {
 
@@ -134,7 +86,7 @@ typedef struct {
     fract32 velocity;
     fract16 morph_amount;
     int active_sample_slot;
-    Sample  samples[150];
+
 
 } t_module;
 
@@ -167,6 +119,7 @@ void module_init(void) {
 
     // write_to_sdram_4mb();
     // wavtab_big_counter = 0;
+    SMPMAN_init();
     Aleph_init(&g_aleph, SAMPLERATE, g_mempool, MEMPOOL_SIZE, NULL);
     g_module.active_sample_slot  = 0;
 
@@ -257,8 +210,9 @@ void module_process(fract32 *in, fract32 *out) {
             int i;
             for (i = 0; i < BLOCK_SIZE; i++) {
                 // record the sum of l+r
-                fract32 to_record = add_fr1x32(inl[i]>>1,-1*(inr[i]>>1)); // x -1 to record balanced
-                Custom_Aleph_MonoVoice_record(to_record); 
+                //fract32 to_record = add_fr1x32(inl[i]>>1,-1*(inr[i]>>1)); // x -1 to record balanced
+                fract32 to_record = inl[i];
+                SMPMAN_record(to_record); 
                 outl[i] = to_record; // Canal izquierdo
                 outr[i] = to_record; // Canal derecho
             }
@@ -287,6 +241,18 @@ void module_set_param_voice(uint16_t voice_index, uint16_t param_index,
     module_set_param(paramWithOffset, value);
 }
 
+
+void module_set_sample_param(uint16_t param_index_with_offset, int32_t value) {
+    int index = param_index_with_offset-SAMPLE_PARAMETER_OFFSET;
+    uint16_t param_index = REMOVE_PARAM_OFFSET(index, SAMPLE_PARAM_COUNT);
+    int sample_number = PARAM_VOICE_NUMBER(index, SAMPLE_PARAM_COUNT);
+    SMPMAN_set_parameter(sample_number, param_index, value);
+
+    
+
+}
+
+
 /**
  * @brief   Set parameter.
  *
@@ -294,6 +260,11 @@ void module_set_param_voice(uint16_t voice_index, uint16_t param_index,
  * @param[in]   value       Value of parameter.
  */
 void module_set_param(uint16_t param_index_with_offset, int32_t value) {
+
+    if (param_index_with_offset>=SAMPLE_PARAMETER_OFFSET){
+        module_set_sample_param(param_index_with_offset,value);
+        return;
+    }
 
     uint16_t param_index =
         REMOVE_PARAM_OFFSET(param_index_with_offset, PARAM_COUNT);
@@ -303,7 +274,7 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
 
     case SAMPLE_RECORD_START:
         recording = 1;
-         Custom_Aleph_MonoVoice_record_reset(); // dont reset, keep recording after
+         SMPMAN_record_reset(); // dont reset, keep recording after
 /*        if (g_module.active_sample_slot==0){
             wavtab_index = 0;
         }
@@ -313,19 +284,19 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
         if (wavtab_index<0){
             wavtab_index = 0;
         }*/
-        g_module.samples[g_module.active_sample_slot]->start_position = wavtab_index;
+        //g_module.samples[g_module.active_sample_slot]->start_position = wavtab_index; // move to sample manager
 
         break;
 
     case SAMPLE_RECORD_STOP:
         recording = 0;
-        g_module.samples[g_module.active_sample_slot]->end_position = wavtab_index;
-        g_module.active_sample_slot ++;
+        // move to sample manager g_module.samples[g_module.active_sample_slot]->end_position = wavtab_index;
+        // move to sample manager g_module.active_sample_slot ++;
         break;
 
     // called from sysex manager and or input sample recorder
     case SAMPLE_LOAD:
-        Custom_Aleph_MonoVoice_record(value);
+        SMPMAN_record(value);
         break;
 
     case PARAM_AMP:
@@ -370,6 +341,7 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
         Custom_Aleph_MonoVoice_set_playback_rate(&g_module.voice[voice_number],
                                                  value);
         break;
+    
 
     default:
         break;

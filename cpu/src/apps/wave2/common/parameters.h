@@ -1,5 +1,11 @@
-#ifndef PARAMS_H
-#define PARAMS_H   
+#ifndef PARAMETERS_H
+#define PARAMETERS_H
+
+#define SAMPLE_PARAMETER_OFFSET ((PARAM_COUNT * MAX_VOICES)  + 1) // () are VERY important
+#define APPLY_PARAM_OFFSET(voice, param, paramCount) (param + (voice * paramCount))
+#define REMOVE_PARAM_OFFSET(param_index_with_offset,paramCount) ((param_index_with_offset) % paramCount)
+#define PARAM_VOICE_NUMBER(param_index_with_offset,paramCount) ((param_index_with_offset) / paramCount)
+
 
 typedef enum {
     PARAM_AMP,
@@ -51,6 +57,5 @@ typedef enum {
 
     PARAM_COUNT
 } e_param;
-
 
 #endif

@@ -75,6 +75,7 @@ void module_set_param_voice(uint16_t voice_index,uint16_t param_index, float val
 void module_set_param_all_voices(uint16_t param_index, float value);
 float module_get_param(uint16_t param_index);
 
+
 #ifdef __cplusplus
 }
 #endif

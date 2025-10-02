@@ -230,6 +230,8 @@ void module_set_param_all_voices(uint16_t param_index_without_offset, float valu
 
 
 }
+
+
 /**
  * @brief       Handle module parameter changes.
  *              Receives float, -1.0 <= value < 1.0,

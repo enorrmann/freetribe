@@ -188,7 +188,28 @@ void gui_print_int(uint8_t x_start, uint8_t y_start, uint8_t value) {
     gui_print(x_start, y_start, text);
 }
 
-void gui_post_param(char *label, int32_t value) {
+
+
+void gui_post_param(const char *label, int32_t value) {
+    // espacio suficiente para cualquier int32 (-2147483648 -> 11 chars + '\0')
+    char val_string[12];  
+    itoa(value, val_string, 10);
+
+    char cat_string[GUI_MAX_STRING_LEN];
+
+    // copiar label truncando si hace falta
+    strncpy(cat_string, label, GUI_MAX_STRING_LEN - 1);
+    cat_string[GUI_MAX_STRING_LEN - 1] = '\0'; // aseguramos terminación
+
+    // concatenar valor si entra
+    strncat(cat_string, val_string, GUI_MAX_STRING_LEN - strlen(cat_string) - 1);
+
+    // concatenar salto de línea si entra
+    strncat(cat_string, "\n", GUI_MAX_STRING_LEN - strlen(cat_string) - 1);
+
+    gui_post(cat_string);
+}
+void DEAD__gui_post_param(char *label, int32_t value) {
 
     /// TODO: Eww.  Sort out string ops.
 
@@ -204,6 +225,7 @@ void gui_post_param(char *label, int32_t value) {
 
     gui_post(cat_string);
 }
+
 
 void gui_draw_line(uint8_t x_start, uint8_t y_start, uint8_t x_end,
                    uint8_t y_end, bool colour) {

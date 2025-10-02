@@ -47,7 +47,7 @@ extern "C" {
 
 #include "leaf.h"
 #include "voice_manager.h"
-#include "params.h"
+#include "common/parameters.h"
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -118,6 +118,7 @@ void module_process(void);
 void module_set_param_voice(uint16_t voice_index,uint16_t param_index, float value);
 void module_set_param_all_voices(uint16_t param_index, float value);
 float module_get_param(uint16_t param_index);
+void module_set_param_sample(uint16_t sample_index,uint16_t param_index_without_offset, int32_t value);
 
 #ifdef __cplusplus
 }
