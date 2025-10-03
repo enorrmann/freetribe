@@ -135,7 +135,12 @@ t_status app_init(void) {
     gui_print(4, 7, "waves Example");
 
     g_current_editing_sample_parameter = 0;
-    g_current_editing_sample_parameter_value = 0;
+    
+    int i;
+    for ( i = 0; i < SAMPLE_PARAM_COUNT; i++) {
+        g_current_editing_sample_parameter_value[i] = 0;
+    }
+    
 
     status = SUCCESS;
     return status;

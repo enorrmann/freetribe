@@ -5,8 +5,7 @@
 enum t_sample_parameter {
     SAMPLE_PLAYBACK_RATE,
     SAMPLE_START_POINT,
-    SAMPLE_START_asds,
-    SAMPLE_START_as,
+    SAMPLE_LOOP_POINT,
     SAMPLE_PARAM_QUALITY,
     SAMPLE_PARAM_COUNT
 };
@@ -19,6 +18,7 @@ typedef struct {
     int hi_note;
     int quality; 
     int start_position;
+    int loop_point;
     int end_position;
     // etc
 

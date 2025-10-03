@@ -9,18 +9,6 @@ uint32_t wavtab_index = 0;
 
 Sample samples[150];
 
-fract32 SMPMAN_get_sample_number(fract32 encoded) {
-    return (encoded >> 28) & 0x0F;
-} // 4 ONES
-
-fract32 SMPMAN_get_sample_parameter(fract32 encoded) {
-    return (encoded >> 24) & 0x0F;
-} // 4 ONES
-
-fract32 SMPMAN_get_sample_parameter_value(fract32 encoded) {
-    return encoded & 0x0F;
-} // 24 ONES
-
 void SMPMAN_init() {
     wavtab_index = 0;
     data_sdram = (fract16 *)SDRAM_ADDRESS;
@@ -28,6 +16,7 @@ void SMPMAN_init() {
 
     samples[0]->quality = 0;        // HI
     samples[0]->start_position = 0; // HI
+    samples[0]->loop_point = 0;  // NO LOOP
 }
 
 void SMPMAN_record(fract32 data) {
@@ -46,6 +35,9 @@ void SMPMAN_set_parameter(int sample_number, int parameter, fract32 value) {
         break;
     case SAMPLE_START_POINT:
         samples[sample_number]->start_position = value;
+        break;
+    case SAMPLE_LOOP_POINT:
+        samples[sample_number]->loop_point = value;
         break;
 
     default:

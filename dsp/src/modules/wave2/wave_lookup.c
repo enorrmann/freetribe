@@ -35,8 +35,12 @@ fract16 sample_playback_delta(int32_t phase, fract32 freq) {
 
     //int32_t index = (phase>>12); // 10 1024 12 4096 cant address full range
     int32_t index = phase >> (samples[0]->quality); // ADJUST SAMPLE PLAYBACK
-    // index+= 48000;// 1 segundo;  test ok
-     index+= (samples[0]->start_position);
+
+    if (samples[0]->loop_point>0 ) {
+        index = index % samples[0]->loop_point ;
+    }
+    
+    index+= (samples[0]->start_position);
 
     fract32 sample0 = data_sdram[index];
     return sample0;

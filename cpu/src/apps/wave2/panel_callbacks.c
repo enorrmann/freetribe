@@ -21,6 +21,25 @@
 #include "common/sample.h"
 #include "globals.h"
 
+static void _print_gui_param(int param, int value) {
+    switch (param) {
+    case SAMPLE_START_POINT:
+        gui_post_param("Start ", value);
+        break;
+    case SAMPLE_PLAYBACK_RATE:
+        gui_post_param("Rate  ", value);
+        break;
+    case SAMPLE_PARAM_QUALITY:
+        gui_post_param("Qual  ", value);
+        break;
+    case SAMPLE_LOOP_POINT:
+        gui_post_param("Loop  ", value);
+        break;
+    default:
+        break;
+    }
+}
+
 static void _set_filter_type(uint8_t filter_type) {
 
     switch (filter_type) {
@@ -235,37 +254,26 @@ void encoder_callback(uint8_t index, uint8_t value) {
             amt = 1000;
         }
         if (g_button_bar_4_held) {
-            amt = 100000;
+            amt = 10000;
         }
 
         if (value == 0x01) {
-            g_current_editing_sample_parameter_value += amt;
+            g_current_editing_sample_parameter_value[g_current_editing_sample_parameter] += amt;
             /*if (g_current_editing_sample_parameter_value > 4096) { // magic
             number g_current_editing_sample_parameter_value = 4096;
             }*/
         } else {
-            g_current_editing_sample_parameter_value -= amt;
-            if (g_current_editing_sample_parameter_value < 0) {
-                g_current_editing_sample_parameter_value = 0;
+            g_current_editing_sample_parameter_value[g_current_editing_sample_parameter] -= amt;
+            if (g_current_editing_sample_parameter_value[g_current_editing_sample_parameter] < 0) {
+                g_current_editing_sample_parameter_value[g_current_editing_sample_parameter] = 0;
             }
         }
         int sample_number = 0; // only one sample for now
-        
-        switch (g_current_editing_sample_parameter) {
-        case SAMPLE_START_POINT:
-            gui_post_param("start ", g_current_editing_sample_parameter_value);
-            break;
-        case SAMPLE_PLAYBACK_RATE:
-            gui_post_param("rate ", g_current_editing_sample_parameter_value);
-            break;
-        case SAMPLE_PARAM_QUALITY:
-            gui_post_param("qual ", g_current_editing_sample_parameter_value);
-            break;
-        default:
-            break;
-        }
-        //module_set_param_sample(0, PARAM_SAMPLE_PARAMETER_SET, g_current_editing_sample_parameter_value);
-        module_set_param_sample(sample_number, g_current_editing_sample_parameter, g_current_editing_sample_parameter_value);
+
+        _print_gui_param(g_current_editing_sample_parameter,g_current_editing_sample_parameter_value[g_current_editing_sample_parameter]);
+        module_set_param_sample(sample_number,
+                                g_current_editing_sample_parameter,
+                                g_current_editing_sample_parameter_value[g_current_editing_sample_parameter]);
         // only voice 0 for now
         break;
 
@@ -461,8 +469,9 @@ void button_callback(uint8_t index, bool state) {
             if (g_current_editing_sample_parameter < SAMPLE_PARAM_COUNT - 1) {
                 g_current_editing_sample_parameter++;
             }
-            gui_post_param("SampPrm  : ", g_current_editing_sample_parameter);
-            
+            // gui_post_param("SampPrm  :
+            // ",g_current_editing_sample_parameter_value[g_current_editing_sample_parameter]);
+            _print_gui_param(g_current_editing_sample_parameter,g_current_editing_sample_parameter_value[g_current_editing_sample_parameter]);
         }
         break;
     case BUTTON_BACK:
@@ -471,7 +480,12 @@ void button_callback(uint8_t index, bool state) {
                 g_current_editing_sample_parameter--;
             }
 
-            gui_post_param("SampPrm  : ", g_current_editing_sample_parameter);
+            // gui_post_param("SampPrm  : ",
+            // g_current_editing_sample_parameter_value
+            // [g_current_editing_sample_parameter]);
+            _print_gui_param(g_current_editing_sample_parameter,
+                             g_current_editing_sample_parameter_value
+                                 [g_current_editing_sample_parameter]);
         }
         break;
 

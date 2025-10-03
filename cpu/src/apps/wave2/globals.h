@@ -21,7 +21,7 @@ static float g_midi_hz_lut[128];
 static float g_octave_tune_lut[256];
 static float g_filter_res_lut[256];
 static int g_current_editing_sample_parameter;
-static int g_current_editing_sample_parameter_value;
+static int g_current_editing_sample_parameter_value[SAMPLE_PARAM_COUNT];
 
 static bool g_shift_held;
 static bool g_menu_held;
