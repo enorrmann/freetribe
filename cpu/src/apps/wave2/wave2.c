@@ -50,33 +50,18 @@ under the terms of the GNU Affero General Public License as published by
 
 #include "leaf.h"
 #include "module_interface.h"
+#include "common/parameters.h"
+#include "panel_buttons.h"
+
+#include "common/sample.h"
+
+
 
 /*----- Macros -------------------------------------------------------*/
 
 #define CONTROL_RATE (1000)
 #define MEMPOOL_SIZE (0x1000)
 
-#define KNOB_LEVEL 0x00
-#define KNOB_PITCH 0x02
-#define KNOB_RES 0x03
-#define KNOB_EG 0x04
-#define KNOB_ATTACK 0x06
-#define KNOB_DECAY 0x08
-#define KNOB_MOD_DEPTH 0x05
-#define KNOB_MOD_SPEED 0x0a
-
-#define ENCODER_OSC 0x01
-#define ENCODER_CUTOFF 0x02
-#define ENCODER_MOD 0x03
-
-#define BUTTON_MENU 0x09
-#define BUTTON_SHIFT 0x0a
-#define BUTTON_AMP_EG 0x20
-#define BUTTON_LPF 0x12
-#define BUTTON_HPF 0x14
-#define BUTTON_BPF 0x16
-#define BUTTON_EXIT 0x0d
-#define BUTTON_IFX_ON 0x21
 
 
 #define DEFAULT_SCALE_NOTES NOTES_PHRYGIAN_DOMINANT
@@ -85,9 +70,27 @@ under the terms of the GNU Affero General Public License as published by
 
 #define PROFILE_INTERVAL 100
 
+#define MULTIPLYER 4096
+static int32_t tet_decimal_values[12] = {
+    1.000000 * MULTIPLYER, 1.059463 * MULTIPLYER, 1.122462 * MULTIPLYER,
+    1.189207 * MULTIPLYER, 1.259921 * MULTIPLYER, 1.334840 * MULTIPLYER,
+    1.414214 * MULTIPLYER, 1.498307 * MULTIPLYER, 1.587401 * MULTIPLYER,
+    1.681793 * MULTIPLYER, 1.781797 * MULTIPLYER, 1.887749 * MULTIPLYER};
+
 /*----- Typedefs -----------------------------------------------------*/
 
 /*----- Static variable definitions ----------------------------------*/
+static int g_current_editing_sample_parameter;
+static int g_current_editing_sample_parameter_value[SAMPLE_PARAM_COUNT];
+
+static bool g_shift_held;
+static bool g_menu_held;
+
+static bool g_button_bar_1_held;
+static bool g_button_bar_2_held;
+static bool g_button_bar_3_held;
+static bool g_button_bar_4_held;
+
 
 static LEAF g_leaf;
 static char g_mempool[MEMPOOL_SIZE];
@@ -171,7 +174,7 @@ t_status app_init(void) {
     // Initialise GUI.
     gui_task();
 
-    gui_print(4, 7, "P o l y T r i b e");
+    gui_print(4, 7, "M a k e W a v e s");
 
     status = SUCCESS;
     return status;
@@ -183,8 +186,27 @@ t_status app_init(void) {
 void app_run(void) { gui_task(); }
 
 /*----- Static function implementations ------------------------------*/
+static void _print_gui_param(int param, int value) {
+    switch (param) {
+    case SAMPLE_START_POINT:
+        gui_post_param("Start ", value);
+        break;
+    case SAMPLE_PLAYBACK_RATE:
+        gui_post_param("Rate  ", value);
+        break;
+    case SAMPLE_PARAM_QUALITY:
+        gui_post_param("Qual  ", value);
+        break;
+    case SAMPLE_LOOP_POINT:
+        gui_post_param("Loop  ", value);
+        break;
+    default:
+        break;
+    }
+}
 
-static void _tick_callback(void) {
+static void _tick_callback(void
+) {
 
     static uint32_t tick_count;
 
@@ -315,12 +337,12 @@ static void _knob_callback(uint8_t index, uint8_t value) {
         }
         break;
 
-    case KNOB_RES:
+    case KNOB_RESONANCE:
         module_set_param_all_voices(PARAM_RES, g_knob_cv_lut[value]);
         gui_post_param("Resonance: ", value);
         break;
 
-    case KNOB_EG:
+    case KNOB_EG_INT:
         module_set_param_all_voices(PARAM_FILTER_ENV_DEPTH,
                                     g_knob_cv_lut[value]);
         gui_post_param("EG Depth: ", value);
@@ -414,6 +436,41 @@ static void _encoder_callback(uint8_t index, uint8_t value) {
 
         break;
 
+        case ENCODER_MAIN:
+        int amt = 1;
+        if (g_button_bar_1_held) {
+            amt = 10;
+        }
+        if (g_button_bar_2_held) {
+            amt = 100;
+        }
+        if (g_button_bar_3_held) {
+            amt = 1000;
+        }
+        if (g_button_bar_4_held) {
+            amt = 10000;
+        }
+
+        if (value == 0x01) {
+            g_current_editing_sample_parameter_value[g_current_editing_sample_parameter] += amt;
+            /*if (g_current_editing_sample_parameter_value > 4096) { // magic
+            number g_current_editing_sample_parameter_value = 4096;
+            }*/
+        } else {
+            g_current_editing_sample_parameter_value[g_current_editing_sample_parameter] -= amt;
+            if (g_current_editing_sample_parameter_value[g_current_editing_sample_parameter] < 0) {
+                g_current_editing_sample_parameter_value[g_current_editing_sample_parameter] = 0;
+            }
+        }
+        int sample_number = 0; // only one sample for now
+
+        _print_gui_param(g_current_editing_sample_parameter,g_current_editing_sample_parameter_value[g_current_editing_sample_parameter]);
+        module_set_param_sample(sample_number,
+                                g_current_editing_sample_parameter,
+                                g_current_editing_sample_parameter_value[g_current_editing_sample_parameter]);
+        // only voice 0 for now
+        break;
+
     default:
         break;
     }
@@ -461,6 +518,26 @@ static void process_note_event(uint8_t note, uint8_t vel, bool state) {
         module_set_param_voice(voice_idx, PARAM_FREQ,
                                g_midi_pitch_cv_lut[note]);
         module_set_param_voice(voice_idx, PARAM_PHASE_RESET, true);
+
+        int note_index = note % 12;
+        int sample_root_note = 62; // the note in which the sample was sampled
+        int scale_offset = sample_root_note % 12;
+
+        if (scale_offset <= note_index) {
+            note_index -= scale_offset;
+            // this method allows only addressing 23 seconds of samples becasue
+            // we are wasting 12 bits of 32 so max table index would be 1048576
+            // (2**20) / (48000 sample rate)
+            module_set_param_voice(voice_idx, PARAM_PLAYBACK_RATE,
+                                   tet_decimal_values[note_index]);
+        } else {
+            note_index = note_index + 12 - scale_offset;
+            module_set_param_voice(voice_idx, PARAM_PLAYBACK_RATE,
+                                   tet_decimal_values[note_index] >>
+                                       1); // lower octave
+        }
+
+        gui_post_param("note ", note);
 
     } else {
         /* Note OFF event */
@@ -514,6 +591,20 @@ static void _button_callback(uint8_t index, bool state) {
     static bool ifx_on = false;
 
     switch (index) {
+    case BUTTON_RECORD:
+        // donesnt matter wich voice, send voice 0
+        ft_set_module_param(0, SAMPLE_RECORD_START, 1);
+        //loaded_samples = 0;
+        gui_post_param("recording ", 1);
+        g_menu_held = state;
+        break;
+
+    case BUTTON_STOP:
+        // donesnt matter wich voice, send voice 0
+        ft_set_module_param(0, SAMPLE_RECORD_STOP, 1);
+        gui_post_param("recording ", 0);
+        g_menu_held = state;
+        break;
 
     case BUTTON_IFX_ON:
         if (state == 1) {
@@ -570,6 +661,30 @@ static void _button_callback(uint8_t index, bool state) {
     case BUTTON_HPF:
         if (state) {
             _set_filter_type(FILTER_TYPE_HPF);
+        }
+        break;
+    case BUTTON_FORWARD:
+        if (state) {
+            if (g_current_editing_sample_parameter < SAMPLE_PARAM_COUNT - 1) {
+                g_current_editing_sample_parameter++;
+            }
+            // gui_post_param("SampPrm  :
+            // ",g_current_editing_sample_parameter_value[g_current_editing_sample_parameter]);
+            _print_gui_param(g_current_editing_sample_parameter,g_current_editing_sample_parameter_value[g_current_editing_sample_parameter]);
+        }
+        break;
+    case BUTTON_BACK:
+        if (state) {
+            if (g_current_editing_sample_parameter > 0) {
+                g_current_editing_sample_parameter--;
+            }
+
+            // gui_post_param("SampPrm  : ",
+            // g_current_editing_sample_parameter_value
+            // [g_current_editing_sample_parameter]);
+            _print_gui_param(g_current_editing_sample_parameter,
+                             g_current_editing_sample_parameter_value
+                                 [g_current_editing_sample_parameter]);
         }
         break;
 

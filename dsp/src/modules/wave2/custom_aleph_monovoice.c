@@ -120,8 +120,8 @@ fract32 custom_Aleph_Waveform_next(Aleph_Waveform *const wave, fract32 rate) {
     
     //Aleph_Phasor_next(&wv->phasor); // en vez de sumar frecuencia, incrementar de a 1
     // this works for sample frequency  
-    //wv->phasor->phase += rate;  // test trunca sample
-    wv->phasor->phase += 1; 
+    wv->phasor->phase += rate;  // test trunca sample, test polysint
+    //wv->phasor->phase += 4096; 
     next =  sample_playback_delta(wv->phasor->phase, rate); 
      
      /* test for wavemorph
@@ -183,7 +183,7 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
     Aleph_FilterSVF_set_coeff(&syn->filter, cutoff);
 
     // Apply filter.
-    /*switch (syn->filter_type) {
+    switch (syn->filter_type) {
 
     case ALEPH_FILTERSVF_TYPE_LPF:
         output = Aleph_FilterSVF_lpf_next(&syn->filter, output);
@@ -203,7 +203,7 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
         break;
     }    // Block DC.
     output = Aleph_HPF_dc_block(&syn->dc_block, output);
-*/
+
     return output;
 }
 

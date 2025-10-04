@@ -20,6 +20,7 @@ typedef struct {
     int start_position;
     int loop_point;
     int end_position;
+    int playback_rate;
     // etc
 
 

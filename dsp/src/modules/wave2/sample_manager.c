@@ -14,9 +14,10 @@ void SMPMAN_init() {
     data_sdram = (fract16 *)SDRAM_ADDRESS;
     samples[0] = (Sample)malloc(sizeof(t_sample));
 
-    samples[0]->quality = 0;        // HI
-    samples[0]->start_position = 0; // HI
+    samples[0]->quality = 0;       
+    samples[0]->start_position = 0;
     samples[0]->loop_point = 0;  // NO LOOP
+    samples[0]->playback_rate = 1;
 }
 
 void SMPMAN_record(fract32 data) {
@@ -38,6 +39,9 @@ void SMPMAN_set_parameter(int sample_number, int parameter, fract32 value) {
         break;
     case SAMPLE_LOOP_POINT:
         samples[sample_number]->loop_point = value;
+        break;
+    case SAMPLE_PLAYBACK_RATE:
+        samples[sample_number]->playback_rate = value;
         break;
 
     default:

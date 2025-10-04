@@ -169,7 +169,7 @@ void module_process(void) {
         //
         amp_mod = tADSRT_tick(&g_module[voice_index].amp_env);
 
-        //amp_mod += amp_mod * tTriLFO_tick(&g_module[voice_index].amp_lfo) * g_module[voice_index].amp_lfo_depth;
+        amp_mod += amp_mod * tTriLFO_tick(&g_module[voice_index].amp_lfo) * g_module[voice_index].amp_lfo_depth;
 
 
 

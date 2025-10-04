@@ -19,7 +19,7 @@
 #include "sysex_manager.h"
 
 #include "common/sample.h"
-#include "globals.h"
+//#include "globals.h"
 
 static void _print_gui_param(int param, int value) {
     switch (param) {
@@ -50,7 +50,7 @@ static void _set_filter_type(uint8_t filter_type) {
         ft_set_led(LED_HPF, 0);
 
         module_set_param_all_voices(PARAM_FILTER_TYPE,
-                                    (1.0 / OSC_TYPE_COUNT) * FILTER_TYPE_LPF);
+                                    (1.0 / FILTER_TYPE_COUNT) * FILTER_TYPE_LPF);
         break;
 
     case FILTER_TYPE_BPF:
@@ -59,7 +59,7 @@ static void _set_filter_type(uint8_t filter_type) {
         ft_set_led(LED_HPF, 0);
 
         module_set_param_all_voices(PARAM_FILTER_TYPE,
-                                    (1.0 / OSC_TYPE_COUNT) * FILTER_TYPE_BPF);
+                                    (1.0 / FILTER_TYPE_COUNT) * FILTER_TYPE_BPF);
         break;
 
     case FILTER_TYPE_HPF:
@@ -68,7 +68,7 @@ static void _set_filter_type(uint8_t filter_type) {
         ft_set_led(LED_HPF, 1);
 
         module_set_param_all_voices(PARAM_FILTER_TYPE,
-                                    (1.0 / OSC_TYPE_COUNT) * FILTER_TYPE_HPF);
+                                    (1.0 / FILTER_TYPE_COUNT) * FILTER_TYPE_HPF);
         break;
 
     default:
@@ -159,43 +159,21 @@ void encoder_callback(uint8_t index, uint8_t value) {
     switch (index) {
 
     case ENCODER_CUTOFF:
-        amt = 1;
-        if (g_shift_held) {
-            // Shift held, adjust morph amount instead of cutoff
-            amt = 10; // Adjust morph amount by 100 when shift is held
-        }
 
         if (value == 0x01) {
-            // if (morph_amount + amt < (loaded_samples-1024)){
-            morph_amount += amt;
 
-            //}
             if (cutoff < 0x7f) {
                 cutoff++;
             }
 
         } else {
-
-            morph_amount -= amt;
-            if (morph_amount < 0) {
-                morph_amount = 0;
-            }
-
             if (cutoff > 0) {
                 cutoff--;
             }
         }
-        if (1 || g_shift_held) { // test
-            // module_set_param_all_voices(PARAM_BASE_MORPH_AMOUNT,
-            // morph_amount*0.00001f); // also ok
-            module_set_param_all_voices(PARAM_PLAYBACK_RATE,
-                                        morph_amount); // test
-            gui_post_param("m: ", morph_amount);
-        } else {
-            gui_post_param("Cutoff: ", cutoff);
-            module_set_param_all_voices(PARAM_FILTER_BASE_CUTOFF,
-                                        g_midi_pitch_cv_lut[cutoff]);
-        }
+        module_set_param_all_voices(PARAM_FILTER_BASE_CUTOFF, g_midi_pitch_cv_lut[cutoff]);
+        gui_post_param("Cutoff: ", cutoff);
+
         break;
 
     case ENCODER_OSC:
@@ -293,8 +271,17 @@ void knob_callback(uint8_t index, uint8_t value) {
     switch (index) {
 
     case KNOB_PITCH:
-        module_set_param_all_voices(PARAM_TUNE, value);
-        gui_post_param("Pitch: ", value);
+        //  if osc type is unison attenuate unison detune 
+        if (module_get_param(PARAM_UNISON) == 1) {
+            module_set_param_all_voices(PARAM_TUNE, 1 - (value * 0.02f / 255.0f));
+            gui_post_param("U. Detune: ", value);
+        } else {
+            module_set_param_all_voices(PARAM_TUNE, g_octave_tune_lut[value]); 
+            //module_set_param_all_voices(PARAM_TUNE, 1 - (value * 1.5f / 255.0f));  // sync testing
+            gui_post_param("Pitch: ", value);
+
+        }
+
         break;
 
     case KNOB_ATTACK:
@@ -356,8 +343,15 @@ void knob_callback(uint8_t index, uint8_t value) {
         break;
 
     case KNOB_LEVEL:
-        module_set_param_all_voices(PARAM_AMP_LEVEL, g_amp_cv_lut[value]);
-        gui_post_param("Amp Level: ", value);
+        if (g_shift_held) {
+            module_set_param_all_voices(PARAM_AMP_2_LEVEL, g_amp_cv_lut[value]);
+            gui_post_param("Amp2 Level: ", value);
+            
+        } else {
+            module_set_param_all_voices(PARAM_AMP_LEVEL, g_amp_cv_lut[value]);
+            gui_post_param("Amp Level: ", value);
+            
+        }
         break;
 
     case KNOB_RESONANCE:
@@ -383,6 +377,7 @@ void knob_callback(uint8_t index, uint8_t value) {
         break;
     }
 }
+
 
 /**
  * @brief   Callback triggered by panel button events.
