@@ -48,21 +48,17 @@ under the terms of the GNU Affero General Public License as published by
 
 #include "gui_task.h"
 
+#include "common/parameters.h"
 #include "leaf.h"
 #include "module_interface.h"
-#include "common/parameters.h"
 #include "panel_buttons.h"
 
 #include "common/sample.h"
-
-
 
 /*----- Macros -------------------------------------------------------*/
 
 #define CONTROL_RATE (1000)
 #define MEMPOOL_SIZE (0x1000)
-
-
 
 #define DEFAULT_SCALE_NOTES NOTES_PHRYGIAN_DOMINANT
 #define DEFAULT_SCALE_TONES 12
@@ -90,7 +86,6 @@ static bool g_button_bar_1_held;
 static bool g_button_bar_2_held;
 static bool g_button_bar_3_held;
 static bool g_button_bar_4_held;
-
 
 static LEAF g_leaf;
 static char g_mempool[MEMPOOL_SIZE];
@@ -133,6 +128,8 @@ static void _set_mod_speed(uint32_t mod_speed);
 static void _lut_init(void);
 
 static void _profile_callback(uint32_t period, uint32_t cycles);
+static void _dsp_parameter_callback(uint16_t module_id, uint16_t param_index, int32_t param_value);
+
 
 /*----- Extern function implementations ------------------------------*/
 
@@ -168,8 +165,9 @@ t_status app_init(void) {
 
     ft_register_tick_callback(0, _tick_callback);
 
-    ft_register_dsp_callback(MSG_TYPE_SYSTEM, SYSTEM_PROFILE,
-                             _profile_callback);
+    ft_register_dsp_callback(MSG_TYPE_SYSTEM, SYSTEM_PROFILE, _profile_callback);
+    ft_register_dsp_callback(MSG_TYPE_MODULE, MODULE_GET_PARAM_VALUE, _dsp_parameter_callback);
+
 
     // Initialise GUI.
     gui_task();
@@ -205,8 +203,7 @@ static void _print_gui_param(int param, int value) {
     }
 }
 
-static void _tick_callback(void
-) {
+static void _tick_callback(void) {
 
     static uint32_t tick_count;
 
@@ -221,7 +218,7 @@ static void _tick_callback(void
 }
 
 static void _profile_callback(uint32_t period, uint32_t cycles) {
-gui_print(1, 55, "buf");
+    gui_print(1, 55, "buf");
     uint32_t percent;
 
     char buf[4] = {0};
@@ -254,15 +251,16 @@ static void _knob_callback(uint8_t index, uint8_t value) {
     switch (index) {
 
     case KNOB_PITCH:
-        //  if osc type is unison attenuate unison detune 
+        //  if osc type is unison attenuate unison detune
         if (module_get_param(PARAM_UNISON) == 1) {
-            module_set_param_all_voices(PARAM_TUNE, 1 - (value * 0.02f / 255.0f));
+            module_set_param_all_voices(PARAM_TUNE,
+                                        1 - (value * 0.02f / 255.0f));
             gui_post_param("U. Detune: ", value);
         } else {
-            module_set_param_all_voices(PARAM_TUNE, g_octave_tune_lut[value]); 
-            //module_set_param_all_voices(PARAM_TUNE, 1 - (value * 1.5f / 255.0f));  // sync testing
+            module_set_param_all_voices(PARAM_TUNE, g_octave_tune_lut[value]);
+            // module_set_param_all_voices(PARAM_TUNE, 1 - (value * 1.5f /
+            // 255.0f));  // sync testing
             gui_post_param("Pitch: ", value);
-
         }
 
         break;
@@ -329,11 +327,10 @@ static void _knob_callback(uint8_t index, uint8_t value) {
         if (g_shift_held) {
             module_set_param_all_voices(PARAM_AMP_2_LEVEL, g_amp_cv_lut[value]);
             gui_post_param("Amp2 Level: ", value);
-            
+
         } else {
             module_set_param_all_voices(PARAM_AMP_LEVEL, g_amp_cv_lut[value]);
             gui_post_param("Amp Level: ", value);
-            
         }
         break;
 
@@ -408,10 +405,12 @@ static void _encoder_callback(uint8_t index, uint8_t value) {
             }
         }
         if (g_shift_held) {
-            module_set_param_all_voices(PARAM_OSC_2_TYPE, (1.0 / OSC_TYPE_COUNT) * osc_type);
+            module_set_param_all_voices(PARAM_OSC_2_TYPE,
+                                        (1.0 / OSC_TYPE_COUNT) * osc_type);
             gui_show_osc_type(2, osc_type);
         } else {
-            module_set_param_all_voices(PARAM_OSC_TYPE, (1.0 / OSC_TYPE_COUNT) * osc_type);
+            module_set_param_all_voices(PARAM_OSC_TYPE,
+                                        (1.0 / OSC_TYPE_COUNT) * osc_type);
             gui_show_osc_type(1, osc_type);
         }
 
@@ -436,7 +435,7 @@ static void _encoder_callback(uint8_t index, uint8_t value) {
 
         break;
 
-        case ENCODER_MAIN:
+    case ENCODER_MAIN:
         int amt = 1;
         if (g_button_bar_1_held) {
             amt = 10;
@@ -452,22 +451,29 @@ static void _encoder_callback(uint8_t index, uint8_t value) {
         }
 
         if (value == 0x01) {
-            g_current_editing_sample_parameter_value[g_current_editing_sample_parameter] += amt;
+            g_current_editing_sample_parameter_value
+                [g_current_editing_sample_parameter] += amt;
             /*if (g_current_editing_sample_parameter_value > 4096) { // magic
             number g_current_editing_sample_parameter_value = 4096;
             }*/
         } else {
-            g_current_editing_sample_parameter_value[g_current_editing_sample_parameter] -= amt;
-            if (g_current_editing_sample_parameter_value[g_current_editing_sample_parameter] < 0) {
-                g_current_editing_sample_parameter_value[g_current_editing_sample_parameter] = 0;
+            g_current_editing_sample_parameter_value
+                [g_current_editing_sample_parameter] -= amt;
+            if (g_current_editing_sample_parameter_value
+                    [g_current_editing_sample_parameter] < 0) {
+                g_current_editing_sample_parameter_value
+                    [g_current_editing_sample_parameter] = 0;
             }
         }
         int sample_number = 0; // only one sample for now
 
-        _print_gui_param(g_current_editing_sample_parameter,g_current_editing_sample_parameter_value[g_current_editing_sample_parameter]);
+        _print_gui_param(g_current_editing_sample_parameter,
+                         g_current_editing_sample_parameter_value
+                             [g_current_editing_sample_parameter]);
         module_set_param_sample(sample_number,
                                 g_current_editing_sample_parameter,
-                                g_current_editing_sample_parameter_value[g_current_editing_sample_parameter]);
+                                g_current_editing_sample_parameter_value
+                                    [g_current_editing_sample_parameter]);
         // only voice 0 for now
         break;
 
@@ -550,7 +556,7 @@ static void process_note_event(uint8_t note, uint8_t vel, bool state) {
                 voice_manager_is_voice_in_release_stage(voice_idx);
             if (in_release_stage) {
                 /* Voice is already in release stage, do nothing */
-                //ft_print("Voice already in release stage");
+                // ft_print("Voice already in release stage");
                 return;
             }
             /* Turn off gate (start release phase) */
@@ -594,7 +600,7 @@ static void _button_callback(uint8_t index, bool state) {
     case BUTTON_RECORD:
         // donesnt matter wich voice, send voice 0
         ft_set_module_param(0, SAMPLE_RECORD_START, 1);
-        //loaded_samples = 0;
+        // loaded_samples = 0;
         gui_post_param("recording ", 1);
         g_menu_held = state;
         break;
@@ -613,7 +619,7 @@ static void _button_callback(uint8_t index, bool state) {
             ft_set_module_param(0, PARAM_IFX, ifx_on);
         }
         break;
-        case BUTTON_EXIT:
+    case BUTTON_EXIT:
         if (state == 1) {
             ft_shutdown();
         }
@@ -650,7 +656,7 @@ static void _button_callback(uint8_t index, bool state) {
 
     case BUTTON_BPF:
         if (state) {
-            if (g_shift_held){
+            if (g_shift_held) {
                 _set_filter_type(FILTER_TYPE_NOTCH);
             } else {
                 _set_filter_type(FILTER_TYPE_BPF);
@@ -670,7 +676,9 @@ static void _button_callback(uint8_t index, bool state) {
             }
             // gui_post_param("SampPrm  :
             // ",g_current_editing_sample_parameter_value[g_current_editing_sample_parameter]);
-            _print_gui_param(g_current_editing_sample_parameter,g_current_editing_sample_parameter_value[g_current_editing_sample_parameter]);
+            _print_gui_param(g_current_editing_sample_parameter,
+                             g_current_editing_sample_parameter_value
+                                 [g_current_editing_sample_parameter]);
         }
         break;
     case BUTTON_BACK:
@@ -687,6 +695,18 @@ static void _button_callback(uint8_t index, bool state) {
                                  [g_current_editing_sample_parameter]);
         }
         break;
+    case BUTTON_BAR_1:
+        g_button_bar_1_held = state;
+        break;
+    case BUTTON_BAR_2:
+        g_button_bar_2_held = state;
+        break;
+    case BUTTON_BAR_3:
+        g_button_bar_3_held = state;
+        break;
+    case BUTTON_BAR_4:
+        g_button_bar_4_held = state;
+        break;
 
     default:
         break;
@@ -697,12 +717,13 @@ static void _set_filter_type(uint8_t filter_type) {
 
     static uint8_t filter_variation = 0;
     filter_variation++;
-    if (filter_variation >1){
+    if (filter_variation > 1) {
         filter_variation = 0;
     }
-    uint8_t ft = filter_type + ( FILTER_TYPE_COUNT * filter_variation);
-    //uint8_t ft = filter_type ;
-    module_set_param_all_voices(PARAM_FILTER_TYPE, (1.0 / FILTER_TYPE_COUNT) * ft);
+    uint8_t ft = filter_type + (FILTER_TYPE_COUNT * filter_variation);
+    // uint8_t ft = filter_type ;
+    module_set_param_all_voices(PARAM_FILTER_TYPE,
+                                (1.0 / FILTER_TYPE_COUNT) * ft);
 
     switch (filter_type) {
 
@@ -869,4 +890,7 @@ static void _lut_init(void) {
     }
 }
 
+static void _dsp_parameter_callback(uint16_t module_id, uint16_t param_index, int32_t param_value){
+    gui_post_param("param: ", param_value);
+    }
 /*----- End of file --------------------------------------------------*/

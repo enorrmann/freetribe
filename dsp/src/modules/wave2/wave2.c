@@ -357,7 +357,7 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
  */
 int32_t module_get_param(uint16_t param_index) {
 
-    int32_t value = 0;
+    int32_t value = 666;
 
     switch (param_index) {
 
