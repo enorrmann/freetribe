@@ -44,6 +44,7 @@ under the terms of the GNU Affero General Public License as published by
 #include "leaf-oscillators.h"
 
 #include "param_scale.h"
+#include <stdint.h>
 
 #include "module_interface.h"
 
@@ -327,7 +328,7 @@ void module_set_param(uint16_t param_index, float value) {
         break;
 
     case PARAM_FILTER_TYPE:
-        ft_set_module_param(0, PARAM_FILTER_TYPE, value * OSC_TYPE_COUNT);
+        ft_set_module_param(0, PARAM_FILTER_TYPE, value * FILTER_TYPE_COUNT);
         break;
 
     case PARAM_AMP_LFO_DEPTH:
@@ -380,17 +381,13 @@ void module_set_param(uint16_t param_index, float value) {
     }
 }
 
-float module_get_param(uint16_t param_index) {
-
-    float value = 0;
+void module_get_param(uint16_t param_index) {
 
     switch (param_index) {
 
     default:
         break;
     }
-
-    return value;
 }
 
 /*----- Static function implementations ------------------------------*/
