@@ -688,10 +688,10 @@ static void _button_callback(uint8_t index, bool state) {
             // loaded_samples = 0;
             gui_post_param("recording ", 1);
 
-            int start_note = 36;
+            int start_note = 48;
             int end_note = 72;
             int step_in_semitones = 3;
-            int record_time_in_ms = 2000; // 1 second each
+            int record_time_in_ms = 1500; // 1 second each
             int recorded_samples = ((end_note - start_note) / step_in_semitones) +1 ;
 
             AUTOSAMPLER_init(start_note, end_note, step_in_semitones,
@@ -710,7 +710,7 @@ static void _button_callback(uint8_t index, bool state) {
                 module_set_param_sample(i, SAMPLE_START_POINT,start_pos_in_samples); 
                 module_set_param_sample(i, SAMPLE_LENGTH,sample_lenght_in_samples); 
             }
-            gui_post_param("config  ", recorded_samples);
+            gui_post_param("Sampling  ", recorded_samples);
         }
 
         g_menu_held = state;
