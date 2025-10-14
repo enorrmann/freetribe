@@ -42,8 +42,12 @@ fract16 sample_playback_delta(int32_t phase, fract32 freq,int32_t sample_number)
     }
     
     index+= (samples[sample_number]->start_position);
+    index+= (samples[sample_number]->global_offset);
     if (index<0){ // crucial
         return 0; 
+    }
+    if (index>samples[sample_number]->end_position){  // sample 1 sec, todo add parameter
+        return 0;
     }
 
     fract32 sample0 = data_sdram[index];

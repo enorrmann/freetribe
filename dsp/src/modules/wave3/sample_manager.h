@@ -1,7 +1,7 @@
 #ifndef SAMPLE_MANAGER_H
 #define SAMPLE_MANAGER_H
 
-#include "common/sample.h"
+#include "sample.h"
 #include "types.h"
 #include "aleph.h"
 

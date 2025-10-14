@@ -2,18 +2,6 @@
 #define SAMPLE_H
 
 
-enum t_sample_parameter {
-    SAMPLE_SELECTED_SAMPLE,
-    SAMPLE_PLAYBACK_RATE,
-    SAMPLE_START_POINT,
-    SAMPLE_LOOP_POINT,
-    SAMPLE_PARAM_QUALITY,
-    SAMPLE_PARAM_ROOT_NOTE,
-    SAMPLE_PARAM_HI_NOTE,
-    SAMPLE_PARAM_LOW_NOTE,
-    SAMPLE_PARAM_COUNT
-};
-
 
 typedef struct {
 
@@ -25,6 +13,7 @@ typedef struct {
     int loop_point;
     int end_position;
     int playback_rate;
+    int global_offset; // added to start position for playback
 
 } t_sample;
 

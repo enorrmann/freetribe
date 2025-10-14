@@ -222,6 +222,17 @@ void gui_post_param(const char *label, int32_t value) {
 
     gui_post(cat_string);
 }
+
+char* int_to_char(int32_t value) {
+    // buffer estático para almacenar el resultado (-2147483648 = 11 chars + '\0')
+    static char str_buf[12];
+
+    // conversión usando itoa, base 10 (decimal)
+    itoa(value, str_buf, 10);
+
+    // devolver puntero al buffer resultante
+    return str_buf;
+}
 void DEAD__gui_post_param(char *label, int32_t value) {
 
     /// TODO: Eww.  Sort out string ops.

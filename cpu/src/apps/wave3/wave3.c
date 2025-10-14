@@ -53,18 +53,20 @@ under the terms of the GNU Affero General Public License as published by
 #include "module_interface.h"
 #include "panel_buttons.h"
 
-#include "common/sample.h"
+#include "autosampler.h"
+#include "sample.h"
 
 /*----- Macros -------------------------------------------------------*/
 
 #define CONTROL_RATE (1000)
 #define MEMPOOL_SIZE (0x1000)
 
-#define DEFAULT_SCALE_NOTES NOTES_PHRYGIAN_DOMINANT
+#define DEFAULT_SCALE_NOTES NOTES_CHROMATIC
 #define DEFAULT_SCALE_TONES 12
 #define DEFAULT_SCALE_MODE 0
 
-#define PROFILE_INTERVAL 100
+#define PROFILE_INTERVAL 1000
+#define SAMPLE_RATE 48000
 
 #define MULTIPLYER 4096
 static int32_t tet_decimal_values[12] = {
@@ -107,7 +109,9 @@ static float g_knob_cv_lut[256];
 static float g_midi_hz_lut[128];
 static float g_octave_tune_lut[256];
 static float g_filter_res_lut[256];
-static Sample g_samples[16];
+#define SAMPLE_COUNT 16
+static Sample g_samples[SAMPLE_COUNT];
+static int g_knob_multiplier = 1;
 
 /*----- Extern variable definitions ----------------------------------*/
 
@@ -129,17 +133,17 @@ static void _set_mod_speed(uint32_t mod_speed);
 static void _lut_init(void);
 
 static void _profile_callback(uint32_t period, uint32_t cycles);
-static void _dsp_parameter_callback(uint16_t module_id, uint16_t param_index, int32_t param_value);
-
+static void _dsp_parameter_callback(uint16_t module_id, uint16_t param_index,
+                                    int32_t param_value);
 
 /*----- Extern function implementations ------------------------------*/
 
-
-void initSamples(){
-    for (int i=0;i<16;i++){
+void initSamples() {
+    for (int i = 0; i < SAMPLE_COUNT; i++) {
         g_samples[i] = malloc(sizeof(t_sample));
     }
 }
+
 /**
  * @brief   Initialise application.
  *
@@ -172,13 +176,16 @@ t_status app_init(void) {
 
     ft_register_tick_callback(0, _tick_callback);
 
-    ft_register_dsp_callback(MSG_TYPE_SYSTEM, SYSTEM_PROFILE, _profile_callback);
-    ft_register_dsp_callback(MSG_TYPE_MODULE, MODULE_PARAM_VALUE, _dsp_parameter_callback);
+    ft_register_dsp_callback(MSG_TYPE_SYSTEM, SYSTEM_PROFILE,
+                             _profile_callback);
+    ft_register_dsp_callback(MSG_TYPE_MODULE, MODULE_PARAM_VALUE,
+                             _dsp_parameter_callback);
 
     initSamples();
 
     // Initialise GUI.
     gui_task();
+    g_current_editing_sample_parameter = 0;
 
     gui_print(4, 7, "M a k e W a v e s");
 
@@ -207,7 +214,7 @@ static void _print_gui_param(int param, int value) {
         gui_post_param("Loop  ", value);
         break;
     case SAMPLE_PARAM_ROOT_NOTE:
-        gui_post_param("Root  ", value);    
+        gui_post_param("Root  ", value);
         break;
     case SAMPLE_PARAM_LOW_NOTE:
         gui_post_param("Low   ", value);
@@ -217,6 +224,12 @@ static void _print_gui_param(int param, int value) {
         break;
     case SAMPLE_SELECTED_SAMPLE:
         gui_post_param("SelSam", value);
+        break;
+    case SAMPLE_GLOBAL_OFFSET:
+        gui_post_param("GlOfst", value);
+        break;
+    case SAMPLE_RECORDING_THRESHOLD:
+        gui_post_param("Threshl", value);
         break;
 
     default:
@@ -229,6 +242,7 @@ static void _tick_callback(void) {
     static uint32_t tick_count;
 
     module_process();
+    AUTOSAMPLER_call_every_ms();
 
     if (tick_count++ >= PROFILE_INTERVAL) {
 
@@ -458,7 +472,7 @@ static void _encoder_callback(uint8_t index, uint8_t value) {
         break;
 
     case ENCODER_MAIN:
-        int amt = 1;
+        int amt = g_knob_multiplier;
         if (g_button_bar_1_held) {
             amt = 10;
         }
@@ -489,18 +503,24 @@ static void _encoder_callback(uint8_t index, uint8_t value) {
         }
 
         int sample_number = 0; // only one sample for now
-        sample_number = g_current_editing_sample_parameter_value[SAMPLE_SELECTED_SAMPLE];
+        sample_number =
+            g_current_editing_sample_parameter_value[SAMPLE_SELECTED_SAMPLE];
 
-        if (g_current_editing_sample_parameter==SAMPLE_PARAM_ROOT_NOTE){
-            g_samples[sample_number]->root_note=g_current_editing_sample_parameter_value[g_current_editing_sample_parameter];
+        if (g_current_editing_sample_parameter == SAMPLE_PARAM_ROOT_NOTE) {
+            g_samples[sample_number]->root_note =
+                g_current_editing_sample_parameter_value
+                    [g_current_editing_sample_parameter];
         }
-        if (g_current_editing_sample_parameter==SAMPLE_PARAM_LOW_NOTE){
-            g_samples[sample_number]->low_note=g_current_editing_sample_parameter_value[g_current_editing_sample_parameter];
+        if (g_current_editing_sample_parameter == SAMPLE_PARAM_LOW_NOTE) {
+            g_samples[sample_number]->low_note =
+                g_current_editing_sample_parameter_value
+                    [g_current_editing_sample_parameter];
         }
-        if (g_current_editing_sample_parameter==SAMPLE_PARAM_HI_NOTE){
-            g_samples[sample_number]->hi_note=g_current_editing_sample_parameter_value[g_current_editing_sample_parameter];
+        if (g_current_editing_sample_parameter == SAMPLE_PARAM_HI_NOTE) {
+            g_samples[sample_number]->hi_note =
+                g_current_editing_sample_parameter_value
+                    [g_current_editing_sample_parameter];
         }
-
 
         _print_gui_param(g_current_editing_sample_parameter,
                          g_current_editing_sample_parameter_value
@@ -524,22 +544,23 @@ static void process_note_event(uint8_t note, uint8_t vel, bool state) {
 
         /// if editing parameter = hi low or root note, set the value here
 
-        // function get sample by note 
+        // function get sample by note
         // if there is no sample return
         int sample_number = -1; // only one sample for now
-        for (int i=0;i<16;i++){
-            if (g_samples[i]->low_note<=note && g_samples[i]->hi_note>=note){
-                gui_post_param("sample ", i);
+        for (int i = 0; i < SAMPLE_COUNT; i++) {
+             if (g_samples[i]->low_note <= note &&g_samples[i]->hi_note >=  note) {
+            //if (g_samples[i]->root_note == note) { // testing only root note
+                gui_post_param("sel sample ", i);  // muestra numero de sample
+                g_current_editing_sample_parameter_value
+                    [SAMPLE_SELECTED_SAMPLE] = i; //
                 sample_number = i;
                 break;
             }
         }
-        if (sample_number == -1){
+        if (sample_number == -1) {
             gui_post_param("no samp ", note);
             return;
         }
-
-
 
         /* Check if note is already active (prevent retriggering) */
         voice_idx = voice_manager_get_voice_by_note(note);
@@ -580,25 +601,32 @@ static void process_note_event(uint8_t note, uint8_t vel, bool state) {
         module_set_param_voice(voice_idx, PARAM_PHASE_RESET, true);
 
         int note_index = note % 12;
-        int sample_root_note = g_samples[sample_number]->root_note; // the note in which the sample was sampled
+        int sample_root_note =g_samples[sample_number]                ->root_note; // the note in which the sample was sampled
         int scale_offset = sample_root_note % 12;
-        module_set_param_voice(voice_idx, PARAM_ASSIGN_SAMPLE_TO_VOICE, sample_number);
+        module_set_param_voice(voice_idx, PARAM_ASSIGN_SAMPLE_TO_VOICE,                               sample_number);
 
+
+
+        
+        // TODO FIX SCALE CALCS
         if (scale_offset <= note_index) {
             note_index -= scale_offset;
             // this method allows only addressing 23 seconds of samples becasue
             // we are wasting 12 bits of 32 so max table index would be 1048576
             // (2**20) / (48000 sample rate)
-            module_set_param_voice(voice_idx, PARAM_PLAYBACK_RATE,
-                                   tet_decimal_values[note_index]);
+            if (note_index==11){
+                module_set_param_voice( voice_idx, PARAM_PLAYBACK_RATE, tet_decimal_values[note_index]>>1); 
+            } else {
+                module_set_param_voice(voice_idx, PARAM_PLAYBACK_RATE,tet_decimal_values[note_index]);
+            }
+            
+
         } else {
             note_index = note_index + 12 - scale_offset;
-            module_set_param_voice(voice_idx, PARAM_PLAYBACK_RATE,
-                                   tet_decimal_values[note_index] >>
-                                       1); // lower octave
-        }
-
+            // en esta parte entran los samples mas graves que la nota
+            module_set_param_voice( voice_idx, PARAM_PLAYBACK_RATE, tet_decimal_values[note_index]>>1); // lower octave ? why ?
         
+        }
 
     } else {
         /* Note OFF event */
@@ -653,10 +681,38 @@ static void _button_callback(uint8_t index, bool state) {
 
     switch (index) {
     case BUTTON_RECORD:
-        // donesnt matter wich voice, send voice 0
-        ft_set_module_param(0, SAMPLE_RECORD_START, 1);
-        // loaded_samples = 0;
-        gui_post_param("recording ", 1);
+
+        if (state) {
+            // donesnt matter wich voice, send voice 0
+            ft_set_module_param(0, SAMPLE_RECORD_START, 1); // moved to autosampler
+            // loaded_samples = 0;
+            gui_post_param("recording ", 1);
+
+            int start_note = 36;
+            int end_note = 72;
+            int step_in_semitones = 3;
+            int record_time_in_ms = 2000; // 1 second each
+            int recorded_samples = ((end_note - start_note) / step_in_semitones) +1 ;
+
+            AUTOSAMPLER_init(start_note, end_note, step_in_semitones,
+                             record_time_in_ms);
+
+            int sample_lenght_in_samples = (SAMPLE_RATE * record_time_in_ms) / 1000;
+
+            // config_samples here
+            int i;
+            for (i = 0; i < recorded_samples; i++) { // test fix cantidad recorded samples
+                g_samples[i]->root_note = start_note + (i * step_in_semitones);
+                g_samples[i]->low_note = g_samples[i]->root_note - 1; // must be 3/2 or something
+                g_samples[i]->hi_note = g_samples[i]->root_note + 1;
+
+                int start_pos_in_samples = (sample_lenght_in_samples * i );
+                module_set_param_sample(i, SAMPLE_START_POINT,start_pos_in_samples); 
+                module_set_param_sample(i, SAMPLE_LENGTH,sample_lenght_in_samples); 
+            }
+            gui_post_param("config  ", recorded_samples);
+        }
+
         g_menu_held = state;
         break;
 
@@ -751,19 +807,23 @@ static void _button_callback(uint8_t index, bool state) {
         }
         break;
     case BUTTON_BAR_1:
+        g_knob_multiplier = 10;
         g_button_bar_1_held = state;
         break;
     case BUTTON_BAR_2:
+        g_knob_multiplier = 100;
         g_button_bar_2_held = state;
         break;
     case BUTTON_BAR_3:
+        g_knob_multiplier = 1000;
         g_button_bar_3_held = state;
         break;
     case BUTTON_BAR_4:
+        g_knob_multiplier = 10000;
         g_button_bar_4_held = state;
         break;
     case BUTTON_WRITE:
-    ft_get_module_param(0, 1);
+        ft_get_module_param(0, 1);
         break;
     default:
         break;
@@ -947,7 +1007,9 @@ static void _lut_init(void) {
     }
 }
 
-static void _dsp_parameter_callback(uint16_t module_id, uint16_t param_index, int32_t param_value){
+static void _dsp_parameter_callback(uint16_t module_id, uint16_t param_index,
+                                    int32_t param_value) {
     gui_post_param("p ", param_value);
-    }
+}
+
 /*----- End of file --------------------------------------------------*/

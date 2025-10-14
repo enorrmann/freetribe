@@ -38,14 +38,14 @@ under the terms of the GNU Affero General Public License as published by
 
 #include <stdint.h>
 
+#include "common/parameters.h"
 #include "module.h"
 #include "param_scale.h"
+#include "sample.h"
+#include "sample_manager.h"
 #include "types.h"
 #include "utils.h"
 #include <math.h>
-#include "common/sample.h"
-#include "common/parameters.h"
-#include "sample_manager.h"
 
 #include "aleph.h"
 
@@ -57,7 +57,6 @@ void module_set_param_voice(uint16_t voice_index, uint16_t param_index,
 /*----- Macros -------------------------------------------------------*/
 
 #define MEMPOOL_SIZE (0x2000)
-
 
 // #define DEFAULT_CUTOFF 0x7f // Index in pitch LUT.
 #define DEFAULT_OSC_TYPE 2
@@ -78,7 +77,6 @@ void module_set_param_voice(uint16_t voice_index, uint16_t param_index,
 
 /*----- Typedefs -----------------------------------------------------*/
 
-
 typedef struct {
 
     Custom_Aleph_MonoVoice voice[MAX_VOICES];
@@ -86,7 +84,6 @@ typedef struct {
     fract32 velocity;
     fract16 morph_amount;
     int active_sample_slot;
-
 
 } t_module;
 
@@ -98,8 +95,9 @@ __attribute__((aligned(32))) static char g_mempool[MEMPOOL_SIZE];
 static t_Aleph g_aleph;
 static t_module g_module;
 static int recording = 0;
+static int recording_gate_open = 0;
 static int monitor_level = 0;
-
+static int recording_threshold = 5; // 1 to 100
 
 /*----- Extern variable definitions ----------------------------------*/
 
@@ -123,7 +121,7 @@ void module_init(void) {
     // wavtab_big_counter = 0;
     SMPMAN_init();
     Aleph_init(&g_aleph, SAMPLERATE, g_mempool, MEMPOOL_SIZE, NULL);
-    g_module.active_sample_slot  = 0;
+    g_module.active_sample_slot = 0;
 
     int i;
     for (i = 0; i < MAX_VOICES; i++) {
@@ -142,30 +140,30 @@ void module_init(void) {
 #include <stdbool.h>
 #include <stdint.h>
 
-
 #define WINDOW_SIZE 4096 // nº de samples por ventana para decidir
 #define BLOCK_SIZE 1
 
 // velocidad de respuesta (cuanto menor, más rápido reacciona)
-#define MONITOR_DECAY_SHIFT 6   // equivale a factor ≈ 1/64
+#define MONITOR_DECAY_SHIFT 1 // was 6 // equivale a factor ≈ 1/64
 
 // entrada en formato fract32 (Q1.31)
 // salida: variable global monitor_level (1 a 100)
-static int32_t monitor_accum = 0;  // acumulador interno (Q1.31)
-//int32_t monitor_level = 1;         // valor visible (1–100)
+static int32_t monitor_accum = 0; // acumulador interno (Q1.31)
+// int32_t monitor_level = 1;         // valor visible (1–100)
 
-#define MONITOR_DECAY_SHIFT 6      // suavizado ≈ 1/64
+
 
 void _monitor(fract32 *in, fract32 *out) {
-    
+
     fract32 *outl = out;
     fract32 *outr = out + BLOCK_SIZE;
     fract32 *inl = in;
     fract32 *inr = in + BLOCK_SIZE;
-    int32_t sample = inl[0];
 
-    outr[0] = inl[0];
-    outl[0] = inl[0];
+    //    outr[0] = inl[0];
+    //  outl[0] = inl[0];
+
+    int32_t sample = inl[0];
 
     // valor absoluto (en Q1.31)
     if (sample < 0)
@@ -176,8 +174,7 @@ void _monitor(fract32 *in, fract32 *out) {
 
     // conversión de Q1.31 a escala 1–100
     // (>>24 equivale a dividir por 2^24 ≈ 1/128 del rango total)
-    int32_t scaled = monitor_accum >> 20;  // 0–127 aprox
-
+    int32_t scaled = monitor_accum >> 20; // 0–127 aprox
 
     monitor_level = scaled;
 }
@@ -244,22 +241,25 @@ void module_process(fract32 *in, fract32 *out) {
     fract32 *inl = in;
     fract32 *inr = in + BLOCK_SIZE;
 
-    if (false){ // monitoring
-        _monitor(in,out);
-            return;
+    _monitor(in, out);
 
-    }
-
-     if (recording) {
+    if (recording) {
+        if (monitor_level > recording_threshold) { // threshold to start recording
+            recording_gate_open = 1;
+        }
+        if (recording_gate_open) {
             int i;
             for (i = 0; i < BLOCK_SIZE; i++) {
                 // record the sum of l+r
-                //fract32 to_record = add_fr1x32(inl[i]>>1,-1*(inr[i]>>1)); // x -1 to record balanced
-                fract32 to_record = inl[i];
-                SMPMAN_record(to_record); 
+                // fract32 to_record = add_fr1x32(inl[i]>>1,-1*(inr[i]>>1)); //
+                // x -1 to record balanced
+                //fract32 to_record = inl[i];
+                fract32 to_record = add_fr1x32(inl[i]>>1,(inr[i]>>1)); 
+                SMPMAN_record(to_record);
                 outl[i] = to_record; // Canal izquierdo
                 outr[i] = to_record; // Canal derecho
             }
+        }
 
         return;
     }
@@ -285,17 +285,16 @@ void module_set_param_voice(uint16_t voice_index, uint16_t param_index,
     module_set_param(paramWithOffset, value);
 }
 
-
 void module_set_sample_param(uint16_t param_index_with_offset, int32_t value) {
-    int index = param_index_with_offset-SAMPLE_PARAMETER_OFFSET;
+    int index = param_index_with_offset - SAMPLE_PARAMETER_OFFSET;
     uint16_t param_index = REMOVE_PARAM_OFFSET(index, SAMPLE_PARAM_COUNT);
     int sample_number = PARAM_VOICE_NUMBER(index, SAMPLE_PARAM_COUNT);
-    SMPMAN_set_parameter(sample_number, param_index, value);
+    if (param_index == SAMPLE_RECORDING_THRESHOLD){
+        recording_threshold = value;
 
-    
-
+    } else {
+            SMPMAN_set_parameter(sample_number, param_index, value);}
 }
-
 
 /**
  * @brief   Set parameter.
@@ -305,8 +304,8 @@ void module_set_sample_param(uint16_t param_index_with_offset, int32_t value) {
  */
 void module_set_param(uint16_t param_index_with_offset, int32_t value) {
 
-    if (param_index_with_offset>=SAMPLE_PARAMETER_OFFSET){
-        module_set_sample_param(param_index_with_offset,value);
+    if (param_index_with_offset >= SAMPLE_PARAMETER_OFFSET) {
+        module_set_sample_param(param_index_with_offset, value);
         return;
     }
 
@@ -318,24 +317,28 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
 
     case SAMPLE_RECORD_START:
         recording = 1;
-         SMPMAN_record_reset(); // dont reset, keep recording after
-/*        if (g_module.active_sample_slot==0){
-            wavtab_index = 0;
-        }
-        else {
-            wavtab_index = g_module.samples[g_module.active_sample_slot-1]->end_position;
-        }
-        if (wavtab_index<0){
-            wavtab_index = 0;
-        }*/
-        //g_module.samples[g_module.active_sample_slot]->start_position = wavtab_index; // move to sample manager
+        recording_gate_open = 0;
+        SMPMAN_record_reset(); // dont reset, keep recording after
+                               /*        if (g_module.active_sample_slot==0){
+                                           wavtab_index = 0;
+                                       }
+                                       else {
+                                           wavtab_index =
+                                  g_module.samples[g_module.active_sample_slot-1]->end_position;
+                                       }
+                                       if (wavtab_index<0){
+                                           wavtab_index = 0;
+                                       }*/
+        // g_module.samples[g_module.active_sample_slot]->start_position =
+        // wavtab_index; // move to sample manager
 
         break;
 
     case SAMPLE_RECORD_STOP:
         recording = 0;
-        // move to sample manager g_module.samples[g_module.active_sample_slot]->end_position = wavtab_index;
-        // move to sample manager g_module.active_sample_slot ++;
+        // move to sample manager
+        // g_module.samples[g_module.active_sample_slot]->end_position =
+        // wavtab_index; move to sample manager g_module.active_sample_slot ++;
         break;
 
     // called from sysex manager and or input sample recorder
@@ -388,9 +391,8 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
 
     case PARAM_ASSIGN_SAMPLE_TO_VOICE:
         Custom_Aleph_MonoVoice_assign_sample(&g_module.voice[voice_number],
-                                                 value);
+                                             value);
         break;
-    
 
     default:
         break;
