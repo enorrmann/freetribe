@@ -5,6 +5,7 @@
 
 #define FRACT32_MAX ((fract32)0x7fffffff) /* max value of a fract32 */
 
+
 /**
  * @brief Versión simplificada usando delta de fase para ajuste de índice
  * @param p Fase actual
@@ -54,4 +55,5 @@ fract16 sample_playback_delta(int32_t phase, fract32 freq, int32_t sample_number
 
     return interp;
 }
+
 
