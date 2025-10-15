@@ -30,28 +30,28 @@ fract16 wavetable_lookup_delta(fract32 phase, fract32 dp) {
     return (fract16)shr_fr1x32(sample0, 16);
 }
 
-fract16 sample_playback_delta(int32_t phase, fract32 freq,int32_t sample_number) {
+fract16 sample_playback_delta(int32_t phase, fract32 freq, int32_t sample_number) {
+    int32_t index = (phase >> 12);
+    int32_t frac  = phase & 0xFFF; // lower 12 bits as fractional part (0..4095)
     
+    index = index >> samples[sample_number]->quality;
 
-    int32_t index = (phase>>12); // 10 1024 12 4096 cant address full range
-     //index = phase >> (samples[0]->quality); // ADJUST SAMPLE PLAYBACK
-     index = index >> (samples[sample_number]->quality); // ADJUST SAMPLE PLAYBACK
+    if (samples[sample_number]->loop_point > 0) {
+        index = index % samples[sample_number]->loop_point;
+    }
 
-    if (samples[sample_number]->loop_point>0 ) {
-        index = index % samples[sample_number]->loop_point ;
-    }
-    
-    index+= (samples[sample_number]->start_position);
-    index+= (samples[sample_number]->global_offset);
-    if (index<0){ // crucial
-        return 0; 
-    }
-    if (index>samples[sample_number]->end_position){  // sample 1 sec, todo add parameter
+    index += samples[sample_number]->start_position;
+    index += samples[sample_number]->global_offset;
+    if (index < 0 || index + 1 >= samples[sample_number]->end_position)
         return 0;
-    }
 
-    fract32 sample0 = data_sdram[index];
-    return sample0;
+    fract32 s0 = data_sdram[index];
+    fract32 s1 = data_sdram[index + 1];
 
+    // linear interpolation: s0 + frac*(s1 - s0)
+    // frac is 12-bit, so scale by >>12
+    fract32 interp = s0 + (((s1 - s0) * frac) >> 12);
 
+    return interp;
 }
+
