@@ -8,7 +8,7 @@
 
 fract16 *data_sdram;
 //uint32_t wavtab_index = 0;
-extern Sample  samples[16];
+extern t_sample  samples[MAX_SAMPLES];
 
 
 

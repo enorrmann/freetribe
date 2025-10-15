@@ -1,7 +1,7 @@
 #ifndef SAMPLE_H
 #define SAMPLE_H
 
-
+#define MAX_SAMPLES 256
 
 typedef struct {
 

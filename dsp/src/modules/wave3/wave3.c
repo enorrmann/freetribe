@@ -99,6 +99,7 @@ static int recording_gate_open = 0;
 static int monitor_level = 0;
 static int recording_threshold = 5; // 1 to 100
 
+
 /*----- Extern variable definitions ----------------------------------*/
 
 /*----- Static function prototypes -----------------------------------*/

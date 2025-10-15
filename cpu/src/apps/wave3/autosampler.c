@@ -30,25 +30,6 @@ void AUTOSAMPLER_init(char p_start_note, char p_end_note,
     recording_tail = 0;
 }
 
-void old_AUTOSAMPLER_call_every_ms() {
-    if (!recording) {
-        return;
-    }
-
-    record_timer++;
-    if (record_timer >= record_time_in_ms) {
-        record_timer = 0;
-        ft_send_note_off(chan, current_note, vel);
-        current_note += step_in_semitones;
-        if (current_note > end_note) {
-            recording = 0;
-        } else {
-
-            ft_send_note_on(chan, current_note, vel);
-        }
-    }
-}
-
 void AUTOSAMPLER_call_every_ms() {
     if (!recording) return;
 
