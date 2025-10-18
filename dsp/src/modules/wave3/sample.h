@@ -5,9 +5,10 @@
 
 typedef struct {
 
-    int root_note;
+    // not needed here
+/*   int root_note;
     int low_note;
-    int hi_note;
+    int hi_note;*/
     int quality; 
     int start_position;
     int loop_point;

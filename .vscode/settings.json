@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "sample_manager.h": "c",
+        "aleph.h": "c",
+        "types.h": "c",
+        "panel_callbacks.h": "c",
+        "cmath": "c",
+        "param_scale.h": "c"
+    }
+}
