@@ -16,5 +16,6 @@ void PANEL_button_callback(uint8_t index, bool state) ;
 void PANEL_knob_callback(uint8_t index, uint8_t value);
 void PANEL_encoder_callback(uint8_t index, uint8_t value) ;
 void PANEL_set_current_sample(int sample_number) ;
+void PANEL_init();
 
 #endif

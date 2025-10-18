@@ -1,6 +1,8 @@
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
 
+#define MAX_VOICES 8
+
 #define SAMPLE_PARAMETER_OFFSET ((PARAM_COUNT * MAX_VOICES)  + 1) // () are VERY important
 #define APPLY_PARAM_OFFSET(voice, param, paramCount) (param + (voice * paramCount))
 #define REMOVE_PARAM_OFFSET(param_index_with_offset,paramCount) ((param_index_with_offset) % paramCount)

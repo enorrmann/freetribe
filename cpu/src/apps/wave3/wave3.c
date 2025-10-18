@@ -121,7 +121,7 @@ t_status app_init(void) {
     LEAF_init(&g_leaf, CONTROL_RATE, g_mempool, MEMPOOL_SIZE, NULL);
 
     module_init(&g_leaf);
-    //_set_filter_type(FILTER_TYPE_LPF);
+    
 
     lut_init();
 
@@ -145,6 +145,7 @@ t_status app_init(void) {
 
     // Initialise GUI.
     gui_task();
+    PANEL_init();
     
 
     gui_print(4, 7, "M a k e W a v e s");

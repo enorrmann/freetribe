@@ -597,3 +597,6 @@ void PANEL_set_current_sample(int sample_number) {
     g_current_editing_sample_parameter_value[SAMPLE_SELECTED_SAMPLE] =
         sample_number;
 }
+void PANEL_init() {
+    _set_filter_type(FILTER_TYPE_LPF);
+}

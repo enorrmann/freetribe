@@ -5,6 +5,7 @@
         "types.h": "c",
         "panel_callbacks.h": "c",
         "cmath": "c",
-        "param_scale.h": "c"
+        "param_scale.h": "c",
+        "parameters.h": "c"
     }
 }

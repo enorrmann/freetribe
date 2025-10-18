@@ -14,6 +14,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "common/parameters.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,7 +24,7 @@ extern "C" {
  * @defgroup Voice Manager Configuration
  * @{
  */
-#define MAX_VOICES 6       /**< Maximum number of simultaneous voices */
+
 #define INVALID_VOICE 0xFF /**< Invalid voice index indicator */
 #define INVALID_NOTE 0xFF  /**< Invalid MIDI note indicator */
 
