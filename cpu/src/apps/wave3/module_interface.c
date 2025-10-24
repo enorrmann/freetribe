@@ -82,8 +82,6 @@ typedef struct {
     tSineTriLFO filter_lfo;
     float filter_lfo_depth;
 
-    tSineTriLFO morph_lfo;
-    float morph_lfo_depth;
     float morph_amount;
 
     float filter_cutoff;
@@ -95,10 +93,13 @@ typedef struct {
     tTriLFO pitch_lfo;
     float pitch_lfo_depth;
 
+    tTriLFO lfo_1;
+    float lfo_1_depth;
+
     t_cv amp_cv;
     t_cv filter_cv;
     t_cv pitch_cv;
-    t_cv morph_cv;
+    t_cv lfo_1_cv;
 
     e_mod_type mod_type;
 
@@ -134,15 +135,18 @@ void module_init(LEAF *leaf) {
         tADSRT_init(&g_module[voice_index].filter_env, 0, 1024, 1, 1024, g_exp_buffer,  EXP_BUFFER_SIZE, leaf);
 
         tADSRT_init(&g_module[voice_index].pitch_env, 200, 0, 1, 0, g_exp_buffer,EXP_BUFFER_SIZE, leaf); 
+        
         tTriLFO_init(&g_module[voice_index].amp_lfo, leaf);
         tTriLFO_init(&g_module[voice_index].filter_lfo, leaf);
         tTriLFO_init(&g_module[voice_index].pitch_lfo, leaf);
-        tTriLFO_init(&g_module[voice_index].morph_lfo, leaf);
+        tTriLFO_init(&g_module[voice_index].lfo_1, leaf);
+
 
         tTriLFO_setFreq(&g_module[voice_index].amp_lfo, 10);
         tTriLFO_setFreq(&g_module[voice_index].filter_lfo, 10);
         tTriLFO_setFreq(&g_module[voice_index].pitch_lfo, 0);
-        tTriLFO_setFreq(&g_module[voice_index].morph_lfo, 10);
+        tTriLFO_setFreq(&g_module[voice_index].lfo_1, 10);
+
     }
 }
 
@@ -155,7 +159,7 @@ void module_process(void) {
         float amp_mod;
         float filter_mod;
         float pitch_mod;
-        float morph_mod = 0;
+        float lfo1_mod;
 
         if (g_module[voice_index].reset_phase) {
 
@@ -168,23 +172,26 @@ void module_process(void) {
         // Amplitude modulation.
         //
         amp_mod = tADSRT_tick(&g_module[voice_index].amp_env);
-
         amp_mod += amp_mod * tTriLFO_tick(&g_module[voice_index].amp_lfo) * g_module[voice_index].amp_lfo_depth;
-
-
-
-
         // Only send parameters to DSP if they have changed.
         if (_cv_update(&g_module[voice_index].amp_cv, amp_mod)) {
             float clampled_amp = clamp_value(amp_mod);
-            
             if (clampled_amp <= 0.3f && voice_manager_is_voice_in_release_stage(voice_index)) {
                 voice_manager_release_voice(voice_index);
             
             }
 
-            module_set_param_voice(voice_index,PARAM_AMP,clampled_amp);
+            module_set_param_voice(voice_index,PARAM_AMP,clampled_amp); 
+            
         }
+
+
+       lfo1_mod = tTriLFO_tick(&g_module[voice_index].lfo_1);
+      /* if (_cv_update(&g_module[voice_index].lfo_1_cv, lfo1_mod)) {
+            module_set_param_voice(voice_index,PARAM_MORPH_AMOUNT, clamp_value(lfo1_mod));
+
+        }*/
+
 
         /// TODO: Should filter LFO follow the
         ///       envelope, like the amp LFO?
@@ -192,13 +199,14 @@ void module_process(void) {
         // Filter cutoff modulation.
         //
         filter_mod = g_module[voice_index].filter_cutoff;
-
         filter_mod += tADSRT_tick(&g_module[voice_index].filter_env) * g_module[voice_index].filter_env_depth;
-
         filter_mod += tTriLFO_tick(&g_module[voice_index].filter_lfo) * g_module[voice_index].filter_lfo_depth;
 
-        if (_cv_update(&g_module[voice_index].filter_cv, filter_mod)) {
+        filter_mod += lfo1_mod * g_module[voice_index].lfo_1_depth; // testing dual lfo
 
+
+
+        if (_cv_update(&g_module[voice_index].filter_cv, filter_mod)) {
             module_set_param_voice(voice_index,PARAM_CUTOFF, clamp_value(filter_mod));
         }
 
@@ -216,14 +224,9 @@ void module_process(void) {
 
             module_set_param_voice(voice_index,PARAM_FREQ, clamp_value(pitch_mod));
         }*/
+        
+ 
 
-        //morph_mod = g_module[voice_index].morph_amount;
-        morph_mod = tTriLFO_tick(&g_module[voice_index].morph_lfo) * g_module[voice_index].morph_lfo_depth;
-
-        if (_cv_update(&g_module[voice_index].morph_cv, morph_mod)) {
-
-            module_set_param_voice(voice_index,PARAM_MORPH_AMOUNT, clamp_value(morph_mod));
-        }
 
     }
 }
@@ -256,6 +259,14 @@ void module_set_param_voice(uint16_t voice_index,uint16_t param_index_without_of
         g_module[voice_index].morph_amount = value;
         break;
     case PARAM_MORPH_AMOUNT:
+        //ft_set_module_param(0, param_index, float_to_fract32(value));
+        // ver si es lo mismo (int)value // el tema es que el lfo va entre -1 y 1 por eso aca siempre transmite 0 si no lo multiplico antes por algun factor
+        // como hago en module_process()
+        /*int val = value*1000000;//value<0? -value :  value;
+        if (val<0) {
+            val = -val;
+        }
+        ft_set_module_param(0, param_index, val);*/
         ft_set_module_param(0, param_index, float_to_fract32(value));
         break;
     
@@ -275,7 +286,6 @@ void module_set_param_voice(uint16_t voice_index,uint16_t param_index_without_of
         tTriLFO_setPhase(&g_module[voice_index].amp_lfo, float_to_fract32(value));
         tTriLFO_setPhase(&g_module[voice_index].filter_lfo, float_to_fract32(value));
         tTriLFO_setPhase(&g_module[voice_index].pitch_lfo, float_to_fract32(value));
-        tTriLFO_setPhase(&g_module[voice_index].morph_lfo, float_to_fract32(value));
         break;
 
     case PARAM_GATE:
@@ -407,6 +417,13 @@ void module_set_param_voice(uint16_t voice_index,uint16_t param_index_without_of
         tTriLFO_setFreq(&g_module[voice_index].pitch_lfo, value * 20);
         break;
 
+    case PARAM_LFO_1_SPEED:
+        tTriLFO_setFreq(&g_module[voice_index].lfo_1, value * 60); //  triple speed for lfo1
+        break;
+        case PARAM_LFO_1_DEPTH:
+        g_module[voice_index].lfo_1_depth = value;
+        break;
+
     case PARAM_OSC_BASE_FREQ:
         g_module[voice_index].osc_freq = value;
         break;
@@ -419,14 +436,6 @@ void module_set_param_voice(uint16_t voice_index,uint16_t param_index_without_of
         g_module[voice_index].reset_phase = value;
         break;
 
-
-    case PARAM_MORPH_LFO_DEPTH:
-        g_module[voice_index].morph_lfo_depth = value;
-        break;
-
-    case PARAM_MORPH_LFO_SPEED:
-        tTriLFO_setFreq(&g_module[voice_index].morph_lfo, value * 20);
-        break;
 
     case PARAM_RETRIGGER:
 

@@ -423,6 +423,9 @@ void gui_show_mod_type(uint8_t mod_type) {
         case MOD_PITCH_LFO:
             gui_post_label("P LFO");
             break;
+        case MOD_MORPH_LFO:
+            gui_post_label("M LFO");
+            break;
 
         default:
             break;

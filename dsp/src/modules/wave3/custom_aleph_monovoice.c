@@ -79,14 +79,15 @@ void Custom_Aleph_MonoVoice_init_to_pool(Custom_Aleph_MonoVoice *const synth,
     Aleph_LPFOnePole_init_to_pool(&syn->freq_slew, mempool);
     Aleph_LPFOnePole_set_output(&syn->freq_slew, Custom_Aleph_MonoVoice_DEFAULT_FREQ);
 
+    Aleph_LPFOnePole_init_to_pool(&syn->morph_slew, mempool); // lo subo a ver si es por memoria
+    Aleph_LPFOnePole_set_output(&syn->morph_slew, Custom_Aleph_MonoVoice_DEFAULT_AMP); 
+
     Aleph_LPFOnePole_init_to_pool(&syn->cutoff_slew, mempool);
     Aleph_LPFOnePole_set_output(&syn->cutoff_slew, Custom_Aleph_MonoVoice_DEFAULT_CUTOFF);
 
     Aleph_LPFOnePole_init_to_pool(&syn->amp_slew, mempool);
     Aleph_LPFOnePole_set_output(&syn->amp_slew, Custom_Aleph_MonoVoice_DEFAULT_AMP);
 
-    Aleph_LPFOnePole_init_to_pool(&syn->morph_slew, mempool);
-    Aleph_LPFOnePole_set_output(&syn->morph_slew, Custom_Aleph_MonoVoice_DEFAULT_CUTOFF); // todo ?? parameter 
     
 
 }
@@ -111,7 +112,7 @@ void Custom_Aleph_MonoVoice_free(Custom_Aleph_MonoVoice *const synth) {
 
 
 
-fract32 custom_Aleph_Waveform_next(Aleph_Waveform *const wave, fract32 rate,int32_t sample_number) {
+fract32 custom_Aleph_Waveform_next(Aleph_Waveform *const wave, fract32 rate,int32_t sample_number,int32_t morph_amount) {
 
     t_Aleph_Waveform *wv = *wave;
 
@@ -122,7 +123,7 @@ fract32 custom_Aleph_Waveform_next(Aleph_Waveform *const wave, fract32 rate,int3
     // this works for sample frequency  
     wv->phasor->phase += rate;  // test trunca sample, test polysint
     //wv->phasor->phase += 4096; 
-    next =  sample_playback_delta(wv->phasor->phase, rate,sample_number); 
+    next =  sample_playback_delta(wv->phasor->phase, rate,sample_number,morph_amount); 
      
      /* test for wavemorph
      int loop_size_in_samples = 1024;
@@ -163,8 +164,9 @@ fract32 Custom_Aleph_MonoVoice_next(Custom_Aleph_MonoVoice *const synth) {
     cutoff = Aleph_LPFOnePole_next(&syn->cutoff_slew);
 
     morph_amount = Aleph_LPFOnePole_next(&syn->morph_slew);
+    
     // Generate waveforms.
-    output = custom_Aleph_Waveform_next(&syn->waveform,syn->playback_rate,syn->sample_number); // was morph_amount
+    output = custom_Aleph_Waveform_next(&syn->waveform,syn->playback_rate,syn->sample_number,&syn->morph_slew->target); // testing morph_amount
     
 
 
@@ -221,6 +223,7 @@ void Custom_Aleph_MonoVoice_set_amp(Custom_Aleph_MonoVoice *const synth, fract32
     t_Custom_Aleph_MonoVoice *syn = *synth;
 
     Aleph_LPFOnePole_set_target(&syn->amp_slew, amp);
+
 }
 
 void Custom_Aleph_MonoVoice_set_phase(Custom_Aleph_MonoVoice *const synth, fract32 phase) {
@@ -251,8 +254,7 @@ void Custom_Aleph_MonoVoice_set_morph_amount(Custom_Aleph_MonoVoice *const synth
     Aleph_LPFOnePole_set_target(&syn->morph_slew, morph_amount);
 
 }
-void Custom_Aleph_MonoVoice_set_filter_type(Custom_Aleph_MonoVoice *const synth,
-                                     e_Aleph_FilterSVF_type type) {
+void Custom_Aleph_MonoVoice_set_filter_type(Custom_Aleph_MonoVoice *const synth, e_Aleph_FilterSVF_type type) {
 
     t_Custom_Aleph_MonoVoice *syn = *synth;
 

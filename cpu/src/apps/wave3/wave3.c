@@ -67,7 +67,7 @@ under the terms of the GNU Affero General Public License as published by
 #define DEFAULT_SCALE_TONES 12
 #define DEFAULT_SCALE_MODE 0
 
-#define PROFILE_INTERVAL (1000)
+#define PROFILE_INTERVAL (100)
 
 
 #define MULTIPLYER 4096
@@ -224,7 +224,7 @@ static void process_note_event(uint8_t note, uint8_t vel, bool state) {
         sample_number = (note - SAMPLING_START_NOTE + (SAMPLING_STEP_IN_SEMITONES / 2)) / SAMPLING_STEP_IN_SEMITONES; // TEST CALCULATE SAMPLE NUM
 
         if (sample_number >= 0) {
-                gui_post_param("selected sample ", sample_number);  // muestra numero de sample
+                //gui_post_param("selected sample ", sample_number);  // muestra numero de sample
                 PANEL_set_current_sample(sample_number);
         } else {
             gui_post_param("no sample for ", note);

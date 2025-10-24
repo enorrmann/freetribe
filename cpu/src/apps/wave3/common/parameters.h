@@ -1,7 +1,7 @@
 #ifndef PARAMETERS_H
 #define PARAMETERS_H
 
-#define MAX_VOICES 8
+#define MAX_VOICES 1
 
 #define SAMPLE_PARAMETER_OFFSET ((PARAM_COUNT * MAX_VOICES)  + 1) // () are VERY important
 #define APPLY_PARAM_OFFSET(voice, param, paramCount) (param + (voice * paramCount))
@@ -54,8 +54,8 @@ typedef enum {
     SAMPLE_RECORD_STOP,
     PARAM_MORPH_AMOUNT,
     PARAM_BASE_MORPH_AMOUNT,
-    PARAM_MORPH_LFO_DEPTH,
-    PARAM_MORPH_LFO_SPEED,
+    PARAM_LFO_1_DEPTH,
+    PARAM_LFO_1_SPEED,
     PARAM_PLAYBACK_RATE,
     PARAM_IFX,
     PARAM_UNISON,

@@ -6,59 +6,38 @@
 #define FRACT32_MAX ((fract32)0x7fffffff) /* max value of a fract32 */
 
 
-/**
- * @brief Versión simplificada usando delta de fase para ajuste de índice
- * @param p Fase actual
- * @param dp Delta de fase (usado para ajuste de índice)
- * @return Muestra directa de 16-bit fractional
- */
-fract16 wavetable_lookup_delta(fract32 phase, fract32 dp) {
-
-    uint32_t phase_norm = (uint32_t)(phase);
-
-    int index =
-        (phase_norm >> (32 - 10)); // this index is ok up to 1024 samples,
-                                   // because it inside the cycle
-    // int morph_offset = (int)(dp) ; // x 10 or x even x 100 works
-    //  int morph_offset = (int)(dp) ; // x 10 or x even x 100 works
-
-    int morph_offset = fract32_smul(1000, dp); // testing values for lfo depth
-    index += morph_offset;
-
-    fract32 sample0 = data_sdram[index];
-
-    // Convertir a 16-bit y retornar
-    return (fract16)shr_fr1x32(sample0, 16);
-}
-
-fract16 _sample_playback_delta(int32_t phase, fract32 freq, int32_t sample_number) {
-    int32_t index = (phase >> 12);
-    int32_t frac  = phase & 0xFFF; // lower 12 bits as fractional part (0..4095)
+// no fade out
+// p_index goes from 0 to max int32 
+fract16 _sample_playback_delta(int32_t p_index, fract32 freq, int32_t sample_number,int32_t morph_amount) {
+    uint32_t index = (p_index >> 12); // uint32_t very important
+    //int32_t frac  = p_index & 0xFFF; // lower 12 bits as fractional part (0..4095)
     Sample s = &samples[sample_number];
-    index = index >> s->quality;
+    //index = index >> s->quality;
 
     if (s->loop_point > 0) {
         index = index % s->loop_point;
     }
 
-    index += s->start_position;
-    index += s->global_offset;
+    //index += s->start_position;
+    //index += s->global_offset;
     if (index < 0 || index + 1 >= s->end_position)
         return 0;
 
     fract32 s0 = data_sdram[index];
-    fract32 s1 = data_sdram[index + 1];
+    //fract32 s1 = data_sdram[index + 1];
 
     // linear interpolation: s0 + frac*(s1 - s0)
     // frac is 12-bit, so scale by >>12
-    fract32 interp = s0 + (((s1 - s0) * frac) >> 12);
+    //fract32 interp = s0 + (((s1 - s0) * frac) >> 12);
 
-    return interp;
+    //return interp;
+    return s0;
 }
 
-fract16 sample_playback_delta(int32_t phase, fract32 freq, int32_t sample_number) {
-    int32_t index = (phase >> 12);
-    int32_t frac  = phase & 0xFFF; // lower 12 bits as fractional part (0..4095)
+// with fade out
+fract16 sample_playback_delta(int32_t p_index, fract32 freq, int32_t sample_number,int32_t morph_amount) {
+    uint32_t index = (p_index >> 12); // uint32_t very important
+    int32_t frac  = p_index & 0xFFF; // lower 12 bits as fractional part (0..4095)
     
     Sample s = &samples[sample_number];
 
@@ -68,8 +47,13 @@ fract16 sample_playback_delta(int32_t phase, fract32 freq, int32_t sample_number
         index = index % s->loop_point;
     }
 
+
     index += s->start_position;
     index += s->global_offset;
+
+/*    if (morph_amount > 0) {
+        index += (morph_amount*8); // times 4
+    }*/
 
     int32_t end_pos = s->end_position;
 

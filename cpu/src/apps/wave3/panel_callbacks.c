@@ -112,15 +112,18 @@ static void _set_mod_depth(uint32_t mod_depth) {
 
     switch (g_mod_type) {
 
-    case MOD_AMP_LFO:
-        module_set_param_all_voices(PARAM_AMP_LFO_DEPTH,
-                                    g_knob_cv_lut[mod_depth]);
+    case MOD_MORPH_LFO:
+        module_set_param_all_voices(PARAM_LFO_1_DEPTH, g_knob_cv_lut[mod_depth]);
+        gui_post_param("LFO_1 Dpt: ", mod_depth);
+        break;
+
+        case MOD_AMP_LFO:
+        module_set_param_all_voices(PARAM_AMP_LFO_DEPTH, g_knob_cv_lut[mod_depth]);
         gui_post_param("A.LFO Dpt: ", mod_depth);
         break;
 
     case MOD_FILTER_LFO:
-        module_set_param_all_voices(PARAM_FILTER_LFO_DEPTH,
-                                    g_knob_cv_lut[mod_depth]);
+        module_set_param_all_voices(PARAM_FILTER_LFO_DEPTH, g_knob_cv_lut[mod_depth]);
         gui_post_param("F.LFO Dpt: ", mod_depth);
         break;
 
@@ -141,15 +144,18 @@ static void _set_mod_speed(uint32_t mod_speed) {
 
     switch (g_mod_type) {
 
+    case MOD_MORPH_LFO:
+        //module_set_param_all_voices(PARAM_LFO_1_SPEED,mod_speed); // test modulation lfo
+        module_set_param_all_voices(PARAM_LFO_1_SPEED,g_knob_cv_lut[mod_speed]);
+        gui_post_param("LFO_1 Spd: ", mod_speed);
+        break;
     case MOD_AMP_LFO:
-        module_set_param_all_voices(PARAM_AMP_LFO_SPEED,
-                                    g_knob_cv_lut[mod_speed]);
+        module_set_param_all_voices(PARAM_AMP_LFO_SPEED,g_knob_cv_lut[mod_speed]);
         gui_post_param("A.LFO Spd: ", mod_speed);
         break;
 
     case MOD_FILTER_LFO:
-        module_set_param_all_voices(PARAM_FILTER_LFO_SPEED,
-                                    g_knob_cv_lut[mod_speed]);
+        module_set_param_all_voices(PARAM_FILTER_LFO_SPEED,g_knob_cv_lut[mod_speed]);
         gui_post_param("F.LFO Spd: ", mod_speed);
         break;
 
@@ -473,8 +479,7 @@ void PANEL_encoder_callback(uint8_t index, uint8_t value) {
                 cutoff--;
             }
         }
-        module_set_param_all_voices(PARAM_FILTER_BASE_CUTOFF,
-                                    g_midi_pitch_cv_lut[cutoff]);
+        module_set_param_all_voices(PARAM_FILTER_BASE_CUTOFF, g_midi_pitch_cv_lut[cutoff]);
         gui_post_param("Cutoff: ", cutoff);
 
         break;

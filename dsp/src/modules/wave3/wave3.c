@@ -360,8 +360,7 @@ void module_set_param(uint16_t param_index_with_offset, int32_t value) {
         break;
 
     case PARAM_MORPH_AMOUNT:
-        Custom_Aleph_MonoVoice_set_morph_amount(&g_module.voice[voice_number],
-                                                value);
+        Custom_Aleph_MonoVoice_set_morph_amount(&g_module.voice[voice_number],value);
         break;
 
     case PARAM_AMP_LEVEL:
@@ -417,7 +416,8 @@ int32_t module_get_param(uint16_t param_index) {
         break;
     }
 
-    return monitor_level;
+    return g_module.voice[0]->morph_slew->output;
+
 }
 
 /**
