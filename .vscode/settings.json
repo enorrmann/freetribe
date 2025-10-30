@@ -7,6 +7,10 @@
         "cmath": "c",
         "param_scale.h": "c",
         "parameters.h": "c",
-        "lut.h": "c"
+        "lut.h": "c",
+        "freetribe.h": "c",
+        "keyboard.h": "c",
+        "per_gpio.h": "c",
+        "cstdint": "c"
     }
 }
