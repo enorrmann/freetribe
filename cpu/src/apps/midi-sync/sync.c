@@ -2,15 +2,12 @@
 #include "sync.h"
 #include "per_gpio.h"
 
-#define PULSE_LENGHT 1
-#define rising_edge_bank  7
-#define rising_edge_pin   9
-#define rising_edge_out_bank  6
-#define rising_edge_out_pin  11
+
 
 
     static int detections = 0;
     static int total_detection_timer = 0;
+    static int sync_out_timer = 0;
 
 char* float_to_char(float value) {
     static char str_buf[20];
@@ -70,13 +67,13 @@ void send_sync_out(uint16_t bpm, uint8_t ppqn) {
     // incrementar el contador cada llamada (asumiendo 1 ms por tick)
     count++;
 
-    if (count ==  PULSE_LENGHT) { 
-        per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 0); // bajar
+    if (count == pulse_period_ms- PULSE_LENGHT) {
+        per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 1); 
     }
     
-    if (count == pulse_period_ms) {
-        per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 1); // subir
-        count = 0; // reiniciar
+    if (count == pulse_period_ms) { 
+        per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 0); 
+        count = 0;
     }
 }
 
@@ -84,17 +81,17 @@ void send_sync_out2(uint16_t pulse_period_ms) {
 
     // variables estáticas (persisten entre llamadas)
     static uint32_t count = 0;
-
-    // incrementar el contador cada llamada (asumiendo 1 ms por tick)
     count++;
-
-    if (count == PULSE_LENGHT) { 
-        per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 0); // bajar
+    
+    if (count == pulse_period_ms- PULSE_LENGHT) {
+        per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 1); 
     }
-    if (count == pulse_period_ms) {
-        per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 1); // subir
-        count = 0; // reiniciar
+    
+    if (count == pulse_period_ms) { 
+        per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 0); 
+        count = 0;
     }
+    
 }
 
 
@@ -135,6 +132,23 @@ void print_bpm(){
                 float bpm = 60000.0f / (avg_ms_per_pulse * SYNC_PPQN);
                 ft_print(float_to_char(bpm));
                 ft_print("\n");
+                // reset stats
+                total_detection_timer = 0;
+                detections = 0;
 
 }
 
+void send_sync_out_pulse_start(){
+    per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 1);
+    sync_out_timer = PULSE_LENGHT;
+}
+
+void check_sync_out_pulse_end(){
+    if (sync_out_timer > 0) {
+        sync_out_timer--;
+        if (sync_out_timer == 0) {
+            per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 0);
+        }
+    }
+
+}

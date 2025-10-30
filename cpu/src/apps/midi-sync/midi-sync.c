@@ -47,19 +47,28 @@ static volatile uint32_t midi_clock_counter = 0;
 void _button_callback(uint8_t index, bool state);
  static void _tick_callback(void) ;
 
- int freq_sync = 60000 / (SYNC_INTERNAL_BPM * SYNC_PPQN );
+ int pulse_period_ms = 60000 / (SYNC_INTERNAL_BPM * SYNC_PPQN );
 
 static void on_midi_clock(char ch, char a, char b) {
-    (void)ch;
-    (void)a;
-    (void)b; // No se usan
-    midi_clock_counter++;
+//    midi_clock_counter++;
+    static int count = 0;
+    count ++;
+
+    // enviar pulso si corresponde
+    if (count == 1 || ((count - 1) % (MIDI_SYNC_PPQN / SYNC_PPQN) == 0)) {
+        send_sync_out_pulse_start();
+    }
+
+    // reiniciar cada beat
+    if (count >= MIDI_SYNC_PPQN) {
+        count = 0;
+    }
 }
 
 static void process_tempo_tick() {
     static int g_toggle_led = 0;
 
-    if (midi_clock_counter >= 12) {
+    if (midi_clock_counter >= 24) { // midi syn is 24 ppqn
         midi_clock_counter = 0;
         g_toggle_led = 1;
         
@@ -114,8 +123,8 @@ static t_delay_state g_blink_delay;
  */
 t_status app_init(void) {
 
-   // midi_init_fsm();
-   // midi_register_event_handler(EVT_SYS_REALTIME_TIMING_CLOCK, on_midi_clock);
+    midi_init_fsm();
+    midi_register_event_handler(EVT_SYS_REALTIME_TIMING_CLOCK, on_midi_clock);
   //  midi_register_event_handler(EVT_SYS_REALTIME_SEQ_START, on_midi_start);
    // midi_register_event_handler(EVT_SYS_REALTIME_SEQ_STOP, on_midi_stop);
 
@@ -138,13 +147,16 @@ t_status app_init(void) {
  */
 void app_run(void) { 
   //  process_tempo_tick(); 
+
  }
 
  static void _tick_callback(void) {
 
-   // send_sync_out(120,SYNC_PPQN); // 120 BPM, 24 PPQN
-    send_sync_out2(freq_sync); // 120 BPM, *  24 PPQN
+   //send_sync_out(SYNC_INTERNAL_BPM,SYNC_PPQN);
+    //send_sync_out2(pulse_period_ms); 
+    check_sync_out_pulse_end();
     poll_sync_gpio();
+
     static int counter = 0;
     counter++;
     if (counter >= 1000) { // cada 4 negras
