@@ -32,6 +32,7 @@ under the terms of the GNU Affero General Public License as published by
 
 #include "freetribe.h"
 #include "sync.h"
+#include "gui_task.h"
 #define BUTTON_EXIT 0x0d
 #define BUTTON_PLAY_PAUSE 0x02
 
@@ -47,16 +48,22 @@ static volatile uint32_t midi_clock_counter = 0;
 void _button_callback(uint8_t index, bool state);
  static void _tick_callback(void) ;
 
- int pulse_period_ms = 60000 / (SYNC_INTERNAL_BPM * SYNC_PPQN );
+static int pulse_period_ms = 60000 / (SYNC_INTERNAL_BPM  * SYNC_PPQN );
 
 static void on_midi_clock(char ch, char a, char b) {
 //    midi_clock_counter++;
     static int count = 0;
+    static int sent_on_count = 0;
     count ++;
 
     // enviar pulso si corresponde
     if (count == 1 || ((count - 1) % (MIDI_SYNC_PPQN / SYNC_PPQN) == 0)) {
         send_sync_out_pulse_start();
+        sent_on_count = count;
+    } else 
+    if (count > sent_on_count ) {
+        send_sync_out_pulse_end();
+
     }
 
     // reiniciar cada beat
@@ -130,7 +137,7 @@ t_status app_init(void) {
 
     ft_register_panel_callback(BUTTON_EVENT, _button_callback);
     ft_register_tick_callback(0, _tick_callback);
-
+gui_task();
     ft_print("inicializ");
 
     return SUCCESS;
@@ -146,6 +153,7 @@ t_status app_init(void) {
  * If so, toggle an LED and restart delay.
  */
 void app_run(void) { 
+    gui_task();
   //  process_tempo_tick(); 
 
  }
@@ -154,8 +162,9 @@ void app_run(void) {
 
    //send_sync_out(SYNC_INTERNAL_BPM,SYNC_PPQN);
     //send_sync_out2(pulse_period_ms); 
-    check_sync_out_pulse_end();
+    //check_sync_out_pulse_end(); /// not used
     poll_sync_gpio();
+    send_sync_out_midi  ();
 
     static int counter = 0;
     counter++;

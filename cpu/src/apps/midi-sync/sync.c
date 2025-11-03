@@ -1,6 +1,7 @@
 
 #include "sync.h"
 #include "per_gpio.h"
+#include "gui_task.h"
 
 
 
@@ -36,16 +37,7 @@ char* float_to_char(float value) {
     return str_buf;
 }
 
-char* int_to_char(int32_t value) {
-    // buffer estático para almacenar el resultado (-2147483648 = 11 chars + '\0')
-    static char str_buf[12];
 
-    // conversión usando itoa, base 10 (decimal)
-    itoa(value, str_buf, 10);
-
-    // devolver puntero al buffer resultante
-    return str_buf;
-}
 void send_sync_out(uint16_t bpm, uint8_t ppqn) {
     // salida del pulso
 
@@ -111,16 +103,6 @@ void poll_sync_gpio() {
             total_detection_timer += last_detection_timer;
             last_detection_timer = 0;
 
-            // solo imprimir "pulse" según el ppqn elegido
-            /*if (detections % ppqn == 0) {
-                pulses++;
-                //ft_print("pulse ");
-                //ft_print(int_to_char(pulses));
-                //ft_print(" detections: ");
-                //ft_print(int_to_char(detections));
-                //ft_print(" bpm: ");
-                  // calcular promedio de ms por pulso
-            }*/
         }
     }
 }
@@ -130,8 +112,7 @@ void print_bpm(){
 
                 // convertir a BPM reales
                 float bpm = 60000.0f / (avg_ms_per_pulse * SYNC_PPQN);
-                ft_print(float_to_char(bpm));
-                ft_print("\n");
+                gui_post_param("BPM Detected: ", (int32_t)bpm);
                 // reset stats
                 total_detection_timer = 0;
                 detections = 0;
@@ -142,6 +123,10 @@ void send_sync_out_pulse_start(){
     per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 1);
     sync_out_timer = PULSE_LENGHT;
 }
+void send_sync_out_pulse_end(){
+    per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 0);
+
+}
 
 void check_sync_out_pulse_end(){
     if (sync_out_timer > 0) {
@@ -151,4 +136,20 @@ void check_sync_out_pulse_end(){
         }
     }
 
+}
+
+void svc_midi_send_clock(void)   { svc_midi_send_byte(0xF8); }
+void svc_midi_send_start(void)   { svc_midi_send_byte(0xFA); }
+void svc_midi_send_continue(void){ svc_midi_send_byte(0xFB); }
+void svc_midi_send_stop(void)    { svc_midi_send_byte(0xFC); }
+
+void send_sync_out_midi() {
+    static float count = 0.0f;
+    float pulse_period_ms = 60000.0f / (SYNC_INTERNAL_BPM * MIDI_SYNC_PPQN);
+
+    count += 1.0f; // float is important for precise timing
+    if (count >= pulse_period_ms) {
+        svc_midi_send_clock();
+        count -= pulse_period_ms; // avoid phasing
+    }
 }

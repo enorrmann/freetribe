@@ -12,6 +12,8 @@
         "keyboard.h": "c",
         "per_gpio.h": "c",
         "cstdint": "c",
-        "sync.h": "c"
+        "sync.h": "c",
+        "stdint.h": "c",
+        "compare": "c"
     }
 }
