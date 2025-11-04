@@ -18,14 +18,14 @@
 
 
 
-void send_sync_out() ;
-void poll_sync_gpio() ;
-void print_bpm();
-void send_sync_out_pulse_start();
-void send_sync_out_pulse_end();
-void check_sync_out_pulse_end();
-void svc_midi_send_clock();
-void svc_midi_send_start();
-void svc_midi_send_continue();
-void svc_midi_send_stop() ;
+void SYNC_send_sync_out() ;
+void SYNC_poll_sync_gpio() ;
+void SYNC_print_bpm();
+void SYNC_send_sync_out_pulse_start();
+void SYNC_send_sync_out_pulse_end();
+void SYNC_check_sync_out_pulse_end();
+void SYNC_midi_send_clock();
+void SYNC_midi_send_start();
+void SYNC_midi_send_continue();
+void SYNC_midi_send_stop() ;
 #endif

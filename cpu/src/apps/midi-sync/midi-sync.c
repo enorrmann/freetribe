@@ -51,22 +51,20 @@ void _button_callback(uint8_t index, bool state);
 
 
 static void on_midi_clock(char ch, char a, char b) {
-//    midi_clock_counter++;
     static int count = 0;
     static int sent_on_count = 0;
     count ++;
 
-    // enviar pulso si corresponde
+    // FORWATD CLOCK TO SYNC PORT
     if (count == 1 || ((count - 1) % (MIDI_SYNC_PPQN / SYNC_PPQN) == 0)) {
-        send_sync_out_pulse_start();
+        SYNC_send_sync_out_pulse_start();
         sent_on_count = count;
-    } else 
-    if (count > sent_on_count ) {
-        send_sync_out_pulse_end();
+    } else if (count > sent_on_count ) {
+        SYNC_send_sync_out_pulse_end();
 
     }
 
-    // reiniciar cada beat
+    // RESET COUNTER
     if (count >= MIDI_SYNC_PPQN) {
         count = 0;
     }
@@ -153,16 +151,14 @@ void app_run(void) {
 
  static void _tick_callback(void) {
 
-   send_sync_out();
-    
-    //check_sync_out_pulse_end(); /// not used
-    poll_sync_gpio();
-    //send_sync_out_midi();
+   SYNC_send_sync_out();
+    SYNC_poll_sync_gpio();
+    SYNC_send_sync_out_midi();
 
     static int counter = 0;
     counter++;
     if (counter >= 1000) { // cada 4 negras
-        print_bpm();
+        SYNC_print_bpm();
         counter = 0;    
     }
 

@@ -37,7 +37,7 @@ char *float_to_char(float value) {
     return str_buf;
 }
 
-void send_sync_out() {
+void SYNC_send_sync_out() {
 
     static float count = 0.0f;
     count += 1.0f;
@@ -52,7 +52,7 @@ void send_sync_out() {
     }
 }
 
-void poll_sync_gpio() {
+void SYNC_poll_sync_gpio() {
     static int last_detection_timer = 0;
     last_detection_timer++;
 
@@ -69,7 +69,7 @@ void poll_sync_gpio() {
     }
 }
 
-void print_bpm() {
+void SYNC_print_bpm() {
     float avg_ms_per_pulse = (float)total_detection_timer / detections;
     float bpm = 60000.0f / (avg_ms_per_pulse * SYNC_PPQN);
     gui_post_param("BPM Detected: ", (int32_t)bpm);
@@ -78,38 +78,29 @@ void print_bpm() {
     detections = 0;
 }
 
-void send_sync_out_pulse_start() {
+void SYNC_send_sync_out_pulse_start() {
     per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 1);
     sync_out_timer = PULSE_LENGHT;
 }
 
-void send_sync_out_pulse_end() {
+void SYNC_send_sync_out_pulse_end() {
     per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 0);
 }
 
-void check_sync_out_pulse_end() {
-    if (sync_out_timer > 0) {
-        sync_out_timer--;
-        if (sync_out_timer == 0) {
-            per_gpio_set(rising_edge_out_bank, rising_edge_out_pin, 0);
-        }
-    }
-}
+void SYNC_midi_send_clock() { svc_midi_send_byte(0xF8); }
 
-void svc_midi_send_clock() { svc_midi_send_byte(0xF8); }
+void SYNC_midi_send_start() { svc_midi_send_byte(0xFA); }
 
-void svc_midi_send_start() { svc_midi_send_byte(0xFA); }
+void SYNC_midi_send_continue() { svc_midi_send_byte(0xFB); }
 
-void svc_midi_send_continue() { svc_midi_send_byte(0xFB); }
+void SYNC_midi_send_stop() { svc_midi_send_byte(0xFC); }
 
-void svc_midi_send_stop() { svc_midi_send_byte(0xFC); }
-
-void send_sync_out_midi() {
+void SYNC_send_sync_out_midi() {
     static float count = 0.0f;
 
     count += 1.0f;
     if (count >= midi_pulse_period_ms) {
-        svc_midi_send_clock();
+        SYNC_midi_send_clock();
         count -= midi_pulse_period_ms;
     }
 }
