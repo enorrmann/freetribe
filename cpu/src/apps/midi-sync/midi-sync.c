@@ -48,7 +48,7 @@ static volatile uint32_t midi_clock_counter = 0;
 void _button_callback(uint8_t index, bool state);
  static void _tick_callback(void) ;
 
-static int pulse_period_ms = 60000 / (SYNC_INTERNAL_BPM  * SYNC_PPQN );
+
 
 static void on_midi_clock(char ch, char a, char b) {
 //    midi_clock_counter++;
@@ -89,19 +89,12 @@ static void process_tempo_tick() {
 }
 
 static void on_midi_start(char ch, char a, char b) {
-    (void)ch;
-    (void)a;
-    (void)b;
     midi_clock_counter = 12;
     ft_print("on_midi_start\n");
     g_midi_running = 1;
 }
 
 static void on_midi_stop(char ch, char a, char b) {
-    (void)ch;
-    (void)a;
-    (void)b;
-    // detener reproducción, etc.
     ft_print("on_midi_stop\n");
     g_midi_running = 0;
     ft_set_led(LED_TAP,0);
@@ -137,7 +130,7 @@ t_status app_init(void) {
 
     ft_register_panel_callback(BUTTON_EVENT, _button_callback);
     ft_register_tick_callback(0, _tick_callback);
-gui_task();
+    gui_task();
     ft_print("inicializ");
 
     return SUCCESS;
@@ -160,11 +153,11 @@ void app_run(void) {
 
  static void _tick_callback(void) {
 
-   //send_sync_out(SYNC_INTERNAL_BPM,SYNC_PPQN);
-    //send_sync_out2(pulse_period_ms); 
+   send_sync_out();
+    
     //check_sync_out_pulse_end(); /// not used
     poll_sync_gpio();
-    send_sync_out_midi  ();
+    //send_sync_out_midi();
 
     static int counter = 0;
     counter++;
