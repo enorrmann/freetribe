@@ -14,6 +14,10 @@
         "cstdint": "c",
         "sync.h": "c",
         "stdint.h": "c",
-        "compare": "c"
+        "compare": "c",
+        "seq.h": "c",
+        "svc_display.h": "c",
+        "svc_delay.h": "c",
+        "hw_gpio.h": "c"
     }
 }
