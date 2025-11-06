@@ -31,14 +31,18 @@ under the terms of the GNU Affero General Public License as published by
 /*----- Includes -----------------------------------------------------*/
 
 #include "freetribe.h"
-#include "seq.h"
+#include "event_seq.h"
 
 #define BUTTON_EXIT 0x0d
+
+#define MIDI_PPQN 24
 
 void _button_callback(uint8_t index, bool state);
 static void _tick_callback(void) ;
 void foo_callback();
-
+static Sequencer my_sequencer;
+static SeqEvent event1, event2, event3, event4;
+static void simulate_midi_tick() ;
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -63,18 +67,26 @@ t_status app_init(void) {
     
     ft_register_tick_callback(0, _tick_callback);
 
-    SEQ_init(120.0f, 4, 4, 8, 16); // 15 BPM, 4/4, 1 note steps, 16 steps
+    // step sequencer
+    /*SEQ_init(120.0f, 4, 4, 8, 16); // 15 BPM, 4/4, 1 note steps, 16 steps
     SEQ_fill_every_n(4);            // Activate every 4 steps
     SEQ_set_update_mode(SEQ_MODE_IMMEDIATE);
     SEQ_start();
-    SEQ_set_step_callback(0, foo_callback);
+    SEQ_set_step_callback(0, foo_callback);*/
+    int steps = 1 * MIDI_PPQN; // 4 beats of 24 PPQN
+
+    SEQ_init(&my_sequencer, steps);
+    event1.callback = foo_callback;
+    SEQ_add_event(&my_sequencer,&event1);
+    SEQ_start(&my_sequencer);
+
     ft_print("sequencer");
 
     return SUCCESS;
 }
 
 void foo_callback(){
-    ft_print("Step triggered!");
+    ft_print("Step triggered ");
 }
 
 /**
@@ -112,11 +124,25 @@ void _button_callback(uint8_t index, bool state) {
 
 
  static void _tick_callback(void) {
- SEQ_tick();
-
-
+    simulate_midi_tick();
 }
 
+
+
+static void simulate_midi_tick() {
+    static float count = 0.0f;
+
+    const float bpm = 120.0f;
+    const uint16_t midi_ppqn = 24;
+    const float interval_ms = (60000.0f / bpm) / MIDI_PPQN; // tiempo entre ticks MIDI
+
+    count += 1.0f; // se llama cada 1 ms
+
+    if (count >= interval_ms) {
+        count -= interval_ms;  // mantiene la fase
+        SEQ_tick(&my_sequencer);          // simula un pulso MIDI PPQN
+    }
+}
 /*----- Static function implementations ------------------------------*/
 
 /*----- End of file --------------------------------------------------*/

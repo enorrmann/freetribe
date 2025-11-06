@@ -18,6 +18,7 @@
         "seq.h": "c",
         "svc_display.h": "c",
         "svc_delay.h": "c",
-        "hw_gpio.h": "c"
+        "hw_gpio.h": "c",
+        "event_seq.h": "c"
     }
 }
