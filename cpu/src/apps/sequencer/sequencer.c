@@ -39,9 +39,10 @@ under the terms of the GNU Affero General Public License as published by
 
 void _button_callback(uint8_t index, bool state);
 static void _tick_callback(void) ;
-void foo_callback();
+void callback1();
+void callback2();
 static Sequencer my_sequencer;
-static SeqEvent event1, event2, event3, event4;
+ SeqEvent event1, event2, event3, event4;
 static void simulate_midi_tick() ;
 
 /*----- Macros -------------------------------------------------------*/
@@ -73,11 +74,18 @@ t_status app_init(void) {
     SEQ_set_update_mode(SEQ_MODE_IMMEDIATE);
     SEQ_start();
     SEQ_set_step_callback(0, foo_callback);*/
-    int steps = 1 * MIDI_PPQN; // 4 beats of 24 PPQN
+    int ticks = 4 * MIDI_PPQN; //  beats times  24 PPQN
+    event1.callback = callback1;
+    event2.callback = callback2;
+    event3.callback = callback1;
+    event4.callback = callback1;
 
-    SEQ_init(&my_sequencer, steps);
-    event1.callback = foo_callback;
-    SEQ_add_event(&my_sequencer,&event1);
+    SEQ_init(&my_sequencer, ticks);
+    
+    SEQ_add_event_at_timestamp(&my_sequencer, 0, &event1);
+    SEQ_add_event_at_timestamp(&my_sequencer, 0.25*MIDI_PPQN, &event2);
+    SEQ_add_event_at_timestamp(&my_sequencer, 1*MIDI_PPQN, &event3);
+    SEQ_add_event_at_timestamp(&my_sequencer, 2*MIDI_PPQN, &event4);
     SEQ_start(&my_sequencer);
 
     ft_print("sequencer");
@@ -85,8 +93,13 @@ t_status app_init(void) {
     return SUCCESS;
 }
 
-void foo_callback(){
-    ft_print("Step triggered ");
+void callback1(){
+    ft_print("callback1  \n");
+    ft_toggle_led(LED_TAP);
+}
+void callback2(){
+    ft_print("callback2 \n");
+    ft_toggle_led(LED_TAP);
 }
 
 /**

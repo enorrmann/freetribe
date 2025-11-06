@@ -48,6 +48,7 @@ void SEQ_tick(Sequencer *seq);
  * The timestamp is in ticks relative to the loop start.
  */
 void SEQ_add_event(Sequencer *seq, SeqEvent *evt);
+void SEQ_add_event_at_timestamp(Sequencer *seq, uint32_t timestamp_tick, SeqEvent *new_event);
 
 /**
  * Remove all events and reset state.
