@@ -5,6 +5,8 @@
 
 // --- Initialization ---
 
+static void (*on_beat_callback)(uint32_t beat_index) = NULL;
+
 void SEQ_init(Sequencer *seq, uint32_t loop_length_ticks) {
     seq->head = NULL;
     seq->current = NULL;
@@ -105,10 +107,15 @@ void SEQ_tick(Sequencer *seq) {
     // Loop while there are events whose timestamp matches current tick
     while (current_event &&
            current_event->timestamp_tick == seq->current_tick) {
-        if (current_event->midi_event_callback)
-            current_event->midi_event_callback(current_event->midi_params.chan,
-                                    current_event->midi_params.data1,
-                                    current_event->midi_params.data2);
+        if (current_event->midi_event_callback) {
+            current_event->midi_event_callback(
+                current_event->midi_params.chan,
+                current_event->midi_params.data1,
+                current_event->midi_params.data2);
+        }
+        if (current_event->callback) {
+            current_event->callback();
+        }
 
         current_event = current_event->next;
 
@@ -119,6 +126,12 @@ void SEQ_tick(Sequencer *seq) {
 
     // Actualizar el "current" al próximo evento
     seq->current = current_event;
+
+        // --- Beat callback every 24 ticks (1 beat) ---
+    if (on_beat_callback && (seq->current_tick % MIDI_PPQN == 0)) {
+        uint32_t beat_index = seq->current_tick / MIDI_PPQN;
+        on_beat_callback(beat_index);
+    }
 }
 
 // --- Clear all events ---
@@ -159,4 +172,9 @@ void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
     // Only update head if the new event has an earlier timestamp
     if (new_event->timestamp_tick < seq->head->timestamp_tick)
         seq->head = new_event;
+}
+
+// Setter
+void SEQ_set_beat_callback(void (*callback)(uint32_t beat_index)) {
+    on_beat_callback = callback;
 }

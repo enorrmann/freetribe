@@ -35,7 +35,7 @@ under the terms of the GNU Affero General Public License as published by
 
 #define BUTTON_EXIT 0x0d
 
-#define MIDI_PPQN 24
+
 
 void _button_callback(uint8_t index, bool state);
 static void _tick_callback(void) ;
@@ -44,6 +44,23 @@ void callback2();
 static Sequencer my_sequencer;
  SeqEvent event1, event2, event3, event4;
 static void simulate_midi_tick() ;
+
+char* int_to_char(int32_t value) {
+    // buffer estático para almacenar el resultado (-2147483648 = 11 chars + '\0')
+    static char str_buf[12];
+
+    // conversión usando itoa, base 10 (decimal)
+    itoa(value, str_buf, 10);
+
+    // devolver puntero al buffer resultante
+    return str_buf;
+}
+
+void beat_callback(uint32_t beat_index){
+    ft_print("Beat ");
+    ft_print(int_to_char(beat_index+1)    );
+    ft_print(" \n");
+}
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -68,13 +85,15 @@ t_status app_init(void) {
     
     ft_register_tick_callback(0, _tick_callback);
 
+    SEQ_set_beat_callback(beat_callback);
+
     // step sequencer
     /*SEQ_init(120.0f, 4, 4, 8, 16); // 15 BPM, 4/4, 1 note steps, 16 steps
     SEQ_fill_every_n(4);            // Activate every 4 steps
     SEQ_set_update_mode(SEQ_MODE_IMMEDIATE);
     SEQ_start();
     SEQ_set_step_callback(0, foo_callback);*/
-    int ticks = 4 * MIDI_PPQN; //  beats times  24 PPQN
+    int ticks = 8 * MIDI_PPQN; //  beats times  24 PPQN
     struct MidiEventParams mep;
 
     mep.chan = 0;
@@ -85,6 +104,12 @@ t_status app_init(void) {
     event2.midi_event_callback = ft_send_note_off;
     event3.midi_event_callback = ft_send_note_on;
     event4.midi_event_callback = ft_send_note_off;
+
+
+        event1.callback = callback1;
+        event2.callback = callback2;
+        event3.callback = callback2;
+        event4.callback = callback1;
 
     event1.midi_params = mep;
     event2.midi_params = mep;
@@ -105,14 +130,16 @@ t_status app_init(void) {
 }
 
 void callback1(int chan, int note, int vel){
-    ft_print("callback1  \n");
-    ft_send_note_on(chan, note , vel);
-    //ft_toggle_led(LED_TAP);
+ //   ft_print("callback1  \n");
+    ft_toggle_led(LED_TAP);
+    ft_toggle_led(LED_RGB_0_GREEN);
+    ft_toggle_led(LED_RGB_3_GREEN);
 }
 void callback2(int chan, int note, int vel){
-    ft_print("callback2 \n");
-    //ft_send_note_off(chan, note , vel);
+   // ft_print("callback2 \n");
     ft_toggle_led(LED_TAP);
+    ft_toggle_led(LED_RGB_0_BLUE);
+    ft_toggle_led(LED_RGB_3_BLUE);
 }
 
 /**

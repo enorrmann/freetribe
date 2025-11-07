@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define MIDI_PPQN 24
+
 typedef void (*t_midi_event_callback)(char chan, char data1, char data2);
 
 // --- Data structures ---
@@ -17,7 +19,7 @@ typedef struct MidiEventParams {
 typedef struct SeqEvent
 {
     uint32_t timestamp_tick; // Position within loop
-    //void (*callback)(void);  // Function to trigger
+    void (*callback)(void);  // Function to trigger
     //void (*callback)(int , int,int );
     t_midi_event_callback midi_event_callback;
 
@@ -72,4 +74,5 @@ void SEQ_clear(Sequencer *seq);
  */
 void SEQ_insert_before_current(Sequencer *seq, SeqEvent *evt);
 
+void SEQ_set_beat_callback(void (*callback)(uint32_t beat_index));
 #endif // SEQUENCER_H
