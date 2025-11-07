@@ -19,6 +19,7 @@
         "svc_display.h": "c",
         "svc_delay.h": "c",
         "hw_gpio.h": "c",
-        "event_seq.h": "c"
+        "event_seq.h": "c",
+        "stop_token": "c"
     }
 }

@@ -105,8 +105,10 @@ void SEQ_tick(Sequencer *seq) {
     // Loop while there are events whose timestamp matches current tick
     while (current_event &&
            current_event->timestamp_tick == seq->current_tick) {
-        if (current_event->callback)
-            current_event->callback();
+        if (current_event->midi_event_callback)
+            current_event->midi_event_callback(current_event->midi_params.chan,
+                                    current_event->midi_params.data1,
+                                    current_event->midi_params.data2);
 
         current_event = current_event->next;
 

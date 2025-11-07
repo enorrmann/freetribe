@@ -75,10 +75,21 @@ t_status app_init(void) {
     SEQ_start();
     SEQ_set_step_callback(0, foo_callback);*/
     int ticks = 4 * MIDI_PPQN; //  beats times  24 PPQN
-    event1.callback = callback1;
-    event2.callback = callback2;
-    event3.callback = callback1;
-    event4.callback = callback1;
+    struct MidiEventParams mep;
+
+    mep.chan = 0;
+    mep.data1 = 60; // C4
+    mep.data2 = 100; // velocity
+
+    event1.midi_event_callback = ft_send_note_on;
+    event2.midi_event_callback = ft_send_note_off;
+    event3.midi_event_callback = ft_send_note_on;
+    event4.midi_event_callback = ft_send_note_off;
+
+    event1.midi_params = mep;
+    event2.midi_params = mep;
+    event3.midi_params = mep;
+    event4.midi_params = mep;
 
     SEQ_init(&my_sequencer, ticks);
     
@@ -93,12 +104,14 @@ t_status app_init(void) {
     return SUCCESS;
 }
 
-void callback1(){
+void callback1(int chan, int note, int vel){
     ft_print("callback1  \n");
-    ft_toggle_led(LED_TAP);
+    ft_send_note_on(chan, note , vel);
+    //ft_toggle_led(LED_TAP);
 }
-void callback2(){
+void callback2(int chan, int note, int vel){
     ft_print("callback2 \n");
+    //ft_send_note_off(chan, note , vel);
     ft_toggle_led(LED_TAP);
 }
 

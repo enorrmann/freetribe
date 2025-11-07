@@ -5,12 +5,23 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+typedef void (*t_midi_event_callback)(char chan, char data1, char data2);
+
 // --- Data structures ---
+typedef struct MidiEventParams {
+    char chan; 
+    char data1;
+    char data2;
+} MidiEventParams;
 
 typedef struct SeqEvent
 {
     uint32_t timestamp_tick; // Position within loop
-    void (*callback)(void);  // Function to trigger
+    //void (*callback)(void);  // Function to trigger
+    //void (*callback)(int , int,int );
+    t_midi_event_callback midi_event_callback;
+
+    struct MidiEventParams midi_params; // MIDI event parameters
     struct SeqEvent *next;
     struct SeqEvent *prev;
 } SeqEvent;
