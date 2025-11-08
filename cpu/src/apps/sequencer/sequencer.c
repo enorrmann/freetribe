@@ -46,7 +46,7 @@ void on_start_callback(int beat_index) ;
 
 void on_start_callback(int beat_index) {
     ft_print("Transport started\n");
-    ft_set_led(LED_PLAY, 1000000);
+    ft_set_led(LED_PLAY, 255);
     //ft_set_led(LED_PAUSE, 1);
 
 }
@@ -65,17 +65,32 @@ char *int_to_char(int32_t value) {
 void beat_callback(uint32_t beat_index) {
     int pad_index = beat_index % 16;
     // pad 0 led LED_PAD_0_RED = 44
-    int pad_0 = LED_PAD_0_RED;
+    int pad_0 = LED_PAD_0_BLUE;
     static int previous_pad = 0;
     if (previous_pad != 0) {
         ft_set_led(previous_pad, 0);
     }
     int current_pad = pad_0 + (pad_index * 2);
     previous_pad = current_pad;
-    ft_set_led(current_pad, 1);
+    ft_set_led(current_pad, 255);
 
-    ft_print("Beat ");
+
+    int led_bar_0 = LED_BAR_0_BLUE;
+    static int previous_led_bar = 0;
+    if (previous_led_bar != 0) {
+        ft_set_led(previous_led_bar, 0);
+    }
+    int led_bar_index = beat_index/16;
+    int current_led_bar = led_bar_0 + (beat_index/16); // bar leds are consecutive
+    previous_led_bar = current_led_bar;
+    ft_set_led(current_led_bar, 255);
+
+    ft_print("Pad ");
     ft_print(int_to_char(pad_index));
+    ft_print(" step ");
+    ft_print(int_to_char(beat_index));
+    ft_print(" bar ");
+    ft_print(int_to_char(led_bar_index));
     ft_print(" \n");
 }
 
@@ -108,7 +123,8 @@ t_status app_init(void) {
     SEQ_set_update_mode(SEQ_MODE_IMMEDIATE);
     SEQ_start();
     SEQ_set_step_callback(0, foo_callback);*/
-    int ticks = 18 * MIDI_PPQN; //  beats times  24 PPQN
+    int beats = 8; // negras / quarter notes
+    int ticks = beats * MIDI_PPQN; //  beats times  24 PPQN
     struct MidiEventParams mep;
 
     mep.chan = 0;
