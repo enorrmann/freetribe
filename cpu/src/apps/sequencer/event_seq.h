@@ -37,6 +37,7 @@ typedef struct
     uint32_t current_tick;      // Current tick position
     t_transport_event_callback on_beat_callback;  
     t_transport_event_callback on_start_callback;
+    t_transport_event_callback on_stop_callback;
     bool playing;
 } Sequencer;
 

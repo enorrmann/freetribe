@@ -5,8 +5,6 @@
 
 // --- Initialization ---
 
-
-
 void SEQ_init(Sequencer *seq, uint32_t loop_length_ticks) {
     seq->head = NULL;
     seq->current = NULL;
@@ -18,10 +16,10 @@ void SEQ_init(Sequencer *seq, uint32_t loop_length_ticks) {
 // --- Control ---
 
 void SEQ_start(Sequencer *seq) {
-    if (seq->on_beat_callback){
+    if (seq->on_beat_callback) {
         seq->on_beat_callback(0);
     }
-    if (seq->on_start_callback){
+    if (seq->on_start_callback) {
         seq->on_start_callback(0);
     }
     seq->playing = true;
@@ -29,7 +27,12 @@ void SEQ_start(Sequencer *seq) {
     seq->current = seq->head;
 }
 
-void SEQ_stop(Sequencer *seq) { seq->playing = false; }
+void SEQ_stop(Sequencer *seq) {
+    seq->playing = false;
+    if (seq->on_stop_callback) {
+        seq->on_stop_callback(0);
+    }
+}
 
 void SEQ_add_event(Sequencer *seq, SeqEvent *new_event) {
     if (!seq)
@@ -133,11 +136,9 @@ void SEQ_tick(Sequencer *seq) {
     // Actualizar el "current" al próximo evento
     seq->current = current_event;
 
-    
     // call on_beat_callback if set and on beat
-    int ppqn = MIDI_PPQN /4;
-    if (seq->on_beat_callback &&
-        (seq->current_tick % ppqn == 0 )) {
+    int ppqn = MIDI_PPQN / 4;
+    if (seq->on_beat_callback && (seq->current_tick % ppqn == 0)) {
         uint32_t beat_index = seq->current_tick / ppqn;
         seq->on_beat_callback(beat_index);
     }
@@ -184,6 +185,7 @@ void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
 }
 
 // Setter
-void SEQ_set_beat_callback(Sequencer *seq, void (*callback)(uint32_t beat_index)) {
+void SEQ_set_beat_callback(Sequencer *seq,
+                           void (*callback)(uint32_t beat_index)) {
     seq->on_beat_callback = callback;
 }

@@ -32,24 +32,28 @@ under the terms of the GNU Affero General Public License as published by
 
 #include "event_seq.h"
 #include "freetribe.h"
-
-#define BUTTON_EXIT 0x0d
+#include "panel_buttons.h"
 
 void _button_callback(uint8_t index, bool state);
 static void _tick_callback(void);
-void callback1(int chan, int note, int vel) ;
-void callback2(int chan, int note, int vel) ;
+void callback1(int chan, int note, int vel);
+void callback2(int chan, int note, int vel);
 static Sequencer my_sequencer;
 SeqEvent event1, event2, event3, event4;
 static void simulate_midi_tick();
-void on_start_callback(int beat_index) ;
+void on_start_callback(int beat_index);
+void on_stop_callback(int beat_index);
 
 void on_start_callback(int beat_index) {
-    ft_print("Transport started\n");
     ft_set_led(LED_PLAY, 255);
-    //ft_set_led(LED_PAUSE, 1);
 
 }
+
+void on_stop_callback(int beat_index) {
+    ft_set_led(LED_PLAY, 0);
+
+}
+
 char *int_to_char(int32_t value) {
     // buffer estático para almacenar el resultado (-2147483648 = 11 chars +
     // '\0')
@@ -74,11 +78,10 @@ void beat_callback(uint32_t beat_index) {
     previous_pad = current_pad;
     ft_set_led(current_pad, 255);
 
-
-    //int led_bar_0 = LED_BAR_0_BLUE;
+    // int led_bar_0 = LED_BAR_0_BLUE;
     int led_bar_0 = LED_BAR_0_RED;
-    int led_bar_index = beat_index/16;
-    if (led_bar_index>3){
+    int led_bar_index = beat_index / 16;
+    if (led_bar_index > 3) {
         led_bar_0 = LED_BAR_0_BLUE;
     }
     led_bar_index = led_bar_index % 4;
@@ -87,17 +90,17 @@ void beat_callback(uint32_t beat_index) {
     if (previous_led_bar != 0) {
         ft_set_led(previous_led_bar, 0);
     }
-    int current_led_bar = led_bar_0 + led_bar_index; 
+    int current_led_bar = led_bar_0 + led_bar_index;
     previous_led_bar = current_led_bar;
     ft_set_led(current_led_bar, 255);
 
-    ft_print("Pad ");
+    /*ft_print("Pad ");
     ft_print(int_to_char(pad_index));
     ft_print(" step ");
     ft_print(int_to_char(beat_index));
     ft_print(" bar ");
     ft_print(int_to_char(current_led_bar));
-    ft_print(" \n");
+    ft_print(" \n");*/
 }
 
 /*----- Macros -------------------------------------------------------*/
@@ -121,15 +124,13 @@ t_status app_init(void) {
 
     ft_register_tick_callback(0, _tick_callback);
 
-
-
     // step sequencer
     /*SEQ_init(120.0f, 4, 4, 8, 16); // 15 BPM, 4/4, 1 note steps, 16 steps
     SEQ_fill_every_n(4);            // Activate every 4 steps
     SEQ_set_update_mode(SEQ_MODE_IMMEDIATE);
     SEQ_start();
     SEQ_set_step_callback(0, foo_callback);*/
-    int beats = 1; // negras / quarter notes
+    int beats = 8;                 // negras / quarter notes
     int ticks = beats * MIDI_PPQN; //  beats times  24 PPQN
     struct MidiEventParams mep;
 
@@ -144,8 +145,8 @@ t_status app_init(void) {
 
     event1.callback = callback1;
     event2.callback = callback2;
-    event3.callback = callback2;
-    event4.callback = callback1;
+    event3.callback = callback1;
+    event4.callback = callback2;
 
     event1.midi_params = mep;
     event2.midi_params = mep;
@@ -153,14 +154,15 @@ t_status app_init(void) {
     event4.midi_params = mep;
 
     SEQ_init(&my_sequencer, ticks);
-    SEQ_set_beat_callback(&my_sequencer,beat_callback);
+    SEQ_set_beat_callback(&my_sequencer, beat_callback);
     my_sequencer.on_start_callback = on_start_callback;
+    my_sequencer.on_stop_callback = on_stop_callback;
 
     SEQ_add_event_at_timestamp(&my_sequencer, 0, &event1);
     SEQ_add_event_at_timestamp(&my_sequencer, 0.25 * MIDI_PPQN, &event2);
     SEQ_add_event_at_timestamp(&my_sequencer, 1 * MIDI_PPQN, &event3);
     SEQ_add_event_at_timestamp(&my_sequencer, 2 * MIDI_PPQN, &event4);
-    SEQ_start(&my_sequencer);
+    //SEQ_start(&my_sequencer);
 
     ft_print("sequencer");
 
@@ -168,14 +170,14 @@ t_status app_init(void) {
 }
 
 void callback1(int chan, int note, int vel) {
-    //   ft_print("callback1  \n");
+       ft_print("callback1  \n");
     ft_toggle_led(LED_TAP);
     ft_toggle_led(LED_RGB_0_GREEN);
     ft_toggle_led(LED_RGB_3_GREEN);
 }
 
 void callback2(int chan, int note, int vel) {
-    // ft_print("callback2 \n");
+     ft_print("callback2 \n");
     ft_toggle_led(LED_TAP);
     ft_toggle_led(LED_RGB_0_BLUE);
     ft_toggle_led(LED_RGB_3_BLUE);
@@ -200,6 +202,15 @@ void app_run(void) {}
 void _button_callback(uint8_t index, bool state) {
 
     switch (index) {
+
+    case BUTTON_RECORD:
+        break;
+    case BUTTON_PLAY_PAUSE:
+        SEQ_start(&my_sequencer);
+        break;
+    case BUTTON_STOP:
+        SEQ_stop(&my_sequencer);
+        break;
 
     case BUTTON_EXIT:
         if (state == 1) {
