@@ -21,6 +21,7 @@
         "hw_gpio.h": "c",
         "event_seq.h": "c",
         "stop_token": "c",
-        "cstdlib": "c"
+        "cstdlib": "c",
+        "stdlib.h": "c"
     }
 }

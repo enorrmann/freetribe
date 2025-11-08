@@ -37,12 +37,19 @@ under the terms of the GNU Affero General Public License as published by
 
 void _button_callback(uint8_t index, bool state);
 static void _tick_callback(void);
-void callback1();
-void callback2();
+void callback1(int chan, int note, int vel) ;
+void callback2(int chan, int note, int vel) ;
 static Sequencer my_sequencer;
 SeqEvent event1, event2, event3, event4;
 static void simulate_midi_tick();
+void on_start_callback(int beat_index) ;
 
+void on_start_callback(int beat_index) {
+    ft_print("Transport started\n");
+    ft_set_led(LED_PLAY, 1000000);
+    //ft_set_led(LED_PAUSE, 1);
+
+}
 char *int_to_char(int32_t value) {
     // buffer estático para almacenar el resultado (-2147483648 = 11 chars +
     // '\0')
@@ -93,7 +100,7 @@ t_status app_init(void) {
 
     ft_register_tick_callback(0, _tick_callback);
 
-    SEQ_set_beat_callback(beat_callback);
+
 
     // step sequencer
     /*SEQ_init(120.0f, 4, 4, 8, 16); // 15 BPM, 4/4, 1 note steps, 16 steps
@@ -124,6 +131,8 @@ t_status app_init(void) {
     event4.midi_params = mep;
 
     SEQ_init(&my_sequencer, ticks);
+    SEQ_set_beat_callback(&my_sequencer,beat_callback);
+    my_sequencer.on_start_callback = on_start_callback;
 
     SEQ_add_event_at_timestamp(&my_sequencer, 0, &event1);
     SEQ_add_event_at_timestamp(&my_sequencer, 0.25 * MIDI_PPQN, &event2);
