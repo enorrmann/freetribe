@@ -40,7 +40,7 @@ static void _tick_callback(void);
 void callback1(int chan, int note, int vel);
 void callback2(int chan, int note, int vel);
 static Sequencer my_sequencer;
-static SeqEventPool event_pool;
+SeqEventPool event_pool;
 
 static void simulate_midi_tick();
 void on_start_callback(int beat_index);
@@ -122,6 +122,11 @@ t_status app_init(void) {
 
     SEQ_POOL_init(&event_pool);
     SeqEvent *event1 = SEQ_POOL_get_event(&event_pool);
+    if (!event1) {
+        ft_print("No event1\n");
+    } else {
+
+    }
     SeqEvent *event2 = SEQ_POOL_get_event(&event_pool);
     SeqEvent *event3 = SEQ_POOL_get_event(&event_pool);
     SeqEvent *event4 = SEQ_POOL_get_event(&event_pool);
@@ -154,10 +159,10 @@ t_status app_init(void) {
     my_sequencer.on_start_callback = on_start_callback;
     my_sequencer.on_stop_callback = on_stop_callback;
 
-    SEQ_add_event_at_timestamp(&my_sequencer, 0,&event1); 
-    SEQ_add_event_at_timestamp(&my_sequencer, 12, &event2);
-     SEQ_add_event_at_timestamp(&my_sequencer, 2 * MIDI_PPQN, &event3);
-     SEQ_add_event_at_timestamp(&my_sequencer, 2.5 * MIDI_PPQN, &event4);
+    SEQ_add_event_at_timestamp(&my_sequencer, 0,event1); 
+    SEQ_add_event_at_timestamp(&my_sequencer, 12, event2);
+     SEQ_add_event_at_timestamp(&my_sequencer, 2 * MIDI_PPQN, event3);
+     SEQ_add_event_at_timestamp(&my_sequencer, 2.5 * MIDI_PPQN, event4);
     // SEQ_start(&my_sequencer);
 
     ft_print("sequencer");
