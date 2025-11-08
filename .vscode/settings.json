@@ -22,6 +22,7 @@
         "event_seq.h": "c",
         "stop_token": "c",
         "cstdlib": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "seq_event_pool.h": "c"
     }
 }

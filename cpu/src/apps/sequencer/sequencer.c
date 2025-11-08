@@ -33,13 +33,15 @@ under the terms of the GNU Affero General Public License as published by
 #include "event_seq.h"
 #include "freetribe.h"
 #include "panel_buttons.h"
+#include "seq_event_pool.h"
 
 void _button_callback(uint8_t index, bool state);
 static void _tick_callback(void);
 void callback1(int chan, int note, int vel);
 void callback2(int chan, int note, int vel);
 static Sequencer my_sequencer;
-SeqEvent event1, event2, event3, event4;
+static SeqEventPool event_pool;
+
 static void simulate_midi_tick();
 void on_start_callback(int beat_index);
 void on_stop_callback(int beat_index);
@@ -118,12 +120,12 @@ t_status app_init(void) {
 
     ft_register_tick_callback(0, _tick_callback);
 
-    // step sequencer
-    /*SEQ_init(120.0f, 4, 4, 8, 16); // 15 BPM, 4/4, 1 note steps, 16 steps
-    SEQ_fill_every_n(4);            // Activate every 4 steps
-    SEQ_set_update_mode(SEQ_MODE_IMMEDIATE);
-    SEQ_start();
-    SEQ_set_step_callback(0, foo_callback);*/
+    SEQ_POOL_init(&event_pool);
+    SeqEvent *event1 = SEQ_POOL_get_event(&event_pool);
+    SeqEvent *event2 = SEQ_POOL_get_event(&event_pool);
+    SeqEvent *event3 = SEQ_POOL_get_event(&event_pool);
+    SeqEvent *event4 = SEQ_POOL_get_event(&event_pool);
+
     int beats = 8;                 // negras / quarter notes
     int ticks = beats * MIDI_PPQN; //  beats times  24 PPQN
     struct MidiEventParams mep;
@@ -132,22 +134,20 @@ t_status app_init(void) {
     mep.data1 = 60;  // C4
     mep.data2 = 100; // velocity
 
-    event1.midi_event_callback = ft_send_note_on;
-    event2.midi_event_callback = ft_send_note_off;
-    event3.midi_event_callback = ft_send_note_on;
-    event4.midi_event_callback = ft_send_note_off;
+    event1->midi_event_callback = ft_send_note_on;
+    event2->midi_event_callback = ft_send_note_off;
+    event3->midi_event_callback = ft_send_note_on;
+    event4->midi_event_callback = ft_send_note_off;
 
-    event1.callback = callback1;
-    event1.id = 1;
-    event2.callback = callback2;
-    event2.id = 2;
-    event3.callback = callback1;
-    event4.callback = callback2;
+    event1->callback = callback1;
+    event2->callback = callback2;
+    event3->callback = callback1;
+    event4->callback = callback2;
 
-    event1.midi_params = mep;
-    event2.midi_params = mep;
-    event3.midi_params = mep;
-    event4.midi_params = mep;
+    event1->midi_params = mep;
+    event2->midi_params = mep;
+    event3->midi_params = mep;
+    event4->midi_params = mep;
 
     SEQ_init(&my_sequencer, ticks);
     SEQ_set_beat_callback(&my_sequencer, beat_callback);
