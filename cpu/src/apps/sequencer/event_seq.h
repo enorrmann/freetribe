@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "freetribe.h"
 
 #define MIDI_PPQN 24
 
@@ -27,6 +28,7 @@ typedef struct SeqEvent
     struct MidiEventParams midi_params; // MIDI event parameters
     struct SeqEvent *next;
     struct SeqEvent *prev;
+    int id;
 } SeqEvent;
 
 typedef struct

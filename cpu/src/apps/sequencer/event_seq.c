@@ -3,6 +3,7 @@
 #include "event_seq.h"
 #include <stdlib.h>
 
+
 // --- Initialization ---
 
 void SEQ_init(Sequencer *seq, uint32_t loop_length_ticks) {
@@ -105,18 +106,13 @@ void SEQ_tick(Sequencer *seq) {
     if (!seq->head)
         return;
 
-    seq->current_tick++;
-    if (seq->current_tick >= seq->loop_length_ticks) {
-        seq->current_tick = 0;
-        seq->current = seq->head;
-    }
-
     SeqEvent *current_event = seq->current;
 
     // Loop while there are events whose timestamp matches current tick
     while (current_event &&
            current_event->timestamp_tick == seq->current_tick) {
         if (current_event->midi_event_callback) {
+
             current_event->midi_event_callback(
                 current_event->midi_params.chan,
                 current_event->midi_params.data1,
@@ -129,8 +125,10 @@ void SEQ_tick(Sequencer *seq) {
         current_event = current_event->next;
 
         // Si llegamos al final del loop (lista circular)
-        if (current_event == seq->head)
+        if (current_event == seq->head) {
             break;
+        } else {
+        }
     }
 
     // Actualizar el "current" al próximo evento
@@ -141,6 +139,11 @@ void SEQ_tick(Sequencer *seq) {
     if (seq->on_beat_callback && (seq->current_tick % ppqn == 0)) {
         uint32_t beat_index = seq->current_tick / ppqn;
         seq->on_beat_callback(beat_index);
+    }
+    seq->current_tick++;
+    if (seq->current_tick >= seq->loop_length_ticks) {
+        seq->current_tick = 0;
+        seq->current = seq->head;
     }
 }
 

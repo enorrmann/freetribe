@@ -44,17 +44,11 @@ static void simulate_midi_tick();
 void on_start_callback(int beat_index);
 void on_stop_callback(int beat_index);
 
-void on_start_callback(int beat_index) {
-    ft_set_led(LED_PLAY, 255);
+void on_start_callback(int beat_index) { ft_set_led(LED_PLAY, 255); }
 
-}
+void on_stop_callback(int beat_index) { ft_set_led(LED_PLAY, 0); }
 
-void on_stop_callback(int beat_index) {
-    ft_set_led(LED_PLAY, 0);
-
-}
-
-char *int_to_char(int32_t value) {
+static char *int_to_char(int32_t value) {
     // buffer estático para almacenar el resultado (-2147483648 = 11 chars +
     // '\0')
     static char str_buf[12];
@@ -144,7 +138,9 @@ t_status app_init(void) {
     event4.midi_event_callback = ft_send_note_off;
 
     event1.callback = callback1;
+    event1.id = 1;
     event2.callback = callback2;
+    event2.id = 2;
     event3.callback = callback1;
     event4.callback = callback2;
 
@@ -158,11 +154,11 @@ t_status app_init(void) {
     my_sequencer.on_start_callback = on_start_callback;
     my_sequencer.on_stop_callback = on_stop_callback;
 
-    SEQ_add_event_at_timestamp(&my_sequencer, 0, &event1);
-    SEQ_add_event_at_timestamp(&my_sequencer, 0.25 * MIDI_PPQN, &event2);
-    SEQ_add_event_at_timestamp(&my_sequencer, 1 * MIDI_PPQN, &event3);
-    SEQ_add_event_at_timestamp(&my_sequencer, 2 * MIDI_PPQN, &event4);
-    //SEQ_start(&my_sequencer);
+    SEQ_add_event_at_timestamp(&my_sequencer, 0,&event1); 
+    SEQ_add_event_at_timestamp(&my_sequencer, 12, &event2);
+     SEQ_add_event_at_timestamp(&my_sequencer, 2 * MIDI_PPQN, &event3);
+     SEQ_add_event_at_timestamp(&my_sequencer, 2.5 * MIDI_PPQN, &event4);
+    // SEQ_start(&my_sequencer);
 
     ft_print("sequencer");
 
@@ -170,17 +166,11 @@ t_status app_init(void) {
 }
 
 void callback1(int chan, int note, int vel) {
-       ft_print("callback1  \n");
-    ft_toggle_led(LED_TAP);
-    ft_toggle_led(LED_RGB_0_GREEN);
-    ft_toggle_led(LED_RGB_3_GREEN);
+    ft_set_led(LED_TAP,255);
 }
 
 void callback2(int chan, int note, int vel) {
-     ft_print("callback2 \n");
-    ft_toggle_led(LED_TAP);
-    ft_toggle_led(LED_RGB_0_BLUE);
-    ft_toggle_led(LED_RGB_3_BLUE);
+    ft_set_led(LED_TAP,0);
 }
 
 /**
@@ -206,7 +196,9 @@ void _button_callback(uint8_t index, bool state) {
     case BUTTON_RECORD:
         break;
     case BUTTON_PLAY_PAUSE:
-        SEQ_start(&my_sequencer);
+        if (state == 1) {
+            SEQ_start(&my_sequencer);
+        }
         break;
     case BUTTON_STOP:
         SEQ_stop(&my_sequencer);
