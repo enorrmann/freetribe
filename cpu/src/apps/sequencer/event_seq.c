@@ -135,7 +135,7 @@ void SEQ_tick(Sequencer *seq) {
 
     
     // call on_beat_callback if set and on beat
-    int ppqn = MIDI_PPQN/4;
+    int ppqn = MIDI_PPQN /4;
     if (seq->on_beat_callback &&
         (seq->current_tick % ppqn == 0 )) {
         uint32_t beat_index = seq->current_tick / ppqn;

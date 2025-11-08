@@ -75,13 +75,19 @@ void beat_callback(uint32_t beat_index) {
     ft_set_led(current_pad, 255);
 
 
-    int led_bar_0 = LED_BAR_0_BLUE;
+    //int led_bar_0 = LED_BAR_0_BLUE;
+    int led_bar_0 = LED_BAR_0_RED;
+    int led_bar_index = beat_index/16;
+    if (led_bar_index>3){
+        led_bar_0 = LED_BAR_0_BLUE;
+    }
+    led_bar_index = led_bar_index % 4;
+
     static int previous_led_bar = 0;
     if (previous_led_bar != 0) {
         ft_set_led(previous_led_bar, 0);
     }
-    int led_bar_index = beat_index/16;
-    int current_led_bar = led_bar_0 + (beat_index/16); // bar leds are consecutive
+    int current_led_bar = led_bar_0 + led_bar_index; 
     previous_led_bar = current_led_bar;
     ft_set_led(current_led_bar, 255);
 
@@ -90,7 +96,7 @@ void beat_callback(uint32_t beat_index) {
     ft_print(" step ");
     ft_print(int_to_char(beat_index));
     ft_print(" bar ");
-    ft_print(int_to_char(led_bar_index));
+    ft_print(int_to_char(current_led_bar));
     ft_print(" \n");
 }
 
@@ -123,7 +129,7 @@ t_status app_init(void) {
     SEQ_set_update_mode(SEQ_MODE_IMMEDIATE);
     SEQ_start();
     SEQ_set_step_callback(0, foo_callback);*/
-    int beats = 8; // negras / quarter notes
+    int beats = 1; // negras / quarter notes
     int ticks = beats * MIDI_PPQN; //  beats times  24 PPQN
     struct MidiEventParams mep;
 
