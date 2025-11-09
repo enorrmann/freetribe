@@ -42,6 +42,7 @@ void callback2(int chan, int note, int vel);
 
 static void _note_on_callback(char chan, char note, char vel);
 static void _note_off_callback(char chan, char note, char vel);
+static void _trigger_callback(uint8_t pad, uint8_t vel, bool state);
 static Sequencer my_sequencer;
 SeqEventPool event_pool;
 
@@ -132,6 +133,7 @@ t_status app_init(void) {
     ft_register_panel_callback(BUTTON_EVENT, _button_callback);
     ft_register_midi_callback(EVT_CHAN_NOTE_ON, _note_on_callback);
     ft_register_midi_callback(EVT_CHAN_NOTE_OFF, _note_off_callback);
+    ft_register_panel_callback(TRIGGER_EVENT, _trigger_callback);
 
     ft_register_tick_callback(0, _tick_callback);
 
@@ -145,8 +147,8 @@ t_status app_init(void) {
     SeqEvent *event3 = SEQ_POOL_get_event(&event_pool);
     SeqEvent *event4 = SEQ_POOL_get_event(&event_pool);
 
-    int beats = 8;                 // negras / quarter notes
-    int ticks = beats * MIDI_PPQN; //  beats times  24 PPQN
+    int sequencer_beats = 4;                 // negras / quarter notes 
+    int ticks = sequencer_beats * MIDI_PPQN; //  beats times  24 PPQN
     struct MidiEventParams mep;
 
     mep.chan = 0;
@@ -174,13 +176,13 @@ t_status app_init(void) {
     my_sequencer.on_stop_callback = on_stop_callback;
     my_sequencer.on_record_toggle_callback = on_record_toggle_callback;
 
-   // SEQ_record_toggle(&my_sequencer); // start in recording mode
+    // SEQ_record_toggle(&my_sequencer); // start in recording mode
 
     SEQ_add_event_at_timestamp(&my_sequencer, 0, event1);
     SEQ_add_event_at_timestamp(&my_sequencer, 12, event2);
     SEQ_add_event_at_timestamp(&my_sequencer, 2 * MIDI_PPQN, event3);
     SEQ_add_event_at_timestamp(&my_sequencer, 2.5 * MIDI_PPQN, event4);
-   // SEQ_record_toggle(&my_sequencer); // stop
+    // SEQ_record_toggle(&my_sequencer); // stop
 
     ft_print("sequencer");
 
@@ -241,8 +243,7 @@ static void _tick_callback(void) { simulate_midi_tick(); }
 static void simulate_midi_tick() {
     static float count = 0.0f;
 
-    const float bpm = 120.0f;
-    const uint16_t midi_ppqn = 24;
+    const float bpm = 60.0f;
     const float interval_ms =
         (60000.0f / bpm) / MIDI_PPQN; // tiempo entre ticks MIDI
 
@@ -309,4 +310,13 @@ static void _note_off_callback(char chan, char note, char vel) {
     event->midi_event_callback = ft_send_note_off;
     event->midi_params = mep;
     SEQ_add_event(&my_sequencer, event);
+}
+
+// simulates keyboard
+static void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
+    if (state) {
+        _note_on_callback(0, 60, 120);
+    } else {
+        _note_off_callback(0, 60, 120);
+    }
 }

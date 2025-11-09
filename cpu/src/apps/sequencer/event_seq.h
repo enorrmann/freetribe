@@ -43,6 +43,8 @@ typedef struct
     t_transport_event_callback  on_record_toggle_callback;
     bool playing;
     bool recording;
+    uint32_t internal_resolution; 
+    uint32_t step_resolution;
 } Sequencer;
 
 // --- Public API ---

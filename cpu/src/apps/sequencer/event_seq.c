@@ -3,6 +3,45 @@
 #include "event_seq.h"
 #include <stdlib.h>
 
+static char *int_to_char(int32_t value) {
+    // buffer estático para almacenar el resultado (-2147483648 = 11 chars +
+    // '\0')
+    static char str_buf[12];
+
+    // conversión usando itoa, base 10 (decimal)
+    itoa(value, str_buf, 10);
+
+    // devolver puntero al buffer resultante
+    return str_buf;
+}
+
+static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
+
+    uint32_t quant_ticks = seq->internal_resolution / 2; // default 1/8
+    // uint32_t quant_ticks = MIDI_PPQN / 4; // default 1/16
+
+    // Redondear al múltiplo más cercano
+    uint32_t lower = (tick / quant_ticks) * quant_ticks;
+    uint32_t upper = lower + quant_ticks;
+    uint32_t quant_tick = 0;
+    if ((tick - lower) >= (quant_ticks / 2)) {
+        quant_tick = upper;
+    } else {
+        quant_tick = lower;
+    }
+    ft_print("t ");
+    ft_print(int_to_char(tick));
+    ft_print(" q ");
+    ft_print(int_to_char(quant_tick));
+    ft_print(" s ");
+    ft_print(int_to_char(tick/seq->step_resolution)); // 4 is resolution or something like that
+    ft_print(" qs ");
+    ft_print(int_to_char(quant_tick/seq->step_resolution)); // 4 is resolution or something like that
+    ft_print("\n");
+
+    return quant_tick;
+}
+
 // --- Initialization ---
 
 void SEQ_init(Sequencer *seq, uint32_t loop_length_ticks) {
@@ -12,6 +51,8 @@ void SEQ_init(Sequencer *seq, uint32_t loop_length_ticks) {
     seq->current_tick = 0;
     seq->playing = false;
     seq->recording = false;
+    seq->internal_resolution = MIDI_PPQN ;
+    seq->step_resolution = MIDI_PPQN / 4 ;
 }
 
 // --- Control ---
@@ -48,7 +89,8 @@ void SEQ_add_event(Sequencer *seq, SeqEvent *new_event) {
     }
 
     new_event->timestamp_tick = seq->current_tick;
-    // new_event->callback = callback;
+    SEQ_quantize_tick(seq, new_event->timestamp_tick);
+    return; // testing
 
     if (!seq->head) {
         // First event in sequence
@@ -114,7 +156,8 @@ void SEQ_add_event_at_timestamp(Sequencer *seq, uint32_t timestamp_tick,
 void SEQ_tick(Sequencer *seq) {
     if (!seq->playing)
         return;
-    // if (!seq->head) return; run even with no events to advance ticks and call callbacks
+    // if (!seq->head) return; run even with no events to advance ticks and call
+    // callbacks
 
     SeqEvent *current_event = seq->current;
 
@@ -145,9 +188,9 @@ void SEQ_tick(Sequencer *seq) {
     seq->current = current_event;
 
     // call on_beat_callback if set and on beat
-    int ppqn = MIDI_PPQN / 4;
-    if (seq->on_beat_callback && (seq->current_tick % ppqn == 0)) {
-        uint32_t beat_index = seq->current_tick / ppqn;
+    
+    if (seq->on_beat_callback && (seq->current_tick % seq->step_resolution == 0)) {
+        uint32_t beat_index = seq->current_tick / seq->step_resolution;
         seq->on_beat_callback(beat_index);
     }
     seq->current_tick++;
