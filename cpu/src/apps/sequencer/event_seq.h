@@ -40,7 +40,9 @@ typedef struct
     t_transport_event_callback on_beat_callback;  
     t_transport_event_callback on_start_callback;
     t_transport_event_callback on_stop_callback;
+    t_transport_event_callback  on_record_toggle_callback;
     bool playing;
+    bool recording;
 } Sequencer;
 
 // --- Public API ---
@@ -55,6 +57,7 @@ void SEQ_init(Sequencer *seq, uint32_t loop_length_ticks);
  */
 void SEQ_start(Sequencer *seq);
 void SEQ_stop(Sequencer *seq);
+void SEQ_record_toggle(Sequencer *seq);
 
 /**
  * Advance the sequencer by one tick.

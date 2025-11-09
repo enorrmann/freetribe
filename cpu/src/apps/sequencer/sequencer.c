@@ -39,16 +39,29 @@ void _button_callback(uint8_t index, bool state);
 static void _tick_callback(void);
 void callback1(int chan, int note, int vel);
 void callback2(int chan, int note, int vel);
+
+static void _note_on_callback(char chan, char note, char vel);
+static void _note_off_callback(char chan, char note, char vel);
 static Sequencer my_sequencer;
 SeqEventPool event_pool;
 
 static void simulate_midi_tick();
 void on_start_callback(int beat_index);
 void on_stop_callback(int beat_index);
+void on_record_toggle_callback(int recording_state);
 
 void on_start_callback(int beat_index) { ft_set_led(LED_PLAY, 255); }
 
-void on_stop_callback(int beat_index) { ft_set_led(LED_PLAY, 0); }
+void on_stop_callback(int beat_index) {
+    for (int ch = 0; ch < 16; ch++) {
+        ft_send_cc(ch, 123, 0); // All Notes Off
+    }
+    ft_set_led(LED_PLAY, 0);
+}
+
+void on_record_toggle_callback(int recording_state) {
+    ft_set_led(LED_REC, 255 * recording_state); // turn on/off record LED
+}
 
 static char *int_to_char(int32_t value) {
     // buffer estático para almacenar el resultado (-2147483648 = 11 chars +
@@ -117,6 +130,8 @@ void beat_callback(uint32_t beat_index) {
 t_status app_init(void) {
 
     ft_register_panel_callback(BUTTON_EVENT, _button_callback);
+    ft_register_midi_callback(EVT_CHAN_NOTE_ON, _note_on_callback);
+    ft_register_midi_callback(EVT_CHAN_NOTE_OFF, _note_off_callback);
 
     ft_register_tick_callback(0, _tick_callback);
 
@@ -125,7 +140,6 @@ t_status app_init(void) {
     if (!event1) {
         ft_print("No event1\n");
     } else {
-
     }
     SeqEvent *event2 = SEQ_POOL_get_event(&event_pool);
     SeqEvent *event3 = SEQ_POOL_get_event(&event_pool);
@@ -158,25 +172,24 @@ t_status app_init(void) {
     SEQ_set_beat_callback(&my_sequencer, beat_callback);
     my_sequencer.on_start_callback = on_start_callback;
     my_sequencer.on_stop_callback = on_stop_callback;
+    my_sequencer.on_record_toggle_callback = on_record_toggle_callback;
 
-    SEQ_add_event_at_timestamp(&my_sequencer, 0,event1); 
+   // SEQ_record_toggle(&my_sequencer); // start in recording mode
+
+    SEQ_add_event_at_timestamp(&my_sequencer, 0, event1);
     SEQ_add_event_at_timestamp(&my_sequencer, 12, event2);
-     SEQ_add_event_at_timestamp(&my_sequencer, 2 * MIDI_PPQN, event3);
-     SEQ_add_event_at_timestamp(&my_sequencer, 2.5 * MIDI_PPQN, event4);
-    // SEQ_start(&my_sequencer);
+    SEQ_add_event_at_timestamp(&my_sequencer, 2 * MIDI_PPQN, event3);
+    SEQ_add_event_at_timestamp(&my_sequencer, 2.5 * MIDI_PPQN, event4);
+   // SEQ_record_toggle(&my_sequencer); // stop
 
     ft_print("sequencer");
 
     return SUCCESS;
 }
 
-void callback1(int chan, int note, int vel) {
-    ft_set_led(LED_TAP,255);
-}
+void callback1(int chan, int note, int vel) { ft_set_led(LED_TAP, 255); }
 
-void callback2(int chan, int note, int vel) {
-    ft_set_led(LED_TAP,0);
-}
+void callback2(int chan, int note, int vel) { ft_set_led(LED_TAP, 0); }
 
 /**
  * @brief   Run application.
@@ -199,6 +212,9 @@ void _button_callback(uint8_t index, bool state) {
     switch (index) {
 
     case BUTTON_RECORD:
+        if (state == 1) {
+            SEQ_record_toggle(&my_sequencer);
+        }
         break;
     case BUTTON_PLAY_PAUSE:
         if (state == 1) {
@@ -238,6 +254,59 @@ static void simulate_midi_tick() {
     }
 }
 
-/*----- Static function implementations ------------------------------*/
+/**
+ * @brief   Callback triggered by MIDI note on events.
+ *
+ * Echo received note on messages to MIDI output.
+ *
+ * @param[in]   chan    MIDI channel.
+ * @param[in]   note    MIDI note number.
+ * @param[in]   vel     MIDI note velocity.
+ */
+static void _note_on_callback(char chan, char note, char vel) {
+    uint8_t note_int = (uint8_t)note;
+    uint8_t vel_int = (uint8_t)vel;
+    MidiEventParams mep;
+    mep.chan = chan;
+    mep.data1 = note;
+    mep.data2 = vel;
+    SeqEvent *event = SEQ_POOL_get_event(&event_pool);
+    // thru
+    ft_send_note_on(chan, note, vel);
+    if (!event) {
+        ft_print("No event\n");
+        return;
+    }
+    event->midi_event_callback = ft_send_note_on;
+    event->midi_params = mep;
+    SEQ_add_event(&my_sequencer, event);
+}
 
-/*----- End of file --------------------------------------------------*/
+/**
+ * @brief   Callback triggered by MIDI note off events.
+ *
+ * Echo received note on messages to MIDI output.
+ *
+ * @param[in]   chan    MIDI channel.
+ * @param[in]   note    MIDI note number.
+ * @param[in]   vel     MIDI note velocity.
+ */
+static void _note_off_callback(char chan, char note, char vel) {
+    uint8_t note_int = (uint8_t)note;
+    uint8_t vel_int = (uint8_t)vel;
+    MidiEventParams mep;
+    mep.chan = chan;
+    mep.data1 = note;
+    mep.data2 = vel;
+    SeqEvent *event = SEQ_POOL_get_event(&event_pool);
+    // thru
+    ft_send_note_off(chan, note, vel);
+    if (!event) {
+        ft_print("No event\n");
+        return;
+    }
+
+    event->midi_event_callback = ft_send_note_off;
+    event->midi_params = mep;
+    SEQ_add_event(&my_sequencer, event);
+}

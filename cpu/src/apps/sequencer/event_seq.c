@@ -3,7 +3,6 @@
 #include "event_seq.h"
 #include <stdlib.h>
 
-
 // --- Initialization ---
 
 void SEQ_init(Sequencer *seq, uint32_t loop_length_ticks) {
@@ -12,6 +11,7 @@ void SEQ_init(Sequencer *seq, uint32_t loop_length_ticks) {
     seq->loop_length_ticks = loop_length_ticks;
     seq->current_tick = 0;
     seq->playing = false;
+    seq->recording = false;
 }
 
 // --- Control ---
@@ -35,9 +35,17 @@ void SEQ_stop(Sequencer *seq) {
     }
 }
 
+void SEQ_record_toggle(Sequencer *seq) {
+    seq->recording = !seq->recording;
+    if (seq->on_record_toggle_callback) {
+        seq->on_record_toggle_callback(seq->recording);
+    }
+}
+
 void SEQ_add_event(Sequencer *seq, SeqEvent *new_event) {
-    if (!seq)
+    if (!seq || !seq->recording) {
         return;
+    }
 
     new_event->timestamp_tick = seq->current_tick;
     // new_event->callback = callback;
@@ -71,6 +79,9 @@ void SEQ_add_event(Sequencer *seq, SeqEvent *new_event) {
 
 void SEQ_add_event_at_timestamp(Sequencer *seq, uint32_t timestamp_tick,
                                 SeqEvent *new_event) {
+    if (!seq || !seq->recording) {
+        return;
+    }
 
     new_event->timestamp_tick = timestamp_tick % seq->loop_length_ticks;
     // new_event->callback = callback;
@@ -103,8 +114,7 @@ void SEQ_add_event_at_timestamp(Sequencer *seq, uint32_t timestamp_tick,
 void SEQ_tick(Sequencer *seq) {
     if (!seq->playing)
         return;
-    if (!seq->head)
-        return;
+    // if (!seq->head) return; run even with no events to advance ticks and call callbacks
 
     SeqEvent *current_event = seq->current;
 
@@ -166,6 +176,10 @@ void SEQ_clear(Sequencer *seq) {
 }
 
 void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
+    if (!seq || !seq->recording) {
+        return;
+    }
+
     if (!seq->head) {
         // If list is empty, fallback to normal insert
         SEQ_add_event(seq, new_event);
