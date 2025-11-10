@@ -263,11 +263,10 @@ void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
         if (prev) {
             new_event->peer_event = prev;
             prev->peer_event = new_event;
-            ft_print("Found matching NOTE_ON event\n");
-            // new_event->timestamp_tick = prev->timestamp_tick + 12;
+            new_event->timestamp_tick = prev->timestamp_tick + 12;
+            // adjust timing or simething
 
         } else {
-            ft_print("No matching NOTE_ON event found\n");
         }
     }
 }
