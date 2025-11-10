@@ -21,8 +21,8 @@ static char *int_to_char(int32_t value) {
 static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
 
     //uint32_t quant_ticks = seq->internal_resolution / 2; // default 1/8
-    //uint32_t quant_ticks = seq->internal_resolution / 4; // default 1/16
-    uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
+    uint32_t quant_ticks = seq->internal_resolution / 4; // default 1/16
+    //uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
 
     // Redondear al múltiplo más cercano
     uint32_t lower = (tick / quant_ticks) * quant_ticks;
@@ -258,6 +258,7 @@ void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) {
             SEQ_add_event_at_timestamp(seq, new_event->timestamp_tick,
                                        new_event);
         } else {
+            ft_print("note not found prev");
         }
     }
 }
@@ -300,7 +301,7 @@ void SEQ_set_beat_callback(Sequencer *seq,
 }
 
 
-// IMPROVEMENT START FROM HEAD AND RUN UNTIL HEAD BECAUSE MULTIPLE INSERTRIONS AT ONCE
+
 static SeqEvent *_SEQ_find_matching_note_on(SeqEvent *evt, uint8_t chan,
                                             uint8_t note) {
     if (!evt || !evt->prev) {
