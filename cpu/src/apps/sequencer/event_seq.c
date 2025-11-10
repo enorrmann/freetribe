@@ -3,6 +3,9 @@
 #include "event_seq.h"
 #include <stdlib.h>
 
+static SeqEvent *_SEQ_find_matching_note_on(Sequencer *seq, uint8_t chan,
+                                            uint8_t note);
+
 static char *int_to_char(int32_t value) {
     // buffer estático para almacenar el resultado (-2147483648 = 11 chars +
     // '\0')
@@ -17,8 +20,9 @@ static char *int_to_char(int32_t value) {
 
 static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
 
-    uint32_t quant_ticks = seq->internal_resolution / 2; // default 1/8
-    // uint32_t quant_ticks = MIDI_PPQN / 4; // default 1/16
+    // uint32_t quant_ticks = seq->internal_resolution / 2; // default 1/8
+    uint32_t quant_ticks = MIDI_PPQN / 4; // default 1/16
+    // uint32_t quant_ticks = MIDI_PPQN / 8; // default 1/32
 
     // Redondear al múltiplo más cercano
     uint32_t lower = (tick / quant_ticks) * quant_ticks;
@@ -34,9 +38,12 @@ static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
     ft_print(" q ");
     ft_print(int_to_char(quant_tick));
     ft_print(" s ");
-    ft_print(int_to_char(tick/seq->step_resolution)); // 4 is resolution or something like that
+    ft_print(int_to_char(
+        tick / seq->step_resolution)); // 4 is resolution or something like that
     ft_print(" qs ");
-    ft_print(int_to_char(quant_tick/seq->step_resolution)); // 4 is resolution or something like that
+    ft_print(int_to_char(
+        quant_tick /
+        seq->step_resolution)); // 4 is resolution or something like that
     ft_print("\n");
 
     return quant_tick;
@@ -44,15 +51,16 @@ static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
 
 // --- Initialization ---
 
-void SEQ_init(Sequencer *seq, uint32_t loop_length_ticks) {
+void SEQ_init(Sequencer *seq, uint32_t beats) {
+
     seq->head = NULL;
     seq->current = NULL;
-    seq->loop_length_ticks = loop_length_ticks;
     seq->current_tick = 0;
     seq->playing = false;
     seq->recording = false;
-    seq->internal_resolution = MIDI_PPQN ;
-    seq->step_resolution = MIDI_PPQN / 4 ;
+    seq->internal_resolution = MIDI_PPQN;
+    seq->step_resolution = seq->internal_resolution / 4;
+    seq->loop_length_ticks = seq->internal_resolution * beats;
 }
 
 // --- Control ---
@@ -89,8 +97,9 @@ void SEQ_add_event(Sequencer *seq, SeqEvent *new_event) {
     }
 
     new_event->timestamp_tick = seq->current_tick;
-    SEQ_quantize_tick(seq, new_event->timestamp_tick);
-    return; // testing
+
+    new_event->timestamp_tick =
+        SEQ_quantize_tick(seq, new_event->timestamp_tick);
 
     if (!seq->head) {
         // First event in sequence
@@ -188,8 +197,9 @@ void SEQ_tick(Sequencer *seq) {
     seq->current = current_event;
 
     // call on_beat_callback if set and on beat
-    
-    if (seq->on_beat_callback && (seq->current_tick % seq->step_resolution == 0)) {
+
+    if (seq->on_beat_callback &&
+        (seq->current_tick % seq->step_resolution == 0)) {
         uint32_t beat_index = seq->current_tick / seq->step_resolution;
         seq->on_beat_callback(beat_index);
     }
@@ -230,7 +240,21 @@ void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
     }
 
     new_event->timestamp_tick = seq->current_tick;
-    // new_event->callback = callback;
+    //new_event->timestamp_tick = SEQ_quantize_tick(seq, new_event->timestamp_tick);
+
+    if (new_event->midi_params.note_on == false) {
+
+        // adjust timing for NOTE_OFF events
+        SeqEvent *prev = _SEQ_find_matching_note_on(
+            seq, new_event->midi_params.chan, new_event->midi_params.data1);
+        if (prev) {
+            ft_print("Found matching NOTE_ON event\n");
+            new_event->timestamp_tick = prev->timestamp_tick + 12;
+
+        } else {
+            ft_print("No matching NOTE_ON event found\n");
+        }
+    }
 
     // Insert before current
     SeqEvent *current_event = seq->current ? seq->current : seq->head;
@@ -248,4 +272,30 @@ void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
 void SEQ_set_beat_callback(Sequencer *seq,
                            void (*callback)(uint32_t beat_index)) {
     seq->on_beat_callback = callback;
+}
+
+// --- Busca hacia atrás el NOTE_ON correspondiente ---
+// Devuelve un puntero al evento NOTE_ON que coincide en canal y nota,
+// o NULL si no se encontró.
+static SeqEvent *_SEQ_find_matching_note_on(Sequencer *seq, uint8_t chan,
+                                            uint8_t note) {
+    SeqEvent *search = seq->current;
+
+    while (search) {
+        if (search->midi_params.chan == chan &&
+            search->midi_params.data1 == note) {
+            if (search->midi_params.note_on) {
+                return search; // Found
+            } else {
+                return NULL; // Found NOTE_OFF before NOTE_ON
+            }
+        }
+        if (search == seq->head) {
+            return NULL; // Reached the start without finding
+        }
+
+        search = search->prev;
+    }
+
+    return NULL; // Not found
 }

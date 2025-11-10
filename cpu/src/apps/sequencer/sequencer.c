@@ -147,8 +147,7 @@ t_status app_init(void) {
     SeqEvent *event3 = SEQ_POOL_get_event(&event_pool);
     SeqEvent *event4 = SEQ_POOL_get_event(&event_pool);
 
-    int sequencer_beats = 4;                 // negras / quarter notes 
-    int ticks = sequencer_beats * MIDI_PPQN; //  beats times  24 PPQN
+
     struct MidiEventParams mep;
 
     mep.chan = 0;
@@ -170,7 +169,8 @@ t_status app_init(void) {
     event3->midi_params = mep;
     event4->midi_params = mep;
 
-    SEQ_init(&my_sequencer, ticks);
+    int sequencer_beats = 4;                 // negras / quarter notes 
+    SEQ_init(&my_sequencer, sequencer_beats);
     SEQ_set_beat_callback(&my_sequencer, beat_callback);
     my_sequencer.on_start_callback = on_start_callback;
     my_sequencer.on_stop_callback = on_stop_callback;
@@ -265,22 +265,23 @@ static void simulate_midi_tick() {
  * @param[in]   vel     MIDI note velocity.
  */
 static void _note_on_callback(char chan, char note, char vel) {
-    uint8_t note_int = (uint8_t)note;
-    uint8_t vel_int = (uint8_t)vel;
+    ft_send_note_on(chan, note, vel);
     MidiEventParams mep;
     mep.chan = chan;
     mep.data1 = note;
     mep.data2 = vel;
+    mep.note_on = true;
     SeqEvent *event = SEQ_POOL_get_event(&event_pool);
     // thru
-    ft_send_note_on(chan, note, vel);
     if (!event) {
         ft_print("No event\n");
         return;
     }
     event->midi_event_callback = ft_send_note_on;
     event->midi_params = mep;
-    SEQ_add_event(&my_sequencer, event);
+        //SEQ_add_event(&my_sequencer, event);
+    SEQ_insert_before_current(&my_sequencer, event);
+
 }
 
 /**
@@ -293,15 +294,14 @@ static void _note_on_callback(char chan, char note, char vel) {
  * @param[in]   vel     MIDI note velocity.
  */
 static void _note_off_callback(char chan, char note, char vel) {
-    uint8_t note_int = (uint8_t)note;
-    uint8_t vel_int = (uint8_t)vel;
+    ft_send_note_off(chan, note, vel);
     MidiEventParams mep;
     mep.chan = chan;
     mep.data1 = note;
     mep.data2 = vel;
+    mep.note_on = false;
     SeqEvent *event = SEQ_POOL_get_event(&event_pool);
     // thru
-    ft_send_note_off(chan, note, vel);
     if (!event) {
         ft_print("No event\n");
         return;
@@ -309,7 +309,9 @@ static void _note_off_callback(char chan, char note, char vel) {
 
     event->midi_event_callback = ft_send_note_off;
     event->midi_params = mep;
-    SEQ_add_event(&my_sequencer, event);
+    //SEQ_add_event(&my_sequencer, event);
+    SEQ_insert_before_current(&my_sequencer, event);
+    
 }
 
 // simulates keyboard

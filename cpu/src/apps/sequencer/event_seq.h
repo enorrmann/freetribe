@@ -17,6 +17,7 @@ typedef struct MidiEventParams {
     char chan; 
     char data1;
     char data2;
+    bool note_on;
 } MidiEventParams;
 
 typedef struct SeqEvent
