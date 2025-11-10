@@ -21,8 +21,8 @@ static char *int_to_char(int32_t value) {
 static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
 
     // uint32_t quant_ticks = seq->internal_resolution / 2; // default 1/8
-    uint32_t quant_ticks = seq->internal_resolution / 4; // default 1/16
-    // uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
+    //uint32_t quant_ticks = seq->internal_resolution / 4; // default 1/16
+     uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
 
     // Redondear al múltiplo más cercano
     uint32_t lower = (tick / quant_ticks) * quant_ticks;
@@ -234,26 +234,18 @@ void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) {
     // adjust timing for NOTE_OFF events
     if (new_event->midi_params.note_on == false) {
         SeqEvent *prev =
-            _SEQ_find_matching_note_on(seq->head, new_event->midi_params.chan, new_event->midi_params.data1);
+            _SEQ_find_matching_note_on(seq->head, new_event->midi_params.chan,
+                                       new_event->midi_params.data1);
         if (prev) {
             new_event->peer_event = prev;
             prev->peer_event = new_event;
-            new_event->timestamp_tick =
-                prev->timestamp_tick +
-                seq->internal_resolution / 4; // default note length 1/16
-            new_event->timestamp_tick = new_event->timestamp_tick %
-                                        seq->loop_length_ticks; // loop the loop
-            ft_print(" off tick ");
-            ft_print(int_to_char(
-                new_event
-                    ->timestamp_tick)); // 4 is resolution or something like
-                                        // that cuando da 0 se traba la note off
-            ft_print("\n");
-            SEQ_add_event_at_timestamp(seq, new_event->timestamp_tick, new_event);
+            new_event->timestamp_tick = prev->timestamp_tick + (seq->internal_resolution / 8); // default note length 1/16
+            new_event->timestamp_tick = new_event->timestamp_tick % seq->loop_length_ticks; // loop the loop
+
+            SEQ_add_event_at_timestamp(seq, new_event->timestamp_tick,
+                                       new_event);
         } else {
             // no matching note on found, just insert at current tick
-            ft_print(" no PREV found\n"); 
-            
         }
     }
 }
@@ -296,10 +288,10 @@ void SEQ_set_beat_callback(Sequencer *seq,
 
 static SeqEvent *_SEQ_find_matching_note_on(SeqEvent *evt, uint8_t chan,
                                             uint8_t note) {
-    if (!evt || !evt->prev){
+    if (!evt || !evt->prev) {
 
         return NULL;
-        }
+    }
 
     SeqEvent *start = evt;
     SeqEvent *search = evt->prev;
