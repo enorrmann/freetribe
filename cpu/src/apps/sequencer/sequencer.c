@@ -151,7 +151,7 @@ t_status app_init(void) {
     struct MidiEventParams mep;
 
     mep.chan = 0;
-    mep.data1 = 60;  // C4
+    mep.data1 = 72;  // C4
     mep.data2 = 100; // velocity
 
     event1->midi_event_callback = ft_send_note_on;
@@ -176,13 +176,13 @@ t_status app_init(void) {
     my_sequencer.on_stop_callback = on_stop_callback;
     my_sequencer.on_record_toggle_callback = on_record_toggle_callback;
 
-    // SEQ_record_toggle(&my_sequencer); // start in recording mode
-
+    // "metronome" 
+    SEQ_record_toggle(&my_sequencer); // start in recording mode
     SEQ_add_event_at_timestamp(&my_sequencer, 0, event1);
-    SEQ_add_event_at_timestamp(&my_sequencer, 12, event2);
-    SEQ_add_event_at_timestamp(&my_sequencer, 2 * MIDI_PPQN, event3);
-    SEQ_add_event_at_timestamp(&my_sequencer, 2.5 * MIDI_PPQN, event4);
-    // SEQ_record_toggle(&my_sequencer); // stop
+    SEQ_add_event_at_timestamp(&my_sequencer, 0.1f*MIDI_PPQN, event2);
+    SEQ_add_event_at_timestamp(&my_sequencer, 1 * MIDI_PPQN, event3);
+    SEQ_add_event_at_timestamp(&my_sequencer, 1.1 * MIDI_PPQN, event4);
+     SEQ_record_toggle(&my_sequencer); // stop
 
     ft_print("sequencer");
 
@@ -229,6 +229,7 @@ void _button_callback(uint8_t index, bool state) {
 
     case BUTTON_EXIT:
         if (state == 1) {
+            on_stop_callback(0); // send all notes off before shutdown
             ft_shutdown();
         }
         break;

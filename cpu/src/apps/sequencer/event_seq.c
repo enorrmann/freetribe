@@ -20,9 +20,9 @@ static char *int_to_char(int32_t value) {
 
 static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
 
-    // uint32_t quant_ticks = seq->internal_resolution / 2; // default 1/8
-    //uint32_t quant_ticks = seq->internal_resolution / 4; // default 1/16
-     uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
+    //uint32_t quant_ticks = seq->internal_resolution / 2; // default 1/8
+    uint32_t quant_ticks = seq->internal_resolution / 4; // default 1/16
+     //uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
 
     // Redondear al múltiplo más cercano
     uint32_t lower = (tick / quant_ticks) * quant_ticks;
