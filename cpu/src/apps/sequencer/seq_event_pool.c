@@ -25,6 +25,7 @@ SeqEvent *SEQ_POOL_get_event(SeqEventPool *pool) {
     pool->free_list = e->next;
     e->next = NULL;
     e->prev = NULL;
+    e->peer_event = NULL;
 
     return e;
 }
@@ -33,12 +34,6 @@ SeqEvent *SEQ_POOL_get_event(SeqEventPool *pool) {
 void SEQ_POOL_release_event(SeqEventPool *pool, SeqEvent *e) {
     if (!pool || !e)
         return;
-
-    // Optional: simple guard to avoid double free
-    if (e->next || e->prev) {
-        // Already in a list — ignore or handle as error
-        return;
-    }
 
     e->callback = NULL;
     e->midi_event_callback = NULL;

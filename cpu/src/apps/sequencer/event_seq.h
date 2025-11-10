@@ -23,12 +23,13 @@ typedef struct SeqEvent
 {
     uint32_t timestamp_tick; // Position within loop
     void (*callback)(void);  // Function to trigger
-    //void (*callback)(int , int,int );
     t_midi_event_callback midi_event_callback;
 
     struct MidiEventParams midi_params; // MIDI event parameters
     struct SeqEvent *next;
     struct SeqEvent *prev;
+    struct SeqEvent *peer_event; // note on/off pairs
+
 } SeqEvent;
 
 typedef struct
@@ -50,9 +51,9 @@ typedef struct
 // --- Public API ---
 
 /**
- * Initialize a sequencer with the specified loop length in ticks.
+ * Initialize a sequencer with the specified loop length in beats.
  */
-void SEQ_init(Sequencer *seq, uint32_t loop_length_ticks);
+void SEQ_init(Sequencer *seq, uint32_t beats);
 
 /**
  * Start or stop playback.
