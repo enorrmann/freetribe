@@ -21,8 +21,8 @@ static char *int_to_char(int32_t value) {
 static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
 
     // uint32_t quant_ticks = seq->internal_resolution / 2; // default 1/8
-    uint32_t quant_ticks = MIDI_PPQN / 4; // default 1/16
-    // uint32_t quant_ticks = MIDI_PPQN / 8; // default 1/32
+    uint32_t quant_ticks = seq->internal_resolution / 4; // default 1/16
+    // uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
 
     // Redondear al múltiplo más cercano
     uint32_t lower = (tick / quant_ticks) * quant_ticks;
@@ -33,6 +33,8 @@ static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
     } else {
         quant_tick = lower;
     }
+    ft_print("loop ");
+    ft_print(int_to_char(seq->loop_length_ticks));
     ft_print("t ");
     ft_print(int_to_char(tick));
     ft_print(" q ");
@@ -240,8 +242,9 @@ void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
     }
 
     new_event->timestamp_tick = seq->current_tick;
-    // new_event->timestamp_tick = SEQ_quantize_tick(seq,
-    // new_event->timestamp_tick);
+    if (new_event->midi_params.note_on) {
+        new_event->timestamp_tick = SEQ_quantize_tick(seq, new_event->timestamp_tick);
+    }
 
     // Insert before current
     SeqEvent *current_event = seq->current ? seq->current : seq->head;
@@ -263,7 +266,16 @@ void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
         if (prev) {
             new_event->peer_event = prev;
             prev->peer_event = new_event;
-            new_event->timestamp_tick = prev->timestamp_tick + 12;
+            new_event->timestamp_tick = prev->timestamp_tick + seq->internal_resolution / 4; // default note length 1/16
+            new_event->timestamp_tick = new_event->timestamp_tick % seq->loop_length_ticks; // loop the loop
+                ft_print(" off tick ");
+    ft_print(int_to_char(new_event->timestamp_tick)); // 4 is resolution or something like that cuando da 0 se traba la note off
+    ft_print("\n");
+if (new_event->timestamp_tick==0){
+new_event->timestamp_tick==2; // test /// es porque no lo estoy insertando en la ubicacion que corresponde, al cambiar el tiempo va insertado en otro lado, no aca
+// por eso en caso de los note off tengo que llamar a insert at timestamp y no insertarlo antes de aca
+// ojo tener en cuenta tambien la busqueda de nota previa porque no va a estar insertado en la lista aun
+}
             // adjust timing or simething
 
         } else {
