@@ -221,7 +221,7 @@ void SEQ_clear(Sequencer *seq) {
     SeqEvent *cur = seq->head;
     do {
         SeqEvent *next = cur->next;
-        free(cur);
+        //free(cur); dont
         cur = next;
     } while (cur != seq->head);
 

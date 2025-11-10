@@ -147,7 +147,6 @@ t_status app_init(void) {
     SeqEvent *event3 = SEQ_POOL_get_event(&event_pool);
     SeqEvent *event4 = SEQ_POOL_get_event(&event_pool);
 
-
     struct MidiEventParams mep;
 
     mep.chan = 0;
@@ -169,20 +168,20 @@ t_status app_init(void) {
     event3->midi_params = mep;
     event4->midi_params = mep;
 
-    int sequencer_beats = 4;                 // negras / quarter notes 
+    int sequencer_beats = 4; // negras / quarter notes
     SEQ_init(&my_sequencer, sequencer_beats);
     SEQ_set_beat_callback(&my_sequencer, beat_callback);
     my_sequencer.on_start_callback = on_start_callback;
     my_sequencer.on_stop_callback = on_stop_callback;
     my_sequencer.on_record_toggle_callback = on_record_toggle_callback;
 
-    // "metronome" 
+    // "metronome"
     SEQ_record_toggle(&my_sequencer); // start in recording mode
     SEQ_add_event_at_timestamp(&my_sequencer, 0, event1);
-    SEQ_add_event_at_timestamp(&my_sequencer, 0.1f*MIDI_PPQN, event2);
+    SEQ_add_event_at_timestamp(&my_sequencer, 0.1f * MIDI_PPQN, event2);
     SEQ_add_event_at_timestamp(&my_sequencer, 1 * MIDI_PPQN, event3);
     SEQ_add_event_at_timestamp(&my_sequencer, 1.1 * MIDI_PPQN, event4);
-     SEQ_record_toggle(&my_sequencer); // stop
+    SEQ_record_toggle(&my_sequencer); // stop
 
     ft_print("sequencer");
 
@@ -233,7 +232,12 @@ void _button_callback(uint8_t index, bool state) {
             ft_shutdown();
         }
         break;
-
+    case BUTTON_ERASE:
+        if (state == 1) {
+            SEQ_clear(&my_sequencer);
+            SEQ_POOL_init(&event_pool);
+        }
+        break;
     default:
         break;
     }
@@ -280,9 +284,8 @@ static void _note_on_callback(char chan, char note, char vel) {
     }
     event->midi_event_callback = ft_send_note_on;
     event->midi_params = mep;
-        //SEQ_add_event(&my_sequencer, event);
+    // SEQ_add_event(&my_sequencer, event);
     SEQ_insert_before_current(&my_sequencer, event);
-
 }
 
 /**
@@ -310,9 +313,8 @@ static void _note_off_callback(char chan, char note, char vel) {
 
     event->midi_event_callback = ft_send_note_off;
     event->midi_params = mep;
-    //SEQ_add_event(&my_sequencer, event);
+    // SEQ_add_event(&my_sequencer, event);
     SEQ_insert_note_off(&my_sequencer, event);
-    
 }
 
 // simulates keyboard
