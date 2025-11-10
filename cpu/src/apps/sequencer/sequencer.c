@@ -37,12 +37,11 @@ under the terms of the GNU Affero General Public License as published by
 
 void _button_callback(uint8_t index, bool state);
 static void _tick_callback(void);
-void callback1(int chan, int note, int vel);
-void callback2(int chan, int note, int vel);
 
 static void _note_on_callback(char chan, char note, char vel);
 static void _note_off_callback(char chan, char note, char vel);
 static void _trigger_callback(uint8_t pad, uint8_t vel, bool state);
+void beat_callback(uint32_t beat_index);
 static Sequencer my_sequencer;
 SeqEventPool event_pool;
 
@@ -138,11 +137,15 @@ t_status app_init(void) {
     ft_register_tick_callback(0, _tick_callback);
 
     SEQ_POOL_init(&event_pool);
+    int sequencer_beats = 4; // negras / quarter notes
+    SEQ_init(&my_sequencer, sequencer_beats);
+    SEQ_set_beat_callback(&my_sequencer, beat_callback);
+    my_sequencer.on_start_callback = on_start_callback;
+    my_sequencer.on_stop_callback = on_stop_callback;
+    my_sequencer.on_record_toggle_callback = on_record_toggle_callback;
+
+    /*
     SeqEvent *event1 = SEQ_POOL_get_event(&event_pool);
-    if (!event1) {
-        ft_print("No event1\n");
-    } else {
-    }
     SeqEvent *event2 = SEQ_POOL_get_event(&event_pool);
     SeqEvent *event3 = SEQ_POOL_get_event(&event_pool);
     SeqEvent *event4 = SEQ_POOL_get_event(&event_pool);
@@ -158,22 +161,11 @@ t_status app_init(void) {
     event3->midi_event_callback = ft_send_note_on;
     event4->midi_event_callback = ft_send_note_off;
 
-    event1->callback = callback1;
-    event2->callback = callback2;
-    event3->callback = callback1;
-    event4->callback = callback2;
-
     event1->midi_params = mep;
     event2->midi_params = mep;
     event3->midi_params = mep;
     event4->midi_params = mep;
 
-    int sequencer_beats = 4; // negras / quarter notes
-    SEQ_init(&my_sequencer, sequencer_beats);
-    SEQ_set_beat_callback(&my_sequencer, beat_callback);
-    my_sequencer.on_start_callback = on_start_callback;
-    my_sequencer.on_stop_callback = on_stop_callback;
-    my_sequencer.on_record_toggle_callback = on_record_toggle_callback;
 
     // "metronome"
     SEQ_record_toggle(&my_sequencer); // start in recording mode
@@ -181,16 +173,12 @@ t_status app_init(void) {
     SEQ_add_event_at_timestamp(&my_sequencer, 0.1f * MIDI_PPQN, event2);
     SEQ_add_event_at_timestamp(&my_sequencer, 1 * MIDI_PPQN, event3);
     SEQ_add_event_at_timestamp(&my_sequencer, 1.1 * MIDI_PPQN, event4);
-    SEQ_record_toggle(&my_sequencer); // stop
+    SEQ_record_toggle(&my_sequencer); */
 
     ft_print("sequencer");
 
     return SUCCESS;
 }
-
-void callback1(int chan, int note, int vel) { ft_set_led(LED_TAP, 255); }
-
-void callback2(int chan, int note, int vel) { ft_set_led(LED_TAP, 0); }
 
 /**
  * @brief   Run application.
@@ -250,7 +238,8 @@ static void simulate_midi_tick() {
 
     const float bpm = 60.0f;
     const float interval_ms =
-        (60000.0f / bpm) / MIDI_PPQN; // tiempo entre ticks MIDI
+        (60000.0f / bpm) /
+        my_sequencer.internal_resolution; // tiempo entre ticks MIDI
 
     count += 1.0f; // se llama cada 1 ms
 
@@ -271,6 +260,9 @@ static void simulate_midi_tick() {
  */
 static void _note_on_callback(char chan, char note, char vel) {
     ft_send_note_on(chan, note, vel);
+    if (!my_sequencer.recording) {
+        return;
+    }
     MidiEventParams mep;
     mep.chan = chan;
     mep.data1 = note;
@@ -279,7 +271,7 @@ static void _note_on_callback(char chan, char note, char vel) {
     SeqEvent *event = SEQ_POOL_get_event(&event_pool);
     // thru
     if (!event) {
-        ft_print("No event\n");
+        ft_print("No FREE event\n");
         return;
     }
     event->midi_event_callback = ft_send_note_on;
@@ -299,6 +291,10 @@ static void _note_on_callback(char chan, char note, char vel) {
  */
 static void _note_off_callback(char chan, char note, char vel) {
     ft_send_note_off(chan, note, vel);
+    if (!my_sequencer.recording) {
+        return;
+    }
+
     MidiEventParams mep;
     mep.chan = chan;
     mep.data1 = note;
@@ -307,7 +303,7 @@ static void _note_off_callback(char chan, char note, char vel) {
     SeqEvent *event = SEQ_POOL_get_event(&event_pool);
     // thru
     if (!event) {
-        ft_print("No event\n");
+        ft_print("No FREE event\n");
         return;
     }
 

@@ -21,8 +21,8 @@ static char *int_to_char(int32_t value) {
 static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
 
     //uint32_t quant_ticks = seq->internal_resolution / 2; // default 1/8
-    uint32_t quant_ticks = seq->internal_resolution / 4; // default 1/16
-     //uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
+    //uint32_t quant_ticks = seq->internal_resolution / 4; // default 1/16
+    uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
 
     // Redondear al múltiplo más cercano
     uint32_t lower = (tick / quant_ticks) * quant_ticks;
@@ -30,9 +30,20 @@ static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
     uint32_t quant_tick = 0;
     if ((tick - lower) >= (quant_ticks / 2)) {
         quant_tick = upper;
+        //    ft_print("U ");
+
     } else {
         quant_tick = lower;
+          //  ft_print("L ");
+
     }
+    /*ft_print("U ");
+    ft_print(int_to_char(upper));
+    ft_print(" L ");
+    ft_print(int_to_char(lower));
+    ft_print(" Q ");
+    ft_print(int_to_char(quant_ticks));
+    ft_print("\n");*/
     /*ft_print("loop ");
     ft_print(int_to_char(seq->loop_length_ticks));
     ft_print("t ");
@@ -109,6 +120,7 @@ void SEQ_add_event(Sequencer *seq, SeqEvent *new_event) {
         new_event->prev = new_event;
         seq->head = new_event;
         seq->current = new_event;
+
         return;
     }
 
@@ -128,6 +140,7 @@ void SEQ_add_event(Sequencer *seq, SeqEvent *new_event) {
     // Only update head if the new event has an earlier timestamp
     if (new_event->timestamp_tick < seq->head->timestamp_tick)
         seq->head = new_event;
+
 }
 
 void SEQ_add_event_at_timestamp(Sequencer *seq, uint32_t timestamp_tick,
@@ -233,19 +246,18 @@ void SEQ_clear(Sequencer *seq) {
 void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) {
     // adjust timing for NOTE_OFF events
     if (new_event->midi_params.note_on == false) {
-        SeqEvent *prev =
-            _SEQ_find_matching_note_on(seq->head, new_event->midi_params.chan,
-                                       new_event->midi_params.data1);
+        //SeqEvent *prev =_SEQ_find_matching_note_on(seq->head, new_event->midi_params.chan, new_event->midi_params.data1);
+        SeqEvent *prev =_SEQ_find_matching_note_on(seq->current, new_event->midi_params.chan, new_event->midi_params.data1); // test try from current
+            
         if (prev) {
             new_event->peer_event = prev;
             prev->peer_event = new_event;
-            new_event->timestamp_tick = prev->timestamp_tick + (seq->internal_resolution / 8); // default note length 1/16
+            new_event->timestamp_tick = prev->timestamp_tick + 2;
             new_event->timestamp_tick = new_event->timestamp_tick % seq->loop_length_ticks; // loop the loop
 
             SEQ_add_event_at_timestamp(seq, new_event->timestamp_tick,
                                        new_event);
         } else {
-            // no matching note on found, just insert at current tick
         }
     }
 }
@@ -278,6 +290,7 @@ void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
     if (new_event->timestamp_tick < seq->head->timestamp_tick) {
         seq->head = new_event;
     }
+
 }
 
 // Setter
@@ -286,6 +299,8 @@ void SEQ_set_beat_callback(Sequencer *seq,
     seq->on_beat_callback = callback;
 }
 
+
+// IMPROVEMENT START FROM HEAD AND RUN UNTIL HEAD BECAUSE MULTIPLE INSERTRIONS AT ONCE
 static SeqEvent *_SEQ_find_matching_note_on(SeqEvent *evt, uint8_t chan,
                                             uint8_t note) {
     if (!evt || !evt->prev) {
@@ -293,7 +308,15 @@ static SeqEvent *_SEQ_find_matching_note_on(SeqEvent *evt, uint8_t chan,
         return NULL;
     }
 
+
     SeqEvent *start = evt;
+        if (start->midi_params.chan == chan &&
+            start->midi_params.data1 == note && start->midi_params.note_on &&
+            start->peer_event == NULL) {
+            return start; // Found valid NOTE_ON
+        }
+
+
     SeqEvent *search = evt->prev;
 
     if (start->prev == start) {
@@ -301,6 +324,7 @@ static SeqEvent *_SEQ_find_matching_note_on(SeqEvent *evt, uint8_t chan,
     }
 
     while (search != start) { // caso especial no la encuentra en el primero
+
         if (search->midi_params.chan == chan &&
             search->midi_params.data1 == note && search->midi_params.note_on &&
             search->peer_event == NULL) {
