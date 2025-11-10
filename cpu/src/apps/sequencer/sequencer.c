@@ -310,7 +310,7 @@ static void _note_off_callback(char chan, char note, char vel) {
     event->midi_event_callback = ft_send_note_off;
     event->midi_params = mep;
     //SEQ_add_event(&my_sequencer, event);
-    SEQ_insert_before_current(&my_sequencer, event);
+    SEQ_insert_note_off(&my_sequencer, event);
     
 }
 

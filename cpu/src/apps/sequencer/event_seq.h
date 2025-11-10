@@ -88,4 +88,5 @@ void SEQ_clear(Sequencer *seq);
 void SEQ_insert_before_current(Sequencer *seq, SeqEvent *evt);
 
 void SEQ_set_beat_callback(Sequencer *seq, void (*callback)(uint32_t beat_index)) ;
+void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) ;
 #endif // SEQUENCER_H
