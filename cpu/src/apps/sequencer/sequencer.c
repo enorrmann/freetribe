@@ -175,7 +175,7 @@ t_status app_init(void) {
     SEQ_add_event_at_timestamp(&my_sequencer, 1.1 * MIDI_PPQN, event4);
     SEQ_record_toggle(&my_sequencer); */
 
-    ft_print("sequencer");
+    ft_print("Sequencer\n\n\n");
 
     return SUCCESS;
 }
@@ -224,6 +224,11 @@ void _button_callback(uint8_t index, bool state) {
         if (state == 1) {
             SEQ_clear(&my_sequencer);
             SEQ_POOL_init(&event_pool);
+        }
+        break;
+        case BUTTON_WRITE:
+        if (state == 1) {
+            SEQ_print(&my_sequencer);
         }
         break;
     default:
@@ -276,8 +281,8 @@ static void _note_on_callback(char chan, char note, char vel) {
     }
     event->midi_event_callback = ft_send_note_on;
     event->midi_params = mep;
-    // SEQ_add_event(&my_sequencer, event);
-    SEQ_insert_before_current(&my_sequencer, event);
+     SEQ_add_event(&my_sequencer, event);
+    //SEQ_insert_before_current(&my_sequencer, event); // buggy ?
 }
 
 /**

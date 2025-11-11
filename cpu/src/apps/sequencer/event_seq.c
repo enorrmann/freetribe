@@ -20,9 +20,9 @@ static char *int_to_char(int32_t value) {
 
 static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
 
-    //uint32_t quant_ticks = seq->internal_resolution / 2; // default 1/8
-    uint32_t quant_ticks = seq->internal_resolution / 4; // default 1/16
-    //uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
+    // uint32_t quant_ticks = seq->internal_resolution / 2; // default 1/8
+    // uint32_t quant_ticks = seq->internal_resolution / 4; // default 1/16
+    uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
 
     // Redondear al múltiplo más cercano
     uint32_t lower = (tick / quant_ticks) * quant_ticks;
@@ -34,8 +34,7 @@ static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
 
     } else {
         quant_tick = lower;
-          //  ft_print("L ");
-
+        //  ft_print("L ");
     }
     /*ft_print("U ");
     ft_print(int_to_char(upper));
@@ -140,7 +139,6 @@ void SEQ_add_event(Sequencer *seq, SeqEvent *new_event) {
     // Only update head if the new event has an earlier timestamp
     if (new_event->timestamp_tick < seq->head->timestamp_tick)
         seq->head = new_event;
-
 }
 
 void SEQ_add_event_at_timestamp(Sequencer *seq, uint32_t timestamp_tick,
@@ -234,7 +232,7 @@ void SEQ_clear(Sequencer *seq) {
     SeqEvent *cur = seq->head;
     do {
         SeqEvent *next = cur->next;
-        //free(cur); dont
+        // free(cur); dont
         cur = next;
     } while (cur != seq->head);
 
@@ -246,14 +244,18 @@ void SEQ_clear(Sequencer *seq) {
 void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) {
     // adjust timing for NOTE_OFF events
     if (new_event->midi_params.note_on == false) {
-        //SeqEvent *prev =_SEQ_find_matching_note_on(seq->head, new_event->midi_params.chan, new_event->midi_params.data1);
-        SeqEvent *prev =_SEQ_find_matching_note_on(seq->current, new_event->midi_params.chan, new_event->midi_params.data1); // test try from current
-            
+        // SeqEvent *prev =_SEQ_find_matching_note_on(seq->head,
+        // new_event->midi_params.chan, new_event->midi_params.data1);
+        SeqEvent *prev = _SEQ_find_matching_note_on(
+            seq->current, new_event->midi_params.chan,
+            new_event->midi_params.data1); // test try from current
+
         if (prev) {
             new_event->peer_event = prev;
             prev->peer_event = new_event;
             new_event->timestamp_tick = prev->timestamp_tick + 2;
-            new_event->timestamp_tick = new_event->timestamp_tick % seq->loop_length_ticks; // loop the loop
+            new_event->timestamp_tick = new_event->timestamp_tick %
+                                        seq->loop_length_ticks; // loop the loop
 
             SEQ_add_event_at_timestamp(seq, new_event->timestamp_tick,
                                        new_event);
@@ -264,34 +266,39 @@ void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) {
 }
 
 void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
-    if (!seq || !seq->recording) {
+    if (!seq || !seq->recording)
         return;
-    }
 
     if (!seq->head) {
-        // If list is empty, fallback to normal insert
         SEQ_add_event(seq, new_event);
         return;
     }
 
+    // Quantize if needed
     new_event->timestamp_tick = seq->current_tick;
-    if (new_event->midi_params.note_on) {
+    if (new_event->midi_params.note_on)
         new_event->timestamp_tick =
             SEQ_quantize_tick(seq, new_event->timestamp_tick);
-    }
 
-    // Insert before current
     SeqEvent *current_event = seq->current ? seq->current : seq->head;
-    new_event->next = current_event;
-    new_event->prev = current_event->prev;
-    current_event->prev->next = new_event;
-    current_event->prev = new_event;
+    SeqEvent *insert_pos = current_event;
 
-    // Only update head if the new event has an earlier timestamp
-    if (new_event->timestamp_tick < seq->head->timestamp_tick) {
-        seq->head = new_event;
+    // --- Find correct insertion point chronologically ---
+    // Move backwards until we find an event with <= timestamp
+    while (insert_pos->prev != seq->head->prev &&
+           insert_pos->prev->timestamp_tick > new_event->timestamp_tick) {
+        insert_pos = insert_pos->prev;
     }
 
+    // --- Insert new_event before insert_pos ---
+    new_event->next = insert_pos;
+    new_event->prev = insert_pos->prev;
+    insert_pos->prev->next = new_event;
+    insert_pos->prev = new_event;
+
+    // --- Update head if necessary ---
+    if (new_event->timestamp_tick < seq->head->timestamp_tick)
+        seq->head = new_event;
 }
 
 // Setter
@@ -300,8 +307,6 @@ void SEQ_set_beat_callback(Sequencer *seq,
     seq->on_beat_callback = callback;
 }
 
-
-
 static SeqEvent *_SEQ_find_matching_note_on(SeqEvent *evt, uint8_t chan,
                                             uint8_t note) {
     if (!evt || !evt->prev) {
@@ -309,14 +314,11 @@ static SeqEvent *_SEQ_find_matching_note_on(SeqEvent *evt, uint8_t chan,
         return NULL;
     }
 
-
     SeqEvent *start = evt;
-        if (start->midi_params.chan == chan &&
-            start->midi_params.data1 == note && start->midi_params.note_on &&
-            start->peer_event == NULL) {
-            return start; // Found valid NOTE_ON
-        }
-
+    if (start->midi_params.chan == chan && start->midi_params.data1 == note &&
+        start->midi_params.note_on && start->peer_event == NULL) {
+        return start; // Found valid NOTE_ON
+    }
 
     SeqEvent *search = evt->prev;
 
@@ -336,4 +338,36 @@ static SeqEvent *_SEQ_find_matching_note_on(SeqEvent *evt, uint8_t chan,
     }
 
     return NULL; // Not found after full loop
+}
+
+void evt_print(SeqEvent *evt) {
+    ft_print(int_to_char(evt->timestamp_tick));
+    ft_print(",");
+    if (evt->midi_params.note_on) {
+        ft_print("ON ");
+    } else {
+        ft_print("OFF ");
+    }
+    ft_print(",");
+    ft_print(int_to_char(evt->midi_params.data1));
+    ft_print(",");
+}
+
+void SEQ_print(Sequencer *seq) {
+
+    if (!seq || !seq->head) {
+        ft_print("empty list \n");
+        return;
+    }
+    SeqEvent *start = seq->head;
+    SeqEvent *cur = seq->head;
+
+    ft_print("TICK,TYPE,NOTE, PEER_TICK,PEER_TYPE,PEER_NOTE \n");
+    do {
+        evt_print(cur);
+        evt_print(cur->peer_event);
+        ft_print("\n");
+
+        cur = cur->next;
+    } while (cur && cur != start);
 }
