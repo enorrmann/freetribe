@@ -39,7 +39,7 @@ typedef struct
     SeqEvent *current;          // Next event to check
     uint32_t loop_length_ticks; // Duration of one loop in ticks
     uint32_t current_tick;      // Current tick position
-    t_transport_event_callback on_beat_callback;  
+    t_transport_event_callback on_step_callback;  
     t_transport_event_callback on_start_callback;
     t_transport_event_callback on_stop_callback;
     t_transport_event_callback  on_record_toggle_callback;
@@ -87,7 +87,7 @@ void SEQ_clear(Sequencer *seq);
  */
 void SEQ_insert_before_current(Sequencer *seq, SeqEvent *evt);
 
-void SEQ_set_beat_callback(Sequencer *seq, void (*callback)(uint32_t beat_index)) ;
+void SEQ_set_step_callback(Sequencer *seq, void (*callback)(uint32_t beat_index)) ;
 void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) ;
 void SEQ_print(Sequencer *seq);
 #endif // SEQUENCER_H

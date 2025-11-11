@@ -41,7 +41,7 @@ static void _tick_callback(void);
 static void _note_on_callback(char chan, char note, char vel);
 static void _note_off_callback(char chan, char note, char vel);
 static void _trigger_callback(uint8_t pad, uint8_t vel, bool state);
-void beat_callback(uint32_t beat_index);
+void step_callback(uint32_t beat_index);
 static Sequencer my_sequencer;
 SeqEventPool event_pool;
 
@@ -75,7 +75,11 @@ static char *int_to_char(int32_t value) {
     return str_buf;
 }
 
-void beat_callback(uint32_t beat_index) {
+void step_callback(uint32_t beat_index) {
+
+    ft_set_led(LED_TAP, ((beat_index%4)?0:255));
+
+    
     int pad_index = beat_index % 16;
     // pad 0 led LED_PAD_0_RED = 44
     int pad_0 = LED_PAD_0_BLUE;
@@ -139,7 +143,7 @@ t_status app_init(void) {
     SEQ_POOL_init(&event_pool);
     int sequencer_beats = 4; // negras / quarter notes
     SEQ_init(&my_sequencer, sequencer_beats);
-    SEQ_set_beat_callback(&my_sequencer, beat_callback);
+    SEQ_set_step_callback(&my_sequencer, step_callback);
     my_sequencer.on_start_callback = on_start_callback;
     my_sequencer.on_stop_callback = on_stop_callback;
     my_sequencer.on_record_toggle_callback = on_record_toggle_callback;

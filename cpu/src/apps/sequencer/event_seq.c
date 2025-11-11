@@ -78,8 +78,8 @@ void SEQ_init(Sequencer *seq, uint32_t beats) {
 // --- Control ---
 
 void SEQ_start(Sequencer *seq) {
-    if (seq->on_beat_callback) {
-        seq->on_beat_callback(0);
+    if (seq->on_step_callback) {
+        seq->on_step_callback(0);
     }
     if (seq->on_start_callback) {
         seq->on_start_callback(0);
@@ -104,14 +104,14 @@ void SEQ_record_toggle(Sequencer *seq) {
 }
 
 void SEQ_add_event(Sequencer *seq, SeqEvent *new_event) {
+
     if (!seq || !seq->recording) {
         return;
     }
 
     new_event->timestamp_tick = seq->current_tick;
 
-    new_event->timestamp_tick =
-        SEQ_quantize_tick(seq, new_event->timestamp_tick);
+    new_event->timestamp_tick = SEQ_quantize_tick(seq, new_event->timestamp_tick);
 
     if (!seq->head) {
         // First event in sequence
@@ -178,6 +178,10 @@ void SEQ_add_event_at_timestamp(Sequencer *seq, uint32_t timestamp_tick,
 void SEQ_tick(Sequencer *seq) {
     if (!seq->playing)
         return;
+            ft_print("step");
+    ft_print(int_to_char(seq->current_tick/seq->step_resolution));
+    ft_print("\n");
+
     // if (!seq->head) return; run even with no events to advance ticks and call
     // callbacks
 
@@ -209,12 +213,12 @@ void SEQ_tick(Sequencer *seq) {
     // Actualizar el "current" al próximo evento
     seq->current = current_event;
 
-    // call on_beat_callback if set and on beat
+    // call on_step_callback if set and on beat
 
-    if (seq->on_beat_callback &&
+    if (seq->on_step_callback &&
         (seq->current_tick % seq->step_resolution == 0)) {
         uint32_t beat_index = seq->current_tick / seq->step_resolution;
-        seq->on_beat_callback(beat_index);
+        seq->on_step_callback(beat_index);
     }
     seq->current_tick++;
     if (seq->current_tick >= seq->loop_length_ticks) {
@@ -306,9 +310,9 @@ void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
 }
 
 // Setter
-void SEQ_set_beat_callback(Sequencer *seq,
+void SEQ_set_step_callback(Sequencer *seq,
                            void (*callback)(uint32_t beat_index)) {
-    seq->on_beat_callback = callback;
+    seq->on_step_callback = callback;
 }
 
 static SeqEvent *_SEQ_find_matching_note_on(SeqEvent *evt, uint8_t chan,
