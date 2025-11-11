@@ -30,34 +30,10 @@ static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
     uint32_t quant_tick = 0;
     if ((tick - lower) >= (quant_ticks / 2)) {
         quant_tick = upper;
-        //    ft_print("U ");
 
     } else {
         quant_tick = lower;
-        //  ft_print("L ");
     }
-    /*ft_print("U ");
-    ft_print(int_to_char(upper));
-    ft_print(" L ");
-    ft_print(int_to_char(lower));
-    ft_print(" Q ");
-    ft_print(int_to_char(quant_ticks));
-    ft_print("\n");*/
-    /*ft_print("loop ");
-    ft_print(int_to_char(seq->loop_length_ticks));
-    ft_print("t ");
-    ft_print(int_to_char(tick));
-    ft_print(" q ");
-    ft_print(int_to_char(quant_tick));
-    ft_print(" s ");
-    ft_print(int_to_char(
-        tick / seq->step_resolution)); // 4 is resolution or something like that
-    ft_print(" qs ");
-    ft_print(int_to_char(
-        quant_tick /
-        seq->step_resolution)); // 4 is resolution or something like that
-    ft_print("\n");*/
-
     return quant_tick;
 }
 
@@ -71,8 +47,12 @@ void SEQ_init(Sequencer *seq, uint32_t beats) {
     seq->playing = false;
     seq->recording = false;
     seq->internal_resolution = MIDI_PPQN;
-    seq->step_resolution = seq->internal_resolution / 4;
+    seq->step_resolution = seq->internal_resolution / 8; // 6 en este caso
     seq->loop_length_ticks = seq->internal_resolution * beats;
+    int i;
+    for (i = 0; i < MAX_STEPS; i++) {
+        seq->step_event_amount[i] = 0;
+    }
 }
 
 // --- Control ---
@@ -111,7 +91,13 @@ void SEQ_add_event(Sequencer *seq, SeqEvent *new_event) {
 
     new_event->timestamp_tick = seq->current_tick;
 
-    new_event->timestamp_tick = SEQ_quantize_tick(seq, new_event->timestamp_tick);
+    new_event->timestamp_tick =
+        SEQ_quantize_tick(seq, new_event->timestamp_tick);
+    uint32_t step_index = seq->current_tick / seq->step_resolution;
+    seq->step_event_amount[step_index]++;
+    if (seq->on_changed_callback) {
+        on_changed_callback(0);
+    }
 
     if (!seq->head) {
         // First event in sequence
@@ -178,9 +164,6 @@ void SEQ_add_event_at_timestamp(Sequencer *seq, uint32_t timestamp_tick,
 void SEQ_tick(Sequencer *seq) {
     if (!seq->playing)
         return;
-            ft_print("step");
-    ft_print(int_to_char(seq->current_tick/seq->step_resolution));
-    ft_print("\n");
 
     // if (!seq->head) return; run even with no events to advance ticks and call
     // callbacks
@@ -217,8 +200,13 @@ void SEQ_tick(Sequencer *seq) {
 
     if (seq->on_step_callback &&
         (seq->current_tick % seq->step_resolution == 0)) {
-        uint32_t beat_index = seq->current_tick / seq->step_resolution;
-        seq->on_step_callback(beat_index);
+
+        uint32_t step_index = seq->current_tick / seq->step_resolution;
+        /*ft_print("On Step callback index");
+        ft_print(int_to_char(step_index));
+        ft_print("\n");*/
+
+        seq->on_step_callback(step_index);
     }
     seq->current_tick++;
     if (seq->current_tick >= seq->loop_length_ticks) {
@@ -262,11 +250,16 @@ void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) {
             // can happen because of quantization
             // but with this check I can't wrap long notes
             // must check only if notes timestamp are EQUAL
-            if (new_event->timestamp_tick==prev_note_on->timestamp_tick){
-                new_event->timestamp_tick = prev_note_on->timestamp_tick + 1; // replace 1 by note quantize parameter
-                new_event->timestamp_tick = new_event->timestamp_tick % seq->loop_length_ticks; // loop the loop
+            if (new_event->timestamp_tick == prev_note_on->timestamp_tick) {
+                new_event->timestamp_tick =
+                    prev_note_on->timestamp_tick +
+                    1; // replace 1 by note quantize parameter
+                new_event->timestamp_tick =
+                    new_event->timestamp_tick %
+                    seq->loop_length_ticks; // loop the loop
             }
-            SEQ_add_event_at_timestamp(seq, new_event->timestamp_tick, new_event);
+            SEQ_add_event_at_timestamp(seq, new_event->timestamp_tick,
+                                       new_event);
         } else {
             ft_print("note not found prev"); // bug hunt
         }

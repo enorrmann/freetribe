@@ -8,6 +8,7 @@
 #include "freetribe.h"
 
 #define MIDI_PPQN 24
+#define MAX_STEPS 64
 
 typedef void (*t_midi_event_callback)(char chan, char data1, char data2);
 typedef void (*t_transport_event_callback)(int beat_index);
@@ -43,10 +44,12 @@ typedef struct
     t_transport_event_callback on_start_callback;
     t_transport_event_callback on_stop_callback;
     t_transport_event_callback  on_record_toggle_callback;
+    t_transport_event_callback on_changed_callback;
     bool playing;
     bool recording;
     uint32_t internal_resolution; 
     uint32_t step_resolution;
+    uint8_t step_event_amount[MAX_STEPS];
 } Sequencer;
 
 // --- Public API ---

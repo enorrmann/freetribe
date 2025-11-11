@@ -49,7 +49,12 @@ static void simulate_midi_tick();
 void on_start_callback(int beat_index);
 void on_stop_callback(int beat_index);
 void on_record_toggle_callback(int recording_state);
+void on_changed_callback(int);
 
+
+void on_changed_callback(int nada){
+    ft_print("on_changed_callback");
+}
 void on_start_callback(int beat_index) { ft_set_led(LED_PLAY, 255); }
 
 void on_stop_callback(int beat_index) {
@@ -57,6 +62,7 @@ void on_stop_callback(int beat_index) {
         ft_send_cc(ch, 123, 0); // All Notes Off
     }
     ft_set_led(LED_PLAY, 0);
+    ft_set_led(LED_TAP, 0);
 }
 
 void on_record_toggle_callback(int recording_state) {
@@ -147,6 +153,7 @@ t_status app_init(void) {
     my_sequencer.on_start_callback = on_start_callback;
     my_sequencer.on_stop_callback = on_stop_callback;
     my_sequencer.on_record_toggle_callback = on_record_toggle_callback;
+    my_sequencer.on_changed_callback = on_changed_callback;
 
     /*
     SeqEvent *event1 = SEQ_POOL_get_event(&event_pool);
