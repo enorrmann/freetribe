@@ -10,7 +10,7 @@
 
 
 // --- Static pool of free events ---
-#define MAX_SEQ_EVENTS 12
+#define MAX_SEQ_EVENTS 256
 
 typedef struct {
     SeqEvent pool[MAX_SEQ_EVENTS];

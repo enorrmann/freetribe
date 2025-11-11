@@ -56,9 +56,7 @@ void set_pad_n(int n, int val);
 void on_changed_callback(int nada) {
     int i;
     for (i = 0; i < MAX_STEPS; i++) {
-        if (my_sequencer.step_event_amount[i] > 0) {
-        }
-        set_pad_n(i, my_sequencer.step_event_amount[i] * 255);
+        set_pad_n(i, my_sequencer.step_event_amount[i]);
     }
 }
 
@@ -89,9 +87,18 @@ static char *int_to_char(int32_t value) {
 }
 
 void set_pad_n(int n, int val) {
+    int bright = val<<5; // times 32
+    if (bright <= 0) {
+        bright = 0;
+    }
+    if (bright > 255) {
+        bright = 255;
+    }
+
     int pad_index = n % 16;
     int current_pad = LED_PAD_0_RED + (pad_index * 2);
-    ft_set_led(current_pad, val ? 255 : 0);
+
+    ft_set_led(current_pad, bright);
 }
 
 void step_callback(uint32_t beat_index) {
@@ -151,7 +158,7 @@ t_status app_init(void) {
     ft_register_tick_callback(0, _tick_callback);
 
     SEQ_POOL_init(&event_pool);
-    int sequencer_beats = 4; // negras / quarter notes
+    int sequencer_beats = 1; // negras / quarter notes
     SEQ_init(&my_sequencer, sequencer_beats);
     SEQ_set_step_callback(&my_sequencer, step_callback);
     my_sequencer.on_start_callback = on_start_callback;
