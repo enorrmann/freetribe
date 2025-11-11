@@ -222,6 +222,7 @@ void _button_callback(uint8_t index, bool state) {
         break;
     case BUTTON_ERASE:
         if (state == 1) {
+            on_stop_callback(0); // send all notes off before shutdown
             SEQ_clear(&my_sequencer);
             SEQ_POOL_init(&event_pool);
         }

@@ -244,23 +244,27 @@ void SEQ_clear(Sequencer *seq) {
 void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) {
     // adjust timing for NOTE_OFF events
     if (new_event->midi_params.note_on == false) {
+        new_event->timestamp_tick = seq->current_tick;
+
         // SeqEvent *prev =_SEQ_find_matching_note_on(seq->head,
         // new_event->midi_params.chan, new_event->midi_params.data1);
-        SeqEvent *prev = _SEQ_find_matching_note_on(
+        SeqEvent *prev_note_on = _SEQ_find_matching_note_on(
             seq->current, new_event->midi_params.chan,
             new_event->midi_params.data1); // test try from current
 
-        if (prev) {
-            new_event->peer_event = prev;
-            prev->peer_event = new_event;
-            new_event->timestamp_tick = prev->timestamp_tick + 2;
-            new_event->timestamp_tick = new_event->timestamp_tick %
-                                        seq->loop_length_ticks; // loop the loop
-
-            SEQ_add_event_at_timestamp(seq, new_event->timestamp_tick,
-                                       new_event);
+        if (prev_note_on) {
+            new_event->peer_event = prev_note_on;
+            prev_note_on->peer_event = new_event;
+            // can happen because of quantization
+            // but with this check I can't wrap long notes
+            // must check only if notes timestamp are EQUAL
+            if (new_event->timestamp_tick==prev_note_on->timestamp_tick){
+                new_event->timestamp_tick = prev_note_on->timestamp_tick + 1; // replace 1 by note quantize parameter
+                new_event->timestamp_tick = new_event->timestamp_tick % seq->loop_length_ticks; // loop the loop
+            }
+            SEQ_add_event_at_timestamp(seq, new_event->timestamp_tick, new_event);
         } else {
-            ft_print("note not found prev");
+            ft_print("note not found prev"); // bug hunt
         }
     }
 }
