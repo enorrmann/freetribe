@@ -50,11 +50,18 @@ void on_start_callback(int beat_index);
 void on_stop_callback(int beat_index);
 void on_record_toggle_callback(int recording_state);
 void on_changed_callback(int);
+static char *int_to_char(int32_t value);
+void set_pad_n(int n, int val);
 
-
-void on_changed_callback(int nada){
-    ft_print("on_changed_callback");
+void on_changed_callback(int nada) {
+    int i;
+    for (i = 0; i < MAX_STEPS; i++) {
+        if (my_sequencer.step_event_amount[i] > 0) {
+        }
+        set_pad_n(i, my_sequencer.step_event_amount[i] * 255);
+    }
 }
+
 void on_start_callback(int beat_index) { ft_set_led(LED_PLAY, 255); }
 
 void on_stop_callback(int beat_index) {
@@ -81,11 +88,16 @@ static char *int_to_char(int32_t value) {
     return str_buf;
 }
 
+void set_pad_n(int n, int val) {
+    int pad_index = n % 16;
+    int current_pad = LED_PAD_0_RED + (pad_index * 2);
+    ft_set_led(current_pad, val ? 255 : 0);
+}
+
 void step_callback(uint32_t beat_index) {
 
-    ft_set_led(LED_TAP, ((beat_index%4)?0:255));
+    ft_set_led(LED_TAP, ((beat_index % 4) ? 0 : 255));
 
-    
     int pad_index = beat_index % 16;
     // pad 0 led LED_PAD_0_RED = 44
     int pad_0 = LED_PAD_0_BLUE;
@@ -112,14 +124,6 @@ void step_callback(uint32_t beat_index) {
     int current_led_bar = led_bar_0 + led_bar_index;
     previous_led_bar = current_led_bar;
     ft_set_led(current_led_bar, 255);
-
-    /*ft_print("Pad ");
-    ft_print(int_to_char(pad_index));
-    ft_print(" step ");
-    ft_print(int_to_char(beat_index));
-    ft_print(" bar ");
-    ft_print(int_to_char(current_led_bar));
-    ft_print(" \n");*/
 }
 
 /*----- Macros -------------------------------------------------------*/
@@ -238,7 +242,7 @@ void _button_callback(uint8_t index, bool state) {
             SEQ_POOL_init(&event_pool);
         }
         break;
-        case BUTTON_WRITE:
+    case BUTTON_WRITE:
         if (state == 1) {
             SEQ_print(&my_sequencer);
         }
@@ -293,8 +297,8 @@ static void _note_on_callback(char chan, char note, char vel) {
     }
     event->midi_event_callback = ft_send_note_on;
     event->midi_params = mep;
-     SEQ_add_event(&my_sequencer, event);
-    //SEQ_insert_before_current(&my_sequencer, event); // buggy ?
+    SEQ_add_event(&my_sequencer, event);
+    // SEQ_insert_before_current(&my_sequencer, event); // buggy ?
 }
 
 /**

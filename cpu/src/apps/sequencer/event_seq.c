@@ -21,8 +21,8 @@ static char *int_to_char(int32_t value) {
 static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
 
     // uint32_t quant_ticks = seq->internal_resolution / 2; // default 1/8
-    // uint32_t quant_ticks = seq->internal_resolution / 4; // default 1/16
-    uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
+     uint32_t quant_ticks = seq->internal_resolution / 4; // default 1/16
+    //uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
 
     // Redondear al múltiplo más cercano
     uint32_t lower = (tick / quant_ticks) * quant_ticks;
@@ -47,7 +47,7 @@ void SEQ_init(Sequencer *seq, uint32_t beats) {
     seq->playing = false;
     seq->recording = false;
     seq->internal_resolution = MIDI_PPQN;
-    seq->step_resolution = seq->internal_resolution / 8; // 6 en este caso
+    seq->step_resolution = seq->internal_resolution / 4; // 6 en este caso
     seq->loop_length_ticks = seq->internal_resolution * beats;
     int i;
     for (i = 0; i < MAX_STEPS; i++) {
@@ -231,6 +231,15 @@ void SEQ_clear(Sequencer *seq) {
     seq->head = NULL;
     seq->current = NULL;
     seq->current_tick = 0;
+
+    int i;
+    for (i = 0; i < MAX_STEPS; i++) {
+        seq->step_event_amount[i] = 0;
+    }
+
+    if (seq->on_changed_callback) {
+        seq->on_changed_callback(0);
+    }
 }
 
 void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) {

@@ -8,7 +8,7 @@
 #include "freetribe.h"
 
 #define MIDI_PPQN 24
-#define MAX_STEPS 64
+#define MAX_STEPS 16
 
 typedef void (*t_midi_event_callback)(char chan, char data1, char data2);
 typedef void (*t_transport_event_callback)(int beat_index);
