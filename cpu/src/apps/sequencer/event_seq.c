@@ -20,10 +20,11 @@ static char *int_to_char(int32_t value) {
 }
 
 static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
+    //return tick;
 
     // uint32_t quant_ticks = seq->internal_resolution / 2; // default 1/8
     uint32_t quant_ticks = seq->internal_resolution / 4; // default 1/16
-    // uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
+     //uint32_t quant_ticks = seq->internal_resolution / 8; // default 1/32
 
     // Redondear al múltiplo más cercano
     uint32_t lower = (tick / quant_ticks) * quant_ticks;
@@ -47,7 +48,7 @@ void SEQ_init(Sequencer *seq, uint32_t beats) {
     seq->current_tick = 0;
     seq->playing = false;
     seq->recording = false;
-    seq->internal_resolution = MIDI_PPQN;
+    seq->internal_resolution = MIDI_PPQN ;
     seq->step_resolution = seq->internal_resolution / 4; // 6 en este caso
     seq->loop_length_ticks = seq->internal_resolution * beats;
     int i;
@@ -86,7 +87,7 @@ void SEQ_record_toggle(Sequencer *seq) {
 
 void _changed(Sequencer *seq, SeqEvent *new_event) {
     if (!new_event->midi_params.note_on) return; // only save note on as registered steps
-    uint32_t step_index = new_event->quantised_timestamp_tick / seq->step_resolution;
+    uint32_t step_index = new_event->timestamp_tick / seq->step_resolution;
     seq->step_event_amount[step_index]++;
     if (seq->on_changed_callback) {
         on_changed_callback(0);
@@ -100,7 +101,6 @@ void SEQ_add_event(Sequencer *seq, SeqEvent *new_event) {
     }
 
     new_event->timestamp_tick = seq->current_tick;
-    new_event->quantised_timestamp_tick =SEQ_quantize_tick(seq, new_event->timestamp_tick);
 
     _changed(seq, new_event);
 
@@ -139,7 +139,6 @@ void SEQ_add_event_at_timestamp(Sequencer *seq, uint32_t timestamp_tick,
     }
 
     new_event->timestamp_tick = timestamp_tick % seq->loop_length_ticks;
-    new_event->quantised_timestamp_tick = new_event->timestamp_tick;
     _changed(seq,new_event);
     // new_event->callback = callback;
 
@@ -178,11 +177,7 @@ void SEQ_tick(Sequencer *seq) {
     SeqEvent *current_event = seq->current;
 
     // Loop while there are events whose timestamp matches current tick
-    uint32_t current_event_tick = current_event->quantised_timestamp_tick;
-    /*if (true) { // if use quantisation
-        current_event_tick = current_event->quantised_timestamp_tick;
-    }*/
-    while (current_event && current_event_tick == seq->current_tick) {
+    while (current_event && current_event->timestamp_tick == seq->current_tick) {
         if (current_event->midi_event_callback) {
 
             current_event->midi_event_callback(
@@ -195,7 +190,6 @@ void SEQ_tick(Sequencer *seq) {
         }
 
         current_event = current_event->next;
-        current_event_tick = current_event->quantised_timestamp_tick;
 
         // Si llegamos al final del loop (lista circular)
         if (current_event == seq->head) {
@@ -271,24 +265,22 @@ void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) {
         if (prev_note_on) {
             new_event->peer_event = prev_note_on;
             prev_note_on->peer_event = new_event;
-            uint32_t gate =
-                new_event->timestamp_tick -
-                prev_note_on
-                    ->timestamp_tick; // original gate time without quantisation
-            // if (new_event->timestamp_tick == prev_note_on->timestamp_tick) {
-            new_event->timestamp_tick = prev_note_on->quantised_timestamp_tick +
-                                        gate + stopped_record_gate;
-            new_event->quantised_timestamp_tick = new_event->timestamp_tick;
-            //}
-            SEQ_add_event_at_timestamp(seq, new_event->timestamp_tick,
-                                       new_event);
+            uint32_t gate = new_event->timestamp_tick - prev_note_on->timestamp_tick; // original gate time without quantisation
+            if (gate==0){
+                gate++;
+            }
+            
+            new_event->timestamp_tick = prev_note_on->timestamp_tick + gate + stopped_record_gate;
+
+            
+            SEQ_add_event_at_timestamp(seq, new_event->timestamp_tick,new_event);
         } else {
             ft_print("note not found prev"); // bug hunt
         }
     }
 }
 
-void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
+/*void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
     if (!seq || !seq->recording)
         return;
 
@@ -323,7 +315,7 @@ void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
     if (new_event->timestamp_tick < seq->head->timestamp_tick)
         seq->head = new_event;
 }
-
+*/
 // Setter
 void SEQ_set_step_callback(Sequencer *seq,
                            void (*callback)(uint32_t beat_index)) {
@@ -366,8 +358,6 @@ static SeqEvent *_SEQ_find_matching_note_on(SeqEvent *evt, uint8_t chan,
 void evt_print(SeqEvent *evt) {
     ft_print(int_to_char(evt->timestamp_tick));
     ft_print(",");
-    ft_print(int_to_char(evt->quantised_timestamp_tick));
-    ft_print(",");
     if (evt->midi_params.note_on) {
         ft_print("ON ");
     } else {
@@ -388,7 +378,7 @@ void SEQ_print(Sequencer *seq) {
     SeqEvent *cur = seq->head;
 
     ft_print(
-        "TICK,Q_TICK,TYPE,NOTE, PEER_TICK,PEER_Q_TICK, PEER_TYPE,PEER_NOTE \n");
+        "TICK,TYPE,NOTE, PEER_TICK, PEER_TYPE,PEER_NOTE \n");
     do {
         evt_print(cur);
         evt_print(cur->peer_event);
@@ -399,5 +389,11 @@ void SEQ_print(Sequencer *seq) {
 }
 
 void SEQ_insert_at_step(Sequencer *seq, SeqEvent *new_event, int step) {
+    bool prev_recording_state = seq->recording;
+    // set it to recording for sequencer mode insertions
+    if (!seq->recording){
+        seq->recording = true;
+    }
     SEQ_add_event_at_timestamp(seq, step * seq->step_resolution, new_event);
+    seq->recording = prev_recording_state;
 }

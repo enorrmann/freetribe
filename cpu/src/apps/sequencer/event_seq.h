@@ -25,7 +25,6 @@ typedef struct MidiEventParams {
 typedef struct SeqEvent
 {
     uint32_t timestamp_tick; // Position within loop
-    uint32_t quantised_timestamp_tick; // quantised Position within loop
     void (*callback)(void);  // Function to trigger
     t_midi_event_callback midi_event_callback;
 

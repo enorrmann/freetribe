@@ -291,7 +291,7 @@ static void _tick_callback(void) { simulate_midi_tick(); }
 static void simulate_midi_tick() {
     static float count = 0.0f;
 
-    const float bpm = 120.0f;
+    const float bpm = 80.0f;
     const float interval_ms =
         (60000.0f / bpm) /
         my_sequencer.internal_resolution; // tiempo entre ticks MIDI
@@ -394,8 +394,6 @@ static void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
         event2->midi_params = mep2;
         SEQ_insert_at_step(&my_sequencer, event,pad);
         SEQ_insert_at_step(&my_sequencer, event2,pad+1);
-
-        ft_print(int_to_char(pad));
 
     }
 
