@@ -1,0 +1,27 @@
+#ifndef SCALES_H
+#define SCALES_H
+
+// --- Major / Minor modes ---
+#define NOTES_IONIAN 2741     // 101010110101 (C D E F G A B)
+#define NOTES_DORIAN 1451     // 010110110101 (C D D# F G A A#)
+#define NOTES_PHRYGIAN 1387   // 010110101101 (C C# D# F G G# A#)
+#define NOTES_LYDIAN 2773     // 101011010101 (C D E F# G A B)
+#define NOTES_MIXOLYDIAN 2733 // 101010110011 (C D E F G A A#)
+#define NOTES_AEOLIAN 1453    // 010110101101 (C D D# F G G# A#)
+#define NOTES_LOCRIAN 1385    // 010110001101 (C C# D# F F# G# A#)
+
+// --- Pentatonic and Blues ---
+#define NOTES_MAJOR_PENTATONIC 2709 // 101010010101 (C D E G A)
+#define NOTES_MINOR_PENTATONIC 1365 // 010101010101 (C D# F G A#)
+#define NOTES_MINOR_BLUES 1257      // 010011010001 (C D# F F# G A#)
+
+// --- Harmonic / Melodic variations ---
+#define NOTES_HARMONIC_MINOR 1877    // 011101010101 (C D D# F G G# B)
+#define NOTES_MELODIC_MINOR 2741     // 101010110101 (C D D# F G A B)
+#define NOTES_PHRYGIAN_DOMINANT 1459 // 010110110011 (C C# E F G G# A#)
+
+// --- Others ---
+#define NOTES_WHOLE_TONE 1366 // 010101010110 (C D E F# G# A#)
+#define NOTES_DIMINISHED 1386 // 010110101010 (C D D# F F# G# A)
+#define NOTES_CHROMATIC 4095  // 111111111111 (C C# D D# E F F# G G# A A# B)
+#endif

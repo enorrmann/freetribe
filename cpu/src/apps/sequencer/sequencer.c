@@ -32,8 +32,17 @@ under the terms of the GNU Affero General Public License as published by
 
 #include "event_seq.h"
 #include "freetribe.h"
+#include "keyboard.h"
 #include "panel_buttons.h"
+#include "scales.h"
 #include "seq_event_pool.h"
+
+#define DEFAULT_SCALE_TONES 12
+#define DEFAULT_SCALE_MODE 0
+
+static t_keyboard g_kbd;
+static t_scale g_scale;
+static uint8_t g_keyboard_mode_enabled, g_sequencer_mode_enabled;
 
 void _button_callback(uint8_t index, bool state);
 static void _tick_callback(void);
@@ -52,6 +61,8 @@ void on_record_toggle_callback(int recording_state);
 void on_changed_callback(int);
 static char *int_to_char(int32_t value);
 void set_pad_n(int n, int val);
+void set_keyboard_mode(int);
+void set_sequencer_mode(int state);
 
 void on_changed_callback(int nada) {
     int i;
@@ -87,7 +98,7 @@ static char *int_to_char(int32_t value) {
 }
 
 void set_pad_n(int n, int val) {
-    int bright = val<<5; // times 32
+    int bright = val << 5; // times 32
     if (bright <= 0) {
         bright = 0;
     }
@@ -150,6 +161,10 @@ void step_callback(uint32_t beat_index) {
  */
 t_status app_init(void) {
 
+    scale_init(&g_scale, NOTES_DORIAN, DEFAULT_SCALE_TONES);
+    keyboard_init(&g_kbd, &g_scale);
+    g_kbd.octave = 4;
+
     ft_register_panel_callback(BUTTON_EVENT, _button_callback);
     ft_register_midi_callback(EVT_CHAN_NOTE_ON, _note_on_callback);
     ft_register_midi_callback(EVT_CHAN_NOTE_OFF, _note_off_callback);
@@ -158,7 +173,7 @@ t_status app_init(void) {
     ft_register_tick_callback(0, _tick_callback);
 
     SEQ_POOL_init(&event_pool);
-    int sequencer_beats = 1; // negras / quarter notes
+    int sequencer_beats = 4; // negras / quarter notes
     SEQ_init(&my_sequencer, sequencer_beats);
     SEQ_set_step_callback(&my_sequencer, step_callback);
     my_sequencer.on_start_callback = on_start_callback;
@@ -244,7 +259,9 @@ void _button_callback(uint8_t index, bool state) {
         break;
     case BUTTON_ERASE:
         if (state == 1) {
-            on_stop_callback(0); // send all notes off before shutdown
+            for (int ch = 0; ch < 16; ch++) {
+                ft_send_cc(ch, 123, 0); // All Notes Off
+            }
             SEQ_clear(&my_sequencer);
             SEQ_POOL_init(&event_pool);
         }
@@ -252,6 +269,16 @@ void _button_callback(uint8_t index, bool state) {
     case BUTTON_WRITE:
         if (state == 1) {
             SEQ_print(&my_sequencer);
+        }
+        break;
+    case BUTTON_KEYBOARD:
+        if (state == 1) {
+            set_keyboard_mode(1);
+        }
+        break;
+    case BUTTON_SEQUENCER:
+        if (state == 1) {
+            set_sequencer_mode(1);
         }
         break;
     default:
@@ -264,7 +291,7 @@ static void _tick_callback(void) { simulate_midi_tick(); }
 static void simulate_midi_tick() {
     static float count = 0.0f;
 
-    const float bpm = 60.0f;
+    const float bpm = 120.0f;
     const float interval_ms =
         (60000.0f / bpm) /
         my_sequencer.internal_resolution; // tiempo entre ticks MIDI
@@ -343,9 +370,58 @@ static void _note_off_callback(char chan, char note, char vel) {
 
 // simulates keyboard
 static void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
-    if (state) {
-        _note_on_callback(0, 60, 120);
-    } else {
-        _note_off_callback(0, 60, 120);
+    if (g_sequencer_mode_enabled && state) {
+        MidiEventParams mep;
+        mep.chan = 0;
+        mep.data1 = 60;
+        mep.data2 = 120;
+        mep.note_on = true;
+        MidiEventParams mep2;
+        mep2.chan = 0;
+        mep2.data1 = 60;
+        mep2.data2 = 120;
+        mep2.note_on = false;
+        SeqEvent *event = SEQ_POOL_get_event(&event_pool);
+        SeqEvent *event2 = SEQ_POOL_get_event(&event_pool);
+        // thru
+        if (!event|| !event2) {
+            ft_print("No FREE event\n");
+            return;
+        }
+        event->midi_event_callback = ft_send_note_on;
+        event->midi_params = mep;
+        event2->midi_event_callback = ft_send_note_off;
+        event2->midi_params = mep2;
+        SEQ_insert_at_step(&my_sequencer, event,pad);
+        SEQ_insert_at_step(&my_sequencer, event2,pad+1);
+
+        ft_print(int_to_char(pad));
+
     }
+
+    if (!g_keyboard_mode_enabled)
+        return;
+    uint8_t note = keyboard_map_note(&g_kbd, pad);
+    if (state) {
+        _note_on_callback(0, note, 120);
+    } else {
+        _note_off_callback(0, note, 120);
+    }
+}
+
+void set_keyboard_mode(int state) {
+
+    g_keyboard_mode_enabled = state;
+    if (state) {
+        set_sequencer_mode(0);
+    }
+    ft_set_led(LED_KEYBOARD, 255 * state);
+}
+
+void set_sequencer_mode(int state) {
+    g_sequencer_mode_enabled = state;
+    if (state) {
+        set_keyboard_mode(0);
+    }
+    ft_set_led(LED_SEQUENCER, 255 * state);
 }

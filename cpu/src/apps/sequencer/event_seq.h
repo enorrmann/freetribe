@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include "freetribe.h"
 
+#define LINE_BREAK "\n"
 #define MIDI_PPQN 24
 #define MAX_STEPS 16
 
@@ -24,6 +25,7 @@ typedef struct MidiEventParams {
 typedef struct SeqEvent
 {
     uint32_t timestamp_tick; // Position within loop
+    uint32_t quantised_timestamp_tick; // quantised Position within loop
     void (*callback)(void);  // Function to trigger
     t_midi_event_callback midi_event_callback;
 
@@ -93,4 +95,5 @@ void SEQ_insert_before_current(Sequencer *seq, SeqEvent *evt);
 void SEQ_set_step_callback(Sequencer *seq, void (*callback)(uint32_t beat_index)) ;
 void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) ;
 void SEQ_print(Sequencer *seq);
+void SEQ_insert_at_step(Sequencer *seq, SeqEvent *new_event, int step);
 #endif // SEQUENCER_H
