@@ -3,8 +3,9 @@
 #include "event_seq.h"
 #include <stdlib.h>
 
-static SeqEvent *_SEQ_find_matching_note_on(SeqEvent *evt, uint8_t chan,
-                                            uint8_t note);
+static SeqEvent *_SEQ_find_matching_note_on(SeqEvent *evt, uint8_t chan,uint8_t note);
+
+
 void _changed(Sequencer *seq, SeqEvent *new_event);
 
 static char *int_to_char(int32_t value) {
@@ -19,7 +20,7 @@ static char *int_to_char(int32_t value) {
     return str_buf;
 }
 
-static inline uint32_t SEQ_quantize_tick(Sequencer *seq, uint32_t tick) {
+static inline uint32_t _quantize_tick(Sequencer *seq, uint32_t tick) {
     //return tick;
 
     // uint32_t quant_ticks = seq->internal_resolution / 2; // default 1/8
@@ -99,8 +100,9 @@ void SEQ_add_event(Sequencer *seq, SeqEvent *new_event) {
     if (!seq || !seq->recording) {
         return;
     }
-
+    
     new_event->timestamp_tick = seq->current_tick;
+    new_event->timestamp_tick = _quantize_tick(seq,new_event->timestamp_tick );
 
     _changed(seq, new_event);
 
@@ -254,10 +256,6 @@ void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) {
 
     // adjust timing for NOTE_OFF events
     if (new_event->midi_params.note_on == false) {
-        new_event->timestamp_tick = seq->current_tick;
-
-        // SeqEvent *prev =_SEQ_find_matching_note_on(seq->head,
-        // new_event->midi_params.chan, new_event->midi_params.data1);
         SeqEvent *prev_note_on = _SEQ_find_matching_note_on(
             seq->current, new_event->midi_params.chan,
             new_event->midi_params.data1); // test try from current
@@ -265,12 +263,15 @@ void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) {
         if (prev_note_on) {
             new_event->peer_event = prev_note_on;
             prev_note_on->peer_event = new_event;
-            uint32_t gate = new_event->timestamp_tick - prev_note_on->timestamp_tick; // original gate time without quantisation
+            /*uint32_t gate = new_event->timestamp_tick - prev_note_on->timestamp_tick; // original gate time without quantisation
             if (gate==0){
                 gate++;
+            }*/
+            new_event->timestamp_tick = seq->current_tick;
+            new_event->timestamp_tick = _quantize_tick(seq,new_event->timestamp_tick );
+            if (new_event->timestamp_tick == prev_note_on->timestamp_tick){
+                new_event->timestamp_tick = prev_note_on->timestamp_tick + seq->step_resolution -1 ; // min note lenght if quantizing
             }
-            
-            new_event->timestamp_tick = prev_note_on->timestamp_tick + gate + stopped_record_gate;
 
             
             SEQ_add_event_at_timestamp(seq, new_event->timestamp_tick,new_event);
@@ -293,7 +294,7 @@ void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) {
     new_event->timestamp_tick = seq->current_tick;
     if (new_event->midi_params.note_on)
         new_event->quantised_timestamp_tick =
-            SEQ_quantize_tick(seq, new_event->timestamp_tick);
+            _quantize_tick(seq, new_event->timestamp_tick);
 
     SeqEvent *current_event = seq->current ? seq->current : seq->head;
     SeqEvent *insert_pos = current_event;
@@ -353,6 +354,7 @@ static SeqEvent *_SEQ_find_matching_note_on(SeqEvent *evt, uint8_t chan,
     }
 
     return NULL; // Not found after full loop
+
 }
 
 void evt_print(SeqEvent *evt) {
