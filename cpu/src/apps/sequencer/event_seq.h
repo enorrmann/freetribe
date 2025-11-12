@@ -9,7 +9,8 @@
 
 #define LINE_BREAK "\n"
 #define MIDI_PPQN 24
-#define MAX_STEPS 16
+#define MAX_STEPS 64
+#define STEPS_PER_PAGE 16
 
 typedef void (*t_midi_event_callback)(char chan, char data1, char data2);
 typedef void (*t_transport_event_callback)(int beat_index);
@@ -42,6 +43,7 @@ typedef struct
     uint32_t loop_length_ticks; // Duration of one loop in ticks
     uint32_t current_tick;      // Current tick position
     t_transport_event_callback on_step_callback;  
+    t_transport_event_callback on_page_callback;   // after n steps, we call it a page
     t_transport_event_callback on_start_callback;
     t_transport_event_callback on_stop_callback;
     t_transport_event_callback  on_record_toggle_callback;

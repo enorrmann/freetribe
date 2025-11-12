@@ -50,7 +50,7 @@ static void _tick_callback(void);
 static void _note_on_callback(char chan, char note, char vel);
 static void _note_off_callback(char chan, char note, char vel);
 static void _trigger_callback(uint8_t pad, uint8_t vel, bool state);
-void step_callback(uint32_t beat_index);
+void on_step_callback(uint32_t beat_index);
 static Sequencer my_sequencer;
 SeqEventPool event_pool;
 
@@ -58,15 +58,24 @@ static void simulate_midi_tick();
 void on_start_callback(int beat_index);
 void on_stop_callback(int beat_index);
 void on_record_toggle_callback(int recording_state);
-void on_changed_callback(int);
+void on_changed_callback(int step_index);
 static char *int_to_char(int32_t value);
 void set_pad_n(int n, int val);
 void set_keyboard_mode(int);
 void set_sequencer_mode(int state);
+void on_page_callback(uint32_t index);
 
-void on_changed_callback(int nada) {
+void on_changed_callback(int step_index) {
+    set_pad_n(step_index, my_sequencer.step_event_amount[step_index]);
+}
+
+void on_page_callback(uint32_t page) {
+
+    int from = page * 16;
+    int to = from + 16;
+
     int i;
-    for (i = 0; i < MAX_STEPS; i++) {
+    for (i = from; i < to; i++) {
         set_pad_n(i, my_sequencer.step_event_amount[i]);
     }
 }
@@ -112,7 +121,9 @@ void set_pad_n(int n, int val) {
     ft_set_led(current_pad, bright);
 }
 
-void step_callback(uint32_t beat_index) {
+void page_callback(uint32_t index) {}
+
+void on_step_callback(uint32_t beat_index) {
 
     ft_set_led(LED_TAP, ((beat_index % 4) ? 0 : 255));
 
@@ -173,44 +184,14 @@ t_status app_init(void) {
     ft_register_tick_callback(0, _tick_callback);
 
     SEQ_POOL_init(&event_pool);
-    int sequencer_beats = 4; // negras / quarter notes
+    int sequencer_beats = 8; // negras / quarter notes
     SEQ_init(&my_sequencer, sequencer_beats);
-    SEQ_set_step_callback(&my_sequencer, step_callback);
+    my_sequencer.on_step_callback = on_step_callback;
     my_sequencer.on_start_callback = on_start_callback;
     my_sequencer.on_stop_callback = on_stop_callback;
     my_sequencer.on_record_toggle_callback = on_record_toggle_callback;
     my_sequencer.on_changed_callback = on_changed_callback;
-
-    /*
-    SeqEvent *event1 = SEQ_POOL_get_event(&event_pool);
-    SeqEvent *event2 = SEQ_POOL_get_event(&event_pool);
-    SeqEvent *event3 = SEQ_POOL_get_event(&event_pool);
-    SeqEvent *event4 = SEQ_POOL_get_event(&event_pool);
-
-    struct MidiEventParams mep;
-
-    mep.chan = 0;
-    mep.data1 = 72;  // C4
-    mep.data2 = 100; // velocity
-
-    event1->midi_event_callback = ft_send_note_on;
-    event2->midi_event_callback = ft_send_note_off;
-    event3->midi_event_callback = ft_send_note_on;
-    event4->midi_event_callback = ft_send_note_off;
-
-    event1->midi_params = mep;
-    event2->midi_params = mep;
-    event3->midi_params = mep;
-    event4->midi_params = mep;
-
-
-    // "metronome"
-    SEQ_record_toggle(&my_sequencer); // start in recording mode
-    SEQ_add_event_at_timestamp(&my_sequencer, 0, event1);
-    SEQ_add_event_at_timestamp(&my_sequencer, 0.1f * MIDI_PPQN, event2);
-    SEQ_add_event_at_timestamp(&my_sequencer, 1 * MIDI_PPQN, event3);
-    SEQ_add_event_at_timestamp(&my_sequencer, 1.1 * MIDI_PPQN, event4);
-    SEQ_record_toggle(&my_sequencer); */
+    my_sequencer.on_page_callback = on_page_callback;
 
     ft_print("Sequencer\n\n\n");
 
@@ -384,7 +365,7 @@ static void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
         SeqEvent *event = SEQ_POOL_get_event(&event_pool);
         SeqEvent *event2 = SEQ_POOL_get_event(&event_pool);
         // thru
-        if (!event|| !event2) {
+        if (!event || !event2) {
             ft_print("No FREE event\n");
             return;
         }
@@ -392,9 +373,8 @@ static void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
         event->midi_params = mep;
         event2->midi_event_callback = ft_send_note_off;
         event2->midi_params = mep2;
-        SEQ_insert_at_step(&my_sequencer, event,pad);
-        SEQ_insert_at_step(&my_sequencer, event2,pad+1);
-
+        SEQ_insert_at_step(&my_sequencer, event, pad);
+        SEQ_insert_at_step(&my_sequencer, event2, pad + 1);
     }
 
     if (!g_keyboard_mode_enabled)

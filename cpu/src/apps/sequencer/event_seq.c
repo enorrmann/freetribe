@@ -91,7 +91,7 @@ void _changed(Sequencer *seq, SeqEvent *new_event) {
     uint32_t step_index = new_event->timestamp_tick / seq->step_resolution;
     seq->step_event_amount[step_index]++;
     if (seq->on_changed_callback) {
-        on_changed_callback(0);
+        on_changed_callback(step_index);
     }
 }
 
@@ -204,15 +204,14 @@ void SEQ_tick(Sequencer *seq) {
 
     // call on_step_callback if set and on beat
 
-    if (seq->on_step_callback &&
-        (seq->current_tick % seq->step_resolution == 0)) {
-
+    if ( (seq->current_tick % seq->step_resolution == 0)) {
         uint32_t step_index = seq->current_tick / seq->step_resolution;
-        /*ft_print("On Step callback index");
-        ft_print(int_to_char(step_index));
-        ft_print("\n");*/
-
-        seq->on_step_callback(step_index);
+        if (step_index % STEPS_PER_PAGE == 0 && seq->on_page_callback){
+            seq->on_page_callback(step_index/STEPS_PER_PAGE);
+        }
+        if (seq->on_step_callback ){
+            seq->on_step_callback(step_index);
+        }
     }
     seq->current_tick++;
     if (seq->current_tick >= seq->loop_length_ticks) {
@@ -281,47 +280,6 @@ void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) {
     }
 }
 
-/*void SEQ_insert_before_current(Sequencer *seq, SeqEvent *new_event) {
-    if (!seq || !seq->recording)
-        return;
-
-    if (!seq->head) {
-        SEQ_add_event(seq, new_event);
-        return;
-    }
-
-    // Quantize if needed
-    new_event->timestamp_tick = seq->current_tick;
-    if (new_event->midi_params.note_on)
-        new_event->quantised_timestamp_tick =
-            _quantize_tick(seq, new_event->timestamp_tick);
-
-    SeqEvent *current_event = seq->current ? seq->current : seq->head;
-    SeqEvent *insert_pos = current_event;
-
-    // --- Find correct insertion point chronologically ---
-    // Move backwards until we find an event with <= timestamp
-    while (insert_pos->prev != seq->head->prev &&
-           insert_pos->prev->timestamp_tick > new_event->timestamp_tick) {
-        insert_pos = insert_pos->prev;
-    }
-
-    // --- Insert new_event before insert_pos ---
-    new_event->next = insert_pos;
-    new_event->prev = insert_pos->prev;
-    insert_pos->prev->next = new_event;
-    insert_pos->prev = new_event;
-
-    // --- Update head if necessary ---
-    if (new_event->timestamp_tick < seq->head->timestamp_tick)
-        seq->head = new_event;
-}
-*/
-// Setter
-void SEQ_set_step_callback(Sequencer *seq,
-                           void (*callback)(uint32_t beat_index)) {
-    seq->on_step_callback = callback;
-}
 
 static SeqEvent *_SEQ_find_matching_note_on(SeqEvent *evt, uint8_t chan,
                                             uint8_t note) {
