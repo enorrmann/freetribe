@@ -42,7 +42,9 @@ under the terms of the GNU Affero General Public License as published by
 
 static t_keyboard g_kbd;
 static t_scale g_scale;
-static uint8_t g_keyboard_mode_enabled, g_sequencer_mode_enabled;
+static uint8_t g_keyboard_mode_enabled, g_sequencer_mode_enabled,g_step_jump_mode_enabled;
+static uint8_t g_current_seq_page;
+static uint8_t g_current_editing_step;
 
 void _button_callback(uint8_t index, bool state);
 static void _tick_callback(void);
@@ -70,7 +72,7 @@ void on_changed_callback(int step_index) {
 }
 
 void on_page_callback(uint32_t page) {
-
+    g_current_seq_page = page;
     int from = page * 16;
     int to = from + 16;
 
@@ -121,7 +123,22 @@ void set_pad_n(int n, int val) {
     ft_set_led(current_pad, bright);
 }
 
-void page_callback(uint32_t index) {}
+void set_pad_n_blue(int n, int val) {
+    int bright = val << 5; // times 32
+    if (bright <= 0) {
+        bright = 0;
+    }
+    if (bright > 255) {
+        bright = 255;
+    }
+
+    int pad_index = n % 16;
+    int current_pad = LED_PAD_0_BLUE + (pad_index * 2);
+
+    ft_set_led(current_pad, bright);
+}
+
+
 
 void on_step_callback(uint32_t beat_index) {
 
@@ -192,6 +209,8 @@ t_status app_init(void) {
     my_sequencer.on_record_toggle_callback = on_record_toggle_callback;
     my_sequencer.on_changed_callback = on_changed_callback;
     my_sequencer.on_page_callback = on_page_callback;
+
+    g_current_seq_page = 0;
 
     ft_print("Sequencer\n\n\n");
 
@@ -351,6 +370,23 @@ static void _note_off_callback(char chan, char note, char vel) {
 
 // simulates keyboard
 static void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
+    if (g_step_jump_mode_enabled && state) {
+        static int prev_editing_step = 0;
+        g_current_editing_step = pad + (16*g_current_seq_page);
+        if (g_current_editing_step==prev_editing_step){
+            return;
+        }
+        /*ft_print("selected step");
+        ft_print(int_to_char(g_current_editing_step));
+        ft_print(LINE_BREAK);*/
+        set_pad_n_blue(g_current_editing_step,255);
+            set_pad_n_blue(prev_editing_step,0);
+
+        prev_editing_step = g_current_editing_step;
+        
+        return ;
+
+    }
     if (g_sequencer_mode_enabled && state) {
         MidiEventParams mep;
         mep.chan = 0;
@@ -373,8 +409,9 @@ static void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
         event->midi_params = mep;
         event2->midi_event_callback = ft_send_note_off;
         event2->midi_params = mep2;
-        SEQ_insert_at_step(&my_sequencer, event, pad);
-        SEQ_insert_at_step(&my_sequencer, event2, pad + 1);
+        int step = pad + (16*g_current_seq_page);
+        SEQ_insert_at_step(&my_sequencer, event, step);
+        SEQ_insert_at_step(&my_sequencer, event2, step + 1);
     }
 
     if (!g_keyboard_mode_enabled)
@@ -391,6 +428,7 @@ void set_keyboard_mode(int state) {
 
     g_keyboard_mode_enabled = state;
     if (state) {
+        set_sequencer_mode(0);
         set_sequencer_mode(0);
     }
     ft_set_led(LED_KEYBOARD, 255 * state);
