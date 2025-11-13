@@ -235,7 +235,7 @@ void SEQ_clear(Sequencer *seq) {
 
     seq->head = NULL;
     seq->current = NULL;
-    seq->current_tick = 0;
+    // seq->current_tick = 0; dont reset the counter, only clear
 
     int i;
     for (i = 0; i < MAX_STEPS; i++) {
