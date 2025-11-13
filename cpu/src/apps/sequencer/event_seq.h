@@ -48,6 +48,8 @@ typedef struct
     t_transport_event_callback on_stop_callback;
     t_transport_event_callback  on_record_toggle_callback;
     t_transport_event_callback on_changed_callback;
+    t_transport_event_callback on_clear_callback;
+    
     bool playing;
     bool recording;
     uint32_t internal_resolution; 

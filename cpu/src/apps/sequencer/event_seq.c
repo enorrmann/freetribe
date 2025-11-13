@@ -245,6 +245,9 @@ void SEQ_clear(Sequencer *seq) {
     if (seq->on_changed_callback) {
         seq->on_changed_callback(0);
     }
+    if (seq->on_clear_callback) {
+        seq->on_clear_callback(0);
+    }
 }
 
 void SEQ_insert_note_off(Sequencer *seq, SeqEvent *new_event) {

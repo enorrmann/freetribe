@@ -43,6 +43,7 @@ under the terms of the GNU Affero General Public License as published by
 static t_keyboard g_kbd;
 static t_scale g_scale;
 static uint8_t g_keyboard_mode_enabled, g_sequencer_mode_enabled,g_step_jump_mode_enabled;
+static uint8_t g_last_input_note = 60;
 static uint8_t g_current_seq_page;
 static uint8_t g_current_editing_step;
 
@@ -61,11 +62,21 @@ void on_start_callback(int beat_index);
 void on_stop_callback(int beat_index);
 void on_record_toggle_callback(int recording_state);
 void on_changed_callback(int step_index);
+void on_clear_callback(int step_index);
 static char *int_to_char(int32_t value);
 void set_pad_n(int n, int val);
 void set_keyboard_mode(int);
 void set_sequencer_mode(int state);
 void on_page_callback(uint32_t index);
+
+void on_clear_callback(int step_index){
+    int i;
+    // turn off all lights
+    for (i=0;i<16;i++){
+        set_pad_n(i,0);
+    }
+
+}
 
 void on_changed_callback(int step_index) {
     set_pad_n(step_index, my_sequencer.step_event_amount[step_index]);
@@ -209,6 +220,7 @@ t_status app_init(void) {
     my_sequencer.on_record_toggle_callback = on_record_toggle_callback;
     my_sequencer.on_changed_callback = on_changed_callback;
     my_sequencer.on_page_callback = on_page_callback;
+    my_sequencer.on_clear_callback = on_clear_callback;
 
     g_current_seq_page = 0;
 
@@ -314,6 +326,7 @@ static void simulate_midi_tick() {
  * @param[in]   vel     MIDI note velocity.
  */
 static void _note_on_callback(char chan, char note, char vel) {
+    g_last_input_note = note;
     ft_send_note_on(chan, note, vel);
     if (!my_sequencer.recording) {
         return;
@@ -390,12 +403,12 @@ static void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
     if (g_sequencer_mode_enabled && state) {
         MidiEventParams mep;
         mep.chan = 0;
-        mep.data1 = 60;
+        mep.data1 = g_last_input_note; // add last pressed note
         mep.data2 = 120;
         mep.note_on = true;
         MidiEventParams mep2;
         mep2.chan = 0;
-        mep2.data1 = 60;
+        mep2.data1 = g_last_input_note;
         mep2.data2 = 120;
         mep2.note_on = false;
         SeqEvent *event = SEQ_POOL_get_event(&event_pool);
