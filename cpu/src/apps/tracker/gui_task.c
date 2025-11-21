@@ -50,12 +50,12 @@ under the terms of the GNU Affero General Public License as published by
 #include "ring_buffer.h"
 #include "ugui.h"
 
-
 /*----- Macros -------------------------------------------------------*/
 
 #define GUI_EVENT_BUF_LEN 0x20
-#define GUI_MAX_STRING_LEN 19 // FONT_6X8 
-//#define GUI_MAX_STRING_LEN 24 // FONT_4X6 
+#define GUI_MAX_STRING_LEN 19 // FONT_6X8
+
+// #define GUI_MAX_STRING_LEN 24 // FONT_4X6
 
 /*----- Typedefs -----------------------------------------------------*/
 
@@ -202,53 +202,55 @@ void gui_post_label(const char *label) {
     strncat(cat_string, "\n", GUI_MAX_STRING_LEN - strlen(cat_string) - 1);
 
     gui_print(15, 15, "                  ");
-    gui_print(15,15,cat_string);
+    gui_print(15, 15, cat_string);
 }
-void gui_post_label_xy(const char *label,int x , int y) {
-    
+
+void gui_post_label_xy(const char *label, int x, int y) {
+
     int step = 1;
-    char* colon  = ":"; 
+    char *colon = ":";
     int tick_in_step = 23;
-    char* event_type  = "n"; // note events
-    //int note = 60;
-    char* note = "C";
-    char* space  = " ";
+    char *event_type = "n"; // note events
+    // int note = 60;
+    char *note = "C";
+    char *flat = "b";
+    char *space = " ";
     int octave = 2;
     int gate = 156;
     int vel = 120;
+    int is_flat = 1;
 
     char cat_string[GUI_MAX_STRING_LEN];
-    //char* template = "1:00mC 1 0:43 1056" ;
-    //char* template =   "-................-" ;
-    //strncpy(cat_string, template, GUI_MAX_STRING_LEN - 1);
-    
-    itoa(step , &cat_string[0],10); 
-    strncpy(&cat_string[1],colon, 1);
-    itoa(tick_in_step/10 , &cat_string[2],10); // 
-    itoa(tick_in_step-(tick_in_step/10*10) , &cat_string[3],10);
+    // char* template = "1:00mC 1 0:43 1056" ;
+    // char* template =   "-................-" ;
+    // strncpy(cat_string, template, GUI_MAX_STRING_LEN - 1);
 
+    itoa(step, &cat_string[0], 10);
+    strncpy(&cat_string[1], colon, 1);
+    itoa(tick_in_step / 10, &cat_string[2], 10); //
+    itoa(tick_in_step - (tick_in_step / 10 * 10), &cat_string[3], 10);
 
-    strncpy(&cat_string[4],event_type, 1);
-    strncpy(&cat_string[5],note, 1);
-    strncpy(&cat_string[6],space, 1);
-    itoa(octave , &cat_string[7],10);
-    strncpy(&cat_string[8],space, 1);
-    itoa(gate/100 , &cat_string[9],10);
-    itoa((gate-(gate/100*100))/10 , &cat_string[10],10);
-    itoa(gate-(gate/10*10) , &cat_string[11],10);
-    strncpy(&cat_string[12],space, 1);
-    itoa(vel/100 , &cat_string[13],10);
-    itoa((vel-(vel/100*100))/10 , &cat_string[14],10);
-    itoa(vel-(vel/10*10) , &cat_string[15],10);
+    strncpy(&cat_string[4], event_type, 1);
+    strncpy(&cat_string[5], note, 1);
+    strncpy(&cat_string[6], is_flat ? flat : space, 1); // flat indicator
+    itoa(octave, &cat_string[7], 10);
+    strncpy(&cat_string[8], space, 1);
+    itoa(gate / 100, &cat_string[9], 10);
+    itoa((gate - (gate / 100 * 100)) / 10, &cat_string[10], 10);
+    itoa(gate - (gate / 10 * 10), &cat_string[11], 10);
+    strncpy(&cat_string[12], space, 1);
+    itoa(vel / 100, &cat_string[13], 10);
+    itoa((vel - (vel / 100 * 100)) / 10, &cat_string[14], 10);
+    itoa(vel - (vel / 10 * 10), &cat_string[15], 10);
 
     cat_string[GUI_MAX_STRING_LEN - 1] = '\0'; // asegurar terminación
 
-    gui_print(x,y,cat_string);
+    gui_print(x, y, cat_string);
 }
 
 void gui_post_param(const char *label, int32_t value) {
     // espacio suficiente para cualquier int32 (-2147483648 -> 11 chars + '\0')
-    char val_string[12];  
+    char val_string[12];
     itoa(value, val_string, 10);
 
     char cat_string[GUI_MAX_STRING_LEN];
@@ -258,7 +260,8 @@ void gui_post_param(const char *label, int32_t value) {
     cat_string[GUI_MAX_STRING_LEN - 1] = '\0'; // aseguramos terminación
 
     // concatenar valor si entra
-    strncat(cat_string, val_string, GUI_MAX_STRING_LEN - strlen(cat_string) - 1);
+    strncat(cat_string, val_string,
+            GUI_MAX_STRING_LEN - strlen(cat_string) - 1);
 
     // concatenar salto de línea si entra
     strncat(cat_string, "\n", GUI_MAX_STRING_LEN - strlen(cat_string) - 1);
@@ -266,8 +269,9 @@ void gui_post_param(const char *label, int32_t value) {
     gui_post(cat_string);
 }
 
-char* int_to_char(int32_t value) {
-    // buffer estático para almacenar el resultado (-2147483648 = 11 chars + '\0')
+char *int_to_char(int32_t value) {
+    // buffer estático para almacenar el resultado (-2147483648 = 11 chars +
+    // '\0')
     static char str_buf[12];
 
     // conversión usando itoa, base 10 (decimal)
@@ -276,8 +280,6 @@ char* int_to_char(int32_t value) {
     // devolver puntero al buffer resultante
     return str_buf;
 }
-
-
 
 void gui_draw_line(uint8_t x_start, uint8_t y_start, uint8_t x_end,
                    uint8_t y_end, bool colour) {
@@ -320,7 +322,7 @@ static t_status _init(void) {
         UG_DriverRegister(DRIVER_FILL_FRAME, ft_fill_frame);
 
         // Configure uGUI
-        //UG_FontSelect(FONT_arial_6X6);
+        // UG_FontSelect(FONT_arial_6X6);
         UG_FontSelect(FONT_6X8);
         // UG_ConsoleSetArea(4, 4, 123, 12);
         UG_ConsoleSetArea(4, 32, 123, 40);
@@ -328,8 +330,6 @@ static t_status _init(void) {
         UG_ConsoleSetBackcolor(C_BLACK);
         UG_ConsoleSetForecolor(C_WHITE);
         UG_FillScreen(C_BLACK);
-
-
 
         // gui_window_main_init();
         // gui_window_main_show();
@@ -400,10 +400,9 @@ static void _put_pixel(UG_S16 x, UG_S16 y, UG_COLOR c) {
 
     ft_put_pixel(x, y, !c);
 }
-void win_callback(UG_MESSAGE *msg)
-{
-    /* Handle window events here if needed */
-}
+
+void win_callback(UG_MESSAGE *msg) { /* Handle window events here if needed */ }
+
 /* GUI instance */
 UG_GUI gui;
 
@@ -413,22 +412,22 @@ UG_WINDOW window;
 /* Textbox */
 UG_TEXTBOX textbox;
 
-void window_init(void)
-{
- 
+void window_init(void) {
+
     /* Create window */
     UG_WindowCreate(&window, win_callback, 1, "NULL");
     UG_WindowSetTitleText(&window, "Demo");
 
     /* Smaller textbox to fit in 63px height */
     /*UG_TextboxCreate(&window, &textbox, 1,
-                     2, 12,      
-                     120, 30     
+                     2, 12,
+                     120, 30
     );*/
-    //UG_TextboxSetFont(&window, 1, &FONT_8X12);
-    //UG_TextboxSetText(&window, 1, "Hello uGUI");
+    // UG_TextboxSetFont(&window, 1, &FONT_8X12);
+    // UG_TextboxSetText(&window, 1, "Hello uGUI");
 
     /* Show window */
     UG_WindowShow(&window);
 }
+
 /*----- End of file --------------------------------------------------*/

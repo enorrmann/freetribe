@@ -69,10 +69,13 @@ t_status app_init(void) {
 
     gui_task();
     ft_print("tracker");
+    int idx =0;
+    int space = 8;
     //gui_post_label("buenas");
-    //gui_post_label_xy("1:00mC 1 0:43 10456", 0, 00);
-    //gui_post_label_xy("1:00mC 1 0:43 1044", 0, 10);
-    gui_post_label_xy("XX", 0, 20);
+    for (idx=0;idx<8;idx++){
+        gui_post_label_xy("1:00mC 1 0:43 10456", 0, idx*space);
+    }
+
 
     return SUCCESS;
 }
