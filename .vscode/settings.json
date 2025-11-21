@@ -23,6 +23,16 @@
         "stop_token": "c",
         "cstdlib": "c",
         "stdlib.h": "c",
-        "seq_event_pool.h": "c"
+        "seq_event_pool.h": "c",
+        "fix16_fract.h": "c",
+        "atomic": "cpp",
+        "random": "cpp",
+        "stdint-gcc.h": "c",
+        "userosc.h": "c",
+        "stdbool.h": "c",
+        "osc_api.h": "c",
+        "userprg.h": "c",
+        "soc_am1808.h": "c",
+        "gui_task.h": "c"
     }
 }
