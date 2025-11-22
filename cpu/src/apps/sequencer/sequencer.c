@@ -42,7 +42,8 @@ under the terms of the GNU Affero General Public License as published by
 
 static t_keyboard g_kbd;
 static t_scale g_scale;
-static uint8_t g_keyboard_mode_enabled, g_sequencer_mode_enabled,g_step_jump_mode_enabled;
+static uint8_t g_keyboard_mode_enabled, g_sequencer_mode_enabled,
+    g_step_jump_mode_enabled;
 static uint8_t g_last_input_note = 60;
 static uint8_t g_current_seq_page;
 static uint8_t g_current_editing_step;
@@ -63,19 +64,35 @@ void on_stop_callback(int beat_index);
 void on_record_toggle_callback(int recording_state);
 void on_changed_callback(int step_index);
 void on_clear_callback(int step_index);
-static char *int_to_char(int32_t value);
+
 void set_pad_n(int n, int val);
 void set_keyboard_mode(int);
 void set_sequencer_mode(int state);
 void on_page_callback(uint32_t index);
+void init_tracker_gui();
+void on_current_event_change_callback(Sequencer *seq, SeqEvent *evt);
 
-void on_clear_callback(int step_index){
+void on_current_event_change_callback(Sequencer *seq, SeqEvent *evt) {
+    if (evt->midi_params.note_on == 0)
+        return; // only show note ons
+    int lines_to_show = 8;
+    int i = 0;
+    SeqEvent *evtToShow = evt;
+    while (i < lines_to_show) {
+        if (evtToShow->midi_params.note_on) {
+            gui_post_event_at_line(seq, evtToShow, i);
+            i++;
+        }
+        evtToShow = evtToShow->next;
+    }
+}
+
+void on_clear_callback(int step_index) {
     int i;
     // turn off all lights
-    for (i=0;i<16;i++){
-        set_pad_n(i,0);
+    for (i = 0; i < 16; i++) {
+        set_pad_n(i, 0);
     }
-
 }
 
 void on_changed_callback(int step_index) {
@@ -107,18 +124,6 @@ void on_record_toggle_callback(int recording_state) {
     ft_set_led(LED_REC, 255 * recording_state); // turn on/off record LED
 }
 
-static char *int_to_char(int32_t value) {
-    // buffer estático para almacenar el resultado (-2147483648 = 11 chars +
-    // '\0')
-    static char str_buf[12];
-
-    // conversión usando itoa, base 10 (decimal)
-    itoa(value, str_buf, 10);
-
-    // devolver puntero al buffer resultante
-    return str_buf;
-}
-
 void set_pad_n(int n, int val) {
     int bright = val << 5; // times 32
     if (bright <= 0) {
@@ -148,8 +153,6 @@ void set_pad_n_blue(int n, int val) {
 
     ft_set_led(current_pad, bright);
 }
-
-
 
 void on_step_callback(uint32_t beat_index) {
 
@@ -221,13 +224,17 @@ t_status app_init(void) {
     my_sequencer.on_changed_callback = on_changed_callback;
     my_sequencer.on_page_callback = on_page_callback;
     my_sequencer.on_clear_callback = on_clear_callback;
+    my_sequencer.on_current_event_change_callback =
+        on_current_event_change_callback;
 
     g_current_seq_page = 0;
-
+    init_tracker_gui();
     ft_print("Sequencer\n\n\n");
 
     return SUCCESS;
 }
+
+void init_tracker_gui() { gui_task(); }
 
 /**
  * @brief   Run application.
@@ -235,7 +242,7 @@ t_status app_init(void) {
  * Test if 0.5 seconds have passed  since we started the delay.
  * If so, toggle an LED and restart delay.
  */
-void app_run(void) {}
+void app_run(void) { gui_task(); }
 
 /*----- Static function implementations ------------------------------*/
 
@@ -344,6 +351,7 @@ static void _note_on_callback(char chan, char note, char vel) {
     }
     event->midi_event_callback = ft_send_note_on;
     event->midi_params = mep;
+
     SEQ_add_event(&my_sequencer, event);
     // SEQ_insert_before_current(&my_sequencer, event); // buggy ?
 }
@@ -369,6 +377,7 @@ static void _note_off_callback(char chan, char note, char vel) {
     mep.data2 = vel;
     mep.note_on = false;
     SeqEvent *event = SEQ_POOL_get_event(&event_pool);
+
     // thru
     if (!event) {
         ft_print("No FREE event\n");
@@ -385,20 +394,16 @@ static void _note_off_callback(char chan, char note, char vel) {
 static void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
     if (g_step_jump_mode_enabled && state) {
         static int prev_editing_step = 0;
-        g_current_editing_step = pad + (16*g_current_seq_page);
-        if (g_current_editing_step==prev_editing_step){
+        g_current_editing_step = pad + (16 * g_current_seq_page);
+        if (g_current_editing_step == prev_editing_step) {
             return;
         }
-        /*ft_print("selected step");
-        ft_print(int_to_char(g_current_editing_step));
-        ft_print(LINE_BREAK);*/
-        set_pad_n_blue(g_current_editing_step,255);
-            set_pad_n_blue(prev_editing_step,0);
+        set_pad_n_blue(g_current_editing_step, 255);
+        set_pad_n_blue(prev_editing_step, 0);
 
         prev_editing_step = g_current_editing_step;
-        
-        return ;
 
+        return;
     }
     if (g_sequencer_mode_enabled && state) {
         MidiEventParams mep;
@@ -422,7 +427,7 @@ static void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
         event->midi_params = mep;
         event2->midi_event_callback = ft_send_note_off;
         event2->midi_params = mep2;
-        int step = pad + (16*g_current_seq_page);
+        int step = pad + (16 * g_current_seq_page);
         SEQ_insert_at_step(&my_sequencer, event, step);
         SEQ_insert_at_step(&my_sequencer, event2, step + 1);
     }

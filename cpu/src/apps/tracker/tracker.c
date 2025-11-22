@@ -32,9 +32,15 @@ under the terms of the GNU Affero General Public License as published by
 
 #include "freetribe.h"
 #include "gui_task.h"
+#include "panel_buttons.h"
 
-#define BUTTON_EXIT 0x0d
+#define C_BLACK                      0x00
+#define C_WHITE                      0xFF
+
+
 #define LINE_BREAK "\n"
+
+int g_pos_x,g_pos_y = 0;
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -73,8 +79,12 @@ t_status app_init(void) {
     int space = 8;
     //gui_post_label("buenas");
     for (idx=0;idx<8;idx++){
-        gui_post_label_xy("1:00mC 1 0:43 10456", 0, idx*space);
+    //    gui_post_label_xy("1:00mC 1 0:43 10456", 0, idx*space);
     }
+    //UG_FillFrame(10,10,0,0,C_WHITE);
+      //UG_DrawLine(0, g_pos_y, 10, g_pos_y, C_WHITE);
+    //UG_FillFrame(10,10,20,20,C_BLACK);
+    //UG_FillFrame(20,20,30,30,C_WHITE);
 
 
     return SUCCESS;
@@ -107,6 +117,23 @@ void _button_callback(uint8_t index, bool state) {
         if (state == 1) {
             ft_shutdown();
         }
+        break;
+    case BUTTON_BACK:
+        int y_prev;
+        if (state == 1) {
+            y_prev = g_pos_y;
+            g_pos_y--;
+        }
+        UG_DrawLine(0, y_prev, 120, y_prev, C_BLACK);
+        UG_DrawLine(0, g_pos_y, 120, g_pos_y, C_WHITE);
+        break;
+    case BUTTON_FORWARD:
+        if (state == 1) {
+            y_prev = g_pos_y;
+            g_pos_y++;
+        }
+        UG_DrawLine(0, y_prev, 120, y_prev, C_BLACK);
+        UG_DrawLine(0, g_pos_y, 120, g_pos_y, C_WHITE);
         break;
 
     default:

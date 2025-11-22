@@ -12,8 +12,13 @@
 #define MAX_STEPS 64
 #define STEPS_PER_PAGE 16
 
+typedef struct Sequencer Sequencer;
+typedef struct SeqEvent SeqEvent;
+typedef struct MidiEventParams MidiEventParams;
+
 typedef void (*t_midi_event_callback)(char chan, char data1, char data2);
 typedef void (*t_transport_event_callback)(int beat_index);
+    typedef void (*t_sequencer_event_callback)(Sequencer *seq, SeqEvent *evt);
 
 // --- Data structures ---
 typedef struct MidiEventParams {
@@ -36,7 +41,7 @@ typedef struct SeqEvent
 
 } SeqEvent;
 
-typedef struct
+typedef struct Sequencer
 {
     SeqEvent *head;             // First event in time order
     SeqEvent *current;          // Next event to check
@@ -49,6 +54,7 @@ typedef struct
     t_transport_event_callback  on_record_toggle_callback;
     t_transport_event_callback on_changed_callback;
     t_transport_event_callback on_clear_callback;
+    t_sequencer_event_callback on_current_event_change_callback;
     
     bool playing;
     bool recording;
