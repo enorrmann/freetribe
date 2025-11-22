@@ -211,7 +211,7 @@ void gui_post_event_at_line(const Sequencer *seq, const SeqEvent *evt, int line)
     int spacing = 8;
     int step =  evt->timestamp_tick / seq->step_resolution;
     char *colon = ":";
-    int tick_in_step = 23;
+    int tick_in_step = evt->timestamp_tick % seq->internal_resolution;
     char *event_type = "n";                      
     int note = evt->midi_params.data1 % 12;
     
