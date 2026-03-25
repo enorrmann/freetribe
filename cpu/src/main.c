@@ -71,14 +71,18 @@ void list_root(void) {
     FRESULT res;
     
     extern FATFS g_fatfs;
+    ft_printf("Mounting filesystem...\n");
     res = f_mount(&g_fatfs, "", 0);
+    ft_printf("f_mount result: %i\n", (int)res);
     if (FR_OK != res) {
         DEBUG_LOG("f_mount failed: %i", (int)res);
         return;
     }
 
     // Open root directory
+    ft_printf("Opening root directory...\n");
     res = f_opendir(&dir, "/");  
+        ft_printf("f_opendir result: %i\n", (int)res);
     if (res == FR_OK) {
         for (;;) {
             res = f_readdir(&dir, &fno);   // Read next item
@@ -169,7 +173,7 @@ int main(void) {
     }
 
 
-    // dev_sdcard_init();
+     dev_sdcard_init();
     // _print_test_block();
 
     list_root();

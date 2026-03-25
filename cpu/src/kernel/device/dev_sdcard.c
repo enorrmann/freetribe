@@ -46,7 +46,7 @@ under the terms of the GNU Affero General Public License as published by
 
 
 /*----- Macros -------------------------------------------------------*/
-
+#define DEBUG_SDDRIVER
 #ifdef DEBUG_SDDRIVER
 #   define DEBUG_LOG_SD(fmt, ...)  DEBUG_LOG(fmt, ##__VA_ARGS__)
 #else
