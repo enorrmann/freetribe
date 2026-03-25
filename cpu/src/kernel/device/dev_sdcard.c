@@ -193,69 +193,56 @@ t_sdcard_status dev_sdcard_read(uint32_t blk_nr, uint32_t blk_cnt, uint32_t* buf
     return SDCARD_OK;
 }
 
-t_sdcard_status dev_sdcard_write(uint32_t blk_nr, uint32_t blk_cnt, const uint32_t* buf) {
-    t_mmcsd_dat_state ds;
-    t_mmcsd_misc misc;
-    t_sdcard_status r;
-    int i, ii;
+t_sdcard_status dev_sdcard_write(uint32_t blk_nr, uint32_t blk_cnt, const uint32_t* buf)
+{
+    if (!buf || blk_cnt == 0) return SDCARD_ERROR;
 
+    const uint32_t total_words = (blk_cnt * MMCSD_BLOCK_SIZE) / sizeof(uint32_t);
+    uint32_t i = 0;
+
+    t_mmcsd_misc misc;
     misc.blkcnt = blk_cnt;
     misc.mflags = MMCSD_MISC_F_WRITE | MMCSD_MISC_F_FIFO_RST | MMCSD_MISC_F_FIFO_32B;
     mmcsd_cntl_misc(MMCSDCON, &misc);
 
-    int cmd_nr = CMD24R1_WRITE_BLOCK;
-    if (blk_cnt > 1) cmd_nr = CMD25R1_WRITE_MULTIPLE_BLOCK;
+    int cmd_nr = (blk_cnt > 1) ? CMD25R1_WRITE_MULTIPLE_BLOCK : CMD24R1_WRITE_BLOCK;
+    uint32_t arg = (sd_sm->is_hc) ? blk_nr : (blk_nr << MASK_OFFSET(MMCSD_BLOCK_SIZE));
 
-    for (i = 0; i < 32 / sizeof(uint32_t);) {
-        mmcsd_write(MMCSDCON, buf[i++]);
-    }
-
-    uint32_t arg = (sd_sm->is_hc) ? (blk_nr) : (blk_nr << MASK_OFFSET(MMCSD_BLOCK_SIZE));
-    r = _sdmmc_cmd(cmd_nr, arg);
+    t_sdcard_status r = _sdmmc_cmd(cmd_nr, arg);
     if (r != SDCARD_OK) return r;
 
-    while (i < blk_cnt * MMCSD_BLOCK_SIZE / sizeof(uint32_t)) {
-        if ((ds = mmcsd_wr_state(MMCSDCON)) == MMCSD_SD_OK) {
-            break;
-        }
-        if (ds == MMCSD_SD_TOUT) {
-            return SDCARD_NO_RESPONSE;
-        }
-        // DEBUG_LOG_SD("   *** ST1=0x%.8X ***\n", MMCSDCON->MMCST1);
-        // if (/* i == 0  || */ds == MMCSD_SD_SENT) {
-        // lost the DXRDY status bit in the mmcsd_wr_state() call within sdmmc_cmd()
-        if (i == 32 / sizeof(uint32_t) || ds == MMCSD_SD_SENT) {
-            for (ii = 0; ii < 32 / sizeof(uint32_t); ii++) {
-                mmcsd_write(MMCSDCON, buf[i++]);
+    t_mmcsd_dat_state ds;
+
+    while (i < total_words) {
+        ds = mmcsd_wr_state(MMCSDCON);
+
+        if (ds == MMCSD_SD_TOUT) return SDCARD_NO_RESPONSE;
+
+        if (ds == MMCSD_SD_SENT) {
+            for (int ii = 0; ii < (32 / sizeof(uint32_t)); ii++) {
+                if (i < total_words) {
+                    mmcsd_write(MMCSDCON, buf[i++]);
+                }
             }
         }
     }
 
-    /* DEBUG_LOG_SD("Wait write complete!\n");
-    for (ii = 0; ii < 8; ii++) {
-        mmcsd_write(MMCSDCON, 0x0UL);    // dummy writes
-    }
-    while ((ds = mmcsd_wr_state(MMCSDCON)) != MMCSD_SD_OK) {
-        DEBUG_LOG_SD("   *** ST1=0x%.8X ***\n", MMCSDCON->MMCST1);
-    } */
-
-    DEBUG_LOG_SD("SDMMC WRITE %d bytes\n", i * sizeof(uint32_t));
-
-    if (blk_cnt <= 1) {
-        goto done;
-    }
-
-    r = _sdmmc_cmd_noarg(CMD12R1b_STOP_TRANSMISSION);
-    if (r != SDCARD_OK) return r;
-
+    // Esperar fin real de transferencia
     do {
-        ds = mmcsd_busy_state(MMCSDCON);
-        //DEBUG_LOG_SD("   *** ST0=0x%.8X RSP=0x%.8X ***\n", MMCSDCON->MMCST0, MMCSDCON->MMCRSP[3]);
-    } while (ds == MMCSD_SD_BUSY);
+        ds = mmcsd_wr_state(MMCSDCON);
 
-done:
+        if (ds == MMCSD_SD_TOUT) return SDCARD_NO_RESPONSE;
+
+    } while (ds != MMCSD_SD_OK);
+
+    if (blk_cnt > 1) {
+        r = _sdmmc_cmd_noarg(CMD12R1b_STOP_TRANSMISSION);
+        if (r != SDCARD_OK) return r;
+
+        while (mmcsd_busy_state(MMCSDCON) == MMCSD_SD_BUSY);
+    }
+
     sd_sm->ci_stat = SDP_TRAN;
-
     return SDCARD_OK;
 }
 
