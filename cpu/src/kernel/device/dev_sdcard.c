@@ -47,7 +47,7 @@ under the terms of the GNU Affero General Public License as published by
 
 /*----- Macros -------------------------------------------------------*/
 // for some reason if I dont define this, app will crash
-#define DEBUG_SDDRIVER
+//#define DEBUG_SDDRIVER
 #ifdef DEBUG_SDDRIVER
 #   define DEBUG_LOG_SD(fmt, ...)  DEBUG_LOG(fmt, ##__VA_ARGS__)
 #else
@@ -136,46 +136,53 @@ const char* dev_sdcard_err_string(int rt) {
     return sdmmc_estr[-rt].estr;
 }
 
-t_sdcard_status dev_sdcard_read(uint32_t blk_nr, uint32_t blk_cnt, uint32_t* buf) {
-    
+
+t_sdcard_status dev_sdcard_read(uint32_t blk_nr, uint32_t blk_cnt, uint32_t* buf)
+{
+    if (!buf || blk_cnt == 0) return SDCARD_ERROR;
+
+    const uint32_t total_words = (blk_cnt * MMCSD_BLOCK_SIZE) / sizeof(uint32_t);
+    uint32_t i = 0;
+
     t_mmcsd_misc misc;
     misc.blkcnt = blk_cnt;
     misc.mflags = MMCSD_MISC_F_READ | MMCSD_MISC_F_FIFO_RST | MMCSD_MISC_F_FIFO_32B;
     mmcsd_cntl_misc(MMCSDCON, &misc);
 
-    int cmd_nr = CMD17R1_READ_SINGLE_BLOCK;
-    if (blk_cnt > 1) cmd_nr = CMD18R1_READ_MULTIPLE_BLOCK;
+    int cmd_nr = (blk_cnt > 1) ? CMD18R1_READ_MULTIPLE_BLOCK : CMD17R1_READ_SINGLE_BLOCK;
+    uint32_t arg = (sd_sm->is_hc) ? blk_nr : (blk_nr << MASK_OFFSET(MMCSD_BLOCK_SIZE));
 
-    uint32_t arg = (sd_sm->is_hc) ? (blk_nr) : (blk_nr << MASK_OFFSET(MMCSD_BLOCK_SIZE));
     t_sdcard_status r = _sdmmc_cmd(cmd_nr, arg);
     if (r != SDCARD_OK) return r;
 
     t_mmcsd_dat_state ds;
-    int i = 0;
-    while (i < blk_cnt * MMCSD_BLOCK_SIZE / sizeof(uint32_t)) {
-        if ((ds = mmcsd_rd_state(MMCSDCON)) == MMCSD_SD_OK) {
-            break;
-        }
-        if (ds == MMCSD_SD_TOUT) {
-            return SDCARD_NO_RESPONSE;
-        }
-        if (ds == MMCSD_SD_CRC_ERR) {
-            return SDCARD_CRC_ERROR;
-        }
-        if (i == 0 || ds == MMCSD_SD_RECVED) {
-            int ii = 0;
 
-            for (ii = 0; ii < 32 / sizeof(uint32_t); ii++) {
-                buf[i++] = mmcsd_read(MMCSDCON);
+    while (i < total_words) {
+        ds = mmcsd_rd_state(MMCSDCON);
+
+        if (ds == MMCSD_SD_TOUT) return SDCARD_NO_RESPONSE;
+        if (ds == MMCSD_SD_CRC_ERR) return SDCARD_CRC_ERROR;
+
+        if (ds == MMCSD_SD_RECVED) {
+            // Read one FIFO chunk (32 bytes)
+            for (int ii = 0; ii < (32 / sizeof(uint32_t)); ii++) {
+                if (i < total_words) {
+                    buf[i++] = mmcsd_read(MMCSDCON);
+                }
             }
         }
-        // DEBUG_LOG_SD("   *** ST1=0x%.8X ***\n", MMCSDCON->MMCST1);
     }
 
-    while ((ds = mmcsd_rd_state(MMCSDCON)) != MMCSD_SD_OK);
+    // Esperar fin real de transferencia
+    do {
+        ds = mmcsd_rd_state(MMCSDCON);
 
-    DEBUG_LOG_SD("SDMMC READ %d bytes\n", i * sizeof(uint32_t));
+        if (ds == MMCSD_SD_TOUT) return SDCARD_NO_RESPONSE;
+        if (ds == MMCSD_SD_CRC_ERR) return SDCARD_CRC_ERROR;
 
+    } while (ds != MMCSD_SD_OK);
+
+    // STOP para multi-block
     if (blk_cnt > 1) {
         r = _sdmmc_cmd_noarg(CMD12R1b_STOP_TRANSMISSION);
         if (r != SDCARD_OK) return r;
