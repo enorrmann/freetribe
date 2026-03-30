@@ -56,7 +56,7 @@ under the terms of the GNU Affero General Public License as published by
 #include "module_interface.h"
 
 /*----- Macros -------------------------------------------------------*/
-
+#define GPIO_POWER_BUTTON 128
 #define CONTROL_RATE (1000)
 #define MEMPOOL_SIZE (0x1000)
 
@@ -176,7 +176,15 @@ t_status app_init(void) {
 /**
  * @brief   Run application.
  */
-void app_run(void) { gui_task(); }
+void app_run(void) {
+     gui_task();
+       if (per_gpio_get_indexed(GPIO_POWER_BUTTON) == 0) {
+
+        ft_shutdown();
+
+        // Should never reach here.
+    }
+     }
 
 /*----- Static function implementations ------------------------------*/
 
