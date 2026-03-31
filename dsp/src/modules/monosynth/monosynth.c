@@ -43,12 +43,15 @@ under the terms of the GNU Affero General Public License as published by
 #include "utils.h"
 
 #include "aleph.h"
+#include "simple_rev.h"
+
 
 #include "aleph_monovoice.h"
 
+
 /*----- Macros -------------------------------------------------------*/
 
-#define MEMPOOL_SIZE (0x2000)
+#define MEMPOOL_SIZE (0x1000) // 16 KB
 
 /// TODO: Struct for parameter type.
 ///         scaler,
@@ -124,8 +127,11 @@ typedef struct {
 __attribute__((section(".l1.data.a")))
 __attribute__((aligned(32))) static char g_mempool[MEMPOOL_SIZE];
 
+
 static t_Aleph g_aleph;
 static t_module g_module;
+
+
 
 /*----- Extern variable definitions ----------------------------------*/
 
@@ -150,6 +156,7 @@ void module_init(void) {
     module_set_param(PARAM_TUNE, FIX16_ONE);
     module_set_param(PARAM_CUTOFF, 0x326f6abb);
     module_set_param(PARAM_RES, FR32_MAX);
+
 }
 
 /**
@@ -166,6 +173,7 @@ void module_process(fract32 *in, fract32 *out) {
 
     // Scale amplitude by level.
     output = mult_fr1x32x32(output, g_module.amp_level);
+    output = apply_complex_reverb(output);
 
     // Set output.
     out[0] = output;
