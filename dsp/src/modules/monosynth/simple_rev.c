@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "aleph.h"
 
 #define SDRAM_ADDRESS 0x00000000
 #define NUM_LINES 4
@@ -26,7 +27,7 @@ int32_t apply_simple_reverb(int32_t input, int line_number) {
 
     int32_t delayed = reverb_buf[offset + reverb_pos];
 
-    int32_t feedback = delayed >> 1;
+    int32_t feedback = delayed *2/3; // Feedback con ganancia de 0.75 (ajustable)
 
     reverb_buf[offset + reverb_pos] = input + feedback;
 
@@ -39,18 +40,18 @@ int32_t apply_simple_reverb(int32_t input, int line_number) {
     line_n_reverb_pos[line_number] = reverb_pos;
 
     //return (input >> 1) + (delayed >> 1);
-    return delayed;
+    return delayed>>2;
 }
 int32_t apply_complex_reverb(int32_t input)
 {
     int64_t acc = input; // acumulador para evitar overflow
 int line_number;
     for (line_number = 0; line_number < NUM_LINES; line_number++) {
-        acc += apply_simple_reverb(input, line_number);
+        acc = add_fr1x32(acc,apply_simple_reverb(input, line_number));
     }
 
     // normalizar (1 dry + 4 wet)
-    acc /= (NUM_LINES);
+//    acc /= (NUM_LINES);
 
     return (int32_t)acc;
 }
