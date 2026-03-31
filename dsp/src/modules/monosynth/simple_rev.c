@@ -5,7 +5,7 @@
 
 int32_t *reverb_buf = (int32_t *)SDRAM_ADDRESS;
 
-static int line_n_reverb_pos[] = {0, 0, 0, 0}; // Separate positions for each delay line
+static int line_n_reverb_pos[] = {0, 0, 0, 0, 0, 0, 0, 0}; // Separate positions for each delay line
 static int line_n_sample_length[] = {
     12011,  // 250 ms
     16807,  // 350 ms
@@ -38,7 +38,8 @@ int32_t apply_simple_reverb(int32_t input, int line_number) {
     // guardar SIEMPRE
     line_n_reverb_pos[line_number] = reverb_pos;
 
-    return (input >> 1) + (delayed >> 1);
+    //return (input >> 1) + (delayed >> 1);
+    return delayed;
 }
 int32_t apply_complex_reverb(int32_t input)
 {
@@ -49,7 +50,7 @@ int line_number;
     }
 
     // normalizar (1 dry + 4 wet)
-    acc /= 5;
+    acc /= (NUM_LINES);
 
     return (int32_t)acc;
 }
