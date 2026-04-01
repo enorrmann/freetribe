@@ -82,24 +82,7 @@ void list_root(void) {
         DEBUG_LOG("Failed to open root directory (%d)", res);
     }
 
-    // FIL f;
-    // UINT bytes_written;
-    // res = f_open(&f, "/test.txt", FA_CREATE_ALWAYS | FA_WRITE);
-    // if (FR_OK != res) {
-    //     DEBUG_LOG("f_open result: %i", res);
-    //     return;
-    // }
-    // res = f_write(&f, "Hello World!", 12, &bytes_written);
-    // if (FR_OK != res) {
-    //     DEBUG_LOG("f_write result: %i", res);
-    //     return;
-    // }
-    // DEBUG_LOG("bytes written: %u", bytes_written);
-    // res = f_close(&f);
-    // if (FR_OK != res) {
-    //     DEBUG_LOG("f_close result: %i", res);
-    //     return;
-    // }
+
 }
 
 void read_file_contents(const char *filename) {
@@ -137,7 +120,7 @@ void read_file_contents(const char *filename) {
         DEBUG_LOG("Audio format: %u", info.audio_format);
         f_lseek(&file, info.data_offset); // Seek to start of sample data
     }
-    return;
+    
 
     // Read and print file contents
     DEBUG_LOG("File contents:");
@@ -151,16 +134,22 @@ void read_file_contents(const char *filename) {
         }
 
         // Print each byte/character
-        for (UINT i = 0; i < bytes_read; i++) {
-            // DEBUG_LOG("%c", buffer[i]);
-            int32_t value = (int32_t)buffer[i] | ((int32_t)buffer[i + 1] << 8) |
-                            ((int32_t)buffer[i + 2] << 16) |
-                            ((int32_t)buffer[i + 3] << 24);
+static uint8_t temp[4];
+static int temp_index = 0;
 
-            ft_set_module_param(
-                0, 0, value); // Send byte to module parameter for testing
-        }
-        // DEBUG_LOG("%s", buffer);
+for (UINT i = 0; i < bytes_read; i++) {
+    temp[temp_index++] = buffer[i];
+
+    if (temp_index == 4) {
+        int32_t value =  (int32_t)temp[0] |
+                        ((int32_t)temp[1] << 8) |
+                        ((int32_t)temp[2] << 16) |
+                        ((int32_t)temp[3] << 24);
+
+        ft_set_module_param(0, 0, value);
+        temp_index = 0;
+    }
+}        // DEBUG_LOG("%s", buffer);
 
         if (bytes_read < buffer_size) {
             break; // End of file
@@ -174,46 +163,7 @@ void read_file_contents(const char *filename) {
     }
 }
 
-// static uint8_t s_buf[512];
 
-// static void _print_test_block() {
-
-//     uint32_t blk_nr = 8192;
-//     uint32_t blk_cnt = 1;
-
-//     t_sdcard_status st = dev_sdcard_read(blk_nr, blk_cnt, (uint32_t*)s_buf);
-//     if (SDCARD_OK != st) {
-//         DEBUG_LOG("dev_sdcard_read error: %i", (int)st);
-//         return;
-//     }
-
-//     for (int i = 0; i < 512/16; i++) {
-//         int o = 16*i;
-//         DEBUG_LOG("buf = %02X %02X %02X %02X %02X %02X %02X %02X  %02X %02X
-//         %02X %02X %02X %02X %02X %02X",
-//             (unsigned int)s_buf[o+0],
-//             (unsigned int)s_buf[o+1],
-//             (unsigned int)s_buf[o+2],
-//             (unsigned int)s_buf[o+3],
-
-//             (unsigned int)s_buf[o+4],
-//             (unsigned int)s_buf[o+5],
-//             (unsigned int)s_buf[o+6],
-//             (unsigned int)s_buf[o+7],
-
-//             (unsigned int)s_buf[o+8 ],
-//             (unsigned int)s_buf[o+9 ],
-//             (unsigned int)s_buf[o+10],
-//             (unsigned int)s_buf[o+11],
-
-//             (unsigned int)s_buf[o+12],
-//             (unsigned int)s_buf[o+13],
-//             (unsigned int)s_buf[o+14],
-//             (unsigned int)s_buf[o+15]
-//         );
-//     }
-
-// }
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -247,8 +197,8 @@ t_status app_init(void) {
     // _print_test_block();
 
     // list_root();
-    read_file_contents("/clap.wav");
-    //clap_i32t.wav
+    //read_file_contents("/clap.wav");
+    read_file_contents("/clap_i32t.wav");
     //clap_f32.wav float
 
     status = SUCCESS;
