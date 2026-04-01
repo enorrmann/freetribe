@@ -105,7 +105,7 @@ void read_file_contents(const char* filename) {
     FRESULT res;
     FIL file;
     UINT bytes_read = 0;
-    const int buffer_size = 16;
+    const int buffer_size = 32;
     char buffer[buffer_size];
     
     extern FATFS g_fatfs;
@@ -129,9 +129,8 @@ void read_file_contents(const char* filename) {
     ft_printf("File contents:\n");
     //f_lseek(&file, 3); // seek to offset 3 for testing
     while (1) {
-        ft_printf("f_read\n");
         res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
-        DEBUG_LOG("bytes_read: %i", (int)bytes_read);
+        DEBUG_LOG("f_read bytes_read: %i", (int)bytes_read);
         if (res != FR_OK) {
             DEBUG_LOG("Error reading file: %i", (int)res);
             break;
@@ -139,9 +138,8 @@ void read_file_contents(const char* filename) {
         
         
         // Print each byte/character
-        for (UINT i = 0; i < bytes_read; i++) {
-            ft_printf("%c", buffer[i]);
-        }
+        for (UINT i = 0; i < bytes_read; i++) {            ft_printf("%c", buffer[i]);        }
+        //ft_printf("%s", buffer);
 
         if (bytes_read < buffer_size) {
             break;  // End of file
@@ -149,8 +147,6 @@ void read_file_contents(const char* filename) {
 
 
     }
-    
-    ft_printf("\n");
     
     // Close file
     res = f_close(&file);
