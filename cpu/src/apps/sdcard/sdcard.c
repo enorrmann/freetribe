@@ -43,37 +43,38 @@ under the terms of the GNU Affero General Public License as published by
 #include "ff.h"
 #include "macros.h"
 // END FF
+#include "wav_reader.h"
 
-
-
-DIR dir;        // Directory object
-FILINFO fno;    // File information structure
+DIR dir;     // Directory object
+FILINFO fno; // File information structure
 
 void list_root(void) {
     FRESULT res;
-    
+
     extern FATFS g_fatfs;
-    ft_printf("Mounting filesystem...\n");
+    DEBUG_LOG("Mounting filesystem...");
     res = f_mount(&g_fatfs, "", 0);
-    ft_printf("f_mount result: %i\n", (int)res);
+    DEBUG_LOG("f_mount result: %i", (int)res);
     if (FR_OK != res) {
         DEBUG_LOG("f_mount failed: %i", (int)res);
         return;
     }
 
     // Open root directory
-    ft_printf("Opening root directory...\n");
-    res = f_opendir(&dir, "/");  
-        ft_printf("f_opendir result: %i\n", (int)res);
+    DEBUG_LOG("Opening root directory...");
+    res = f_opendir(&dir, "/");
+    DEBUG_LOG("f_opendir result: %i", (int)res);
     if (res == FR_OK) {
         for (;;) {
-            res = f_readdir(&dir, &fno);   // Read next item
-            if (res != FR_OK || fno.fname[0] == 0) break;  // Exit on error or end of dir
+            res = f_readdir(&dir, &fno); // Read next item
+            if (res != FR_OK || fno.fname[0] == 0)
+                break; // Exit on error or end of dir
 
             if (fno.fattrib & AM_DIR) {
                 DEBUG_LOG("[DIR]  %s", fno.fname);
             } else {
-                DEBUG_LOG("       %s  (%lu bytes)", fno.fname, (unsigned long)fno.fsize);
+                DEBUG_LOG("       %s  (%lu bytes)", fno.fname,
+                          (unsigned long)fno.fsize);
             }
         }
         f_closedir(&dir);
@@ -101,16 +102,19 @@ void list_root(void) {
     // }
 }
 
-void read_file_contents(const char* filename) {
+void read_file_contents(const char *filename) {
+
+    wav_info_t info;
+
     FRESULT res;
     FIL file;
     UINT bytes_read = 0;
-    const int buffer_size = 32;
+    const int buffer_size = 4096;
     char buffer[buffer_size];
-    
+
     extern FATFS g_fatfs;
-    
-    ft_printf("Mounting filesystem...\n");
+
+    DEBUG_LOG("Mounting filesystem...");
     res = f_mount(&g_fatfs, "", 0);
     if (FR_OK != res) {
         DEBUG_LOG("f_mount failed: %i", (int)res);
@@ -118,16 +122,26 @@ void read_file_contents(const char* filename) {
     }
 
     // Open file for reading
-    ft_printf("Opening file: %s\n", filename);
+    DEBUG_LOG("Opening file: %s", filename);
     res = f_open(&file, filename, FA_READ);
     if (res != FR_OK) {
         DEBUG_LOG("Failed to open file: %i", (int)res);
         return;
     }
+    if (wav_read_info(&file, &info) == FR_OK) {
+        DEBUG_LOG("SR: %lu", info.sample_rate);
+        DEBUG_LOG("Bits: %u", info.bits_per_sample);
+        DEBUG_LOG("Ch: %u", info.num_channels);
+        DEBUG_LOG("Data offset: %lu", info.data_offset);
+        DEBUG_LOG("Data size: %lu", info.data_size);
+        DEBUG_LOG("Audio format: %u", info.audio_format);
+        f_lseek(&file, info.data_offset); // Seek to start of sample data
+    }
+    return;
 
     // Read and print file contents
-    ft_printf("File contents:\n");
-    //f_lseek(&file, 3); // seek to offset 3 for testing
+    DEBUG_LOG("File contents:");
+    // f_lseek(&file, 3); // seek to offset 3 for testing
     while (1) {
         res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
         DEBUG_LOG("f_read bytes_read: %i", (int)bytes_read);
@@ -135,26 +149,30 @@ void read_file_contents(const char* filename) {
             DEBUG_LOG("Error reading file: %i", (int)res);
             break;
         }
-        
-        
+
         // Print each byte/character
-        for (UINT i = 0; i < bytes_read; i++) {            ft_printf("%c", buffer[i]);        }
-        //ft_printf("%s", buffer);
+        for (UINT i = 0; i < bytes_read; i++) {
+            // DEBUG_LOG("%c", buffer[i]);
+            int32_t value = (int32_t)buffer[i] | ((int32_t)buffer[i + 1] << 8) |
+                            ((int32_t)buffer[i + 2] << 16) |
+                            ((int32_t)buffer[i + 3] << 24);
+
+            ft_set_module_param(
+                0, 0, value); // Send byte to module parameter for testing
+        }
+        // DEBUG_LOG("%s", buffer);
 
         if (bytes_read < buffer_size) {
-            break;  // End of file
+            break; // End of file
         }
-
-
     }
-    
+
     // Close file
     res = f_close(&file);
     if (res != FR_OK) {
         DEBUG_LOG("Error closing file: %i", (int)res);
     }
 }
-
 
 // static uint8_t s_buf[512];
 
@@ -171,22 +189,23 @@ void read_file_contents(const char* filename) {
 
 //     for (int i = 0; i < 512/16; i++) {
 //         int o = 16*i;
-//         DEBUG_LOG("buf = %02X %02X %02X %02X %02X %02X %02X %02X  %02X %02X %02X %02X %02X %02X %02X %02X",
+//         DEBUG_LOG("buf = %02X %02X %02X %02X %02X %02X %02X %02X  %02X %02X
+//         %02X %02X %02X %02X %02X %02X",
 //             (unsigned int)s_buf[o+0],
 //             (unsigned int)s_buf[o+1],
 //             (unsigned int)s_buf[o+2],
 //             (unsigned int)s_buf[o+3],
-            
+
 //             (unsigned int)s_buf[o+4],
 //             (unsigned int)s_buf[o+5],
 //             (unsigned int)s_buf[o+6],
 //             (unsigned int)s_buf[o+7],
-            
+
 //             (unsigned int)s_buf[o+8 ],
 //             (unsigned int)s_buf[o+9 ],
 //             (unsigned int)s_buf[o+10],
 //             (unsigned int)s_buf[o+11],
-            
+
 //             (unsigned int)s_buf[o+12],
 //             (unsigned int)s_buf[o+13],
 //             (unsigned int)s_buf[o+14],
@@ -195,7 +214,6 @@ void read_file_contents(const char* filename) {
 //     }
 
 // }
-
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -225,12 +243,14 @@ t_status app_init(void) {
     t_status status = ERROR;
 
     // Nothing to do here.
-     dev_sdcard_init();
+    dev_sdcard_init();
     // _print_test_block();
 
-    //list_root();
-    read_file_contents("/test.txt");
-    
+    // list_root();
+    read_file_contents("/clap.wav");
+    //clap_i32t.wav
+    //clap_f32.wav float
+
     status = SUCCESS;
     return status;
 }
