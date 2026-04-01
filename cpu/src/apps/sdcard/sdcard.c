@@ -101,6 +101,57 @@ void list_root(void) {
     // }
 }
 
+void read_file_contents(const char* filename) {
+    FRESULT res;
+    FIL file;
+    UINT bytes_read;
+    char buffer[256];
+    
+    extern FATFS g_fatfs;
+    
+    ft_printf("Mounting filesystem...\n");
+    res = f_mount(&g_fatfs, "", 0);
+    if (FR_OK != res) {
+        DEBUG_LOG("f_mount failed: %i", (int)res);
+        return;
+    }
+
+    // Open file for reading
+    ft_printf("Opening file: %s\n", filename);
+    res = f_open(&file, filename, FA_READ);
+    if (res != FR_OK) {
+        DEBUG_LOG("Failed to open file: %i", (int)res);
+        return;
+    }
+
+    // Read and print file contents
+    ft_printf("File contents:\n");
+    while (1) {
+        res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
+        if (res != FR_OK) {
+            DEBUG_LOG("Error reading file: %i", (int)res);
+            break;
+        }
+        
+        if (bytes_read == 0) {
+            break;  // End of file
+        }
+        
+        // Print each byte/character
+        for (UINT i = 0; i < bytes_read; i++) {
+            ft_printf("%c", buffer[i]);
+        }
+    }
+    
+    ft_printf("\n");
+    
+    // Close file
+    res = f_close(&file);
+    if (res != FR_OK) {
+        DEBUG_LOG("Error closing file: %i", (int)res);
+    }
+}
+
 
 // static uint8_t s_buf[512];
 
@@ -174,7 +225,9 @@ t_status app_init(void) {
      dev_sdcard_init();
     // _print_test_block();
 
-    list_root();
+    //list_root();
+    read_file_contents("/test.txt");
+    
     status = SUCCESS;
     return status;
 }
