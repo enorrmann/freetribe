@@ -131,6 +131,7 @@ void read_file_contents(const char *filename) {
     DEBUG_LOG("frame_size %i", (int)frame_size);
 
     while (1) {
+        // buffer is overwritten each loop
         res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
         DEBUG_LOG("f_read bytes_read: %i", (int)bytes_read);
         int total_samples_per_channel = bytes_read / frame_size;
