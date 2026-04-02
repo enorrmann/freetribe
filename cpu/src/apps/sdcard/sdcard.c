@@ -124,19 +124,21 @@ void read_file_contents(const char *filename) {
         f_lseek(&file, info.data_offset); // Seek to start of sample data
     }
 
-    // Read and print file contents
-    ft_printf("File contents:");
-    // f_lseek(&file, 3); // seek to offset 3 for testing
-        int bytes_per_sample = info.bits_per_sample  >> 3 ; // divided by 8; // 4 para int32/float32
+        // Read and print file contents
+        ft_printf("File contents:");
+    
+        int bytes_per_sample = info.bits_per_sample  / 8; // 4 para int32/float32
         int frame_size = bytes_per_sample * info.num_channels; // 4=mono, 8=stereo
-    DEBUG_LOG("bytes_per_sample %i", (int)bytes_per_sample);
-    DEBUG_LOG("frame_size %i", (int)frame_size);
+        int total_samples_per_channel = bytes_read / frame_size;
+
+        DEBUG_LOG("bytes_per_sample %i", (int)bytes_per_sample);
+        DEBUG_LOG("frame_size %i", (int)frame_size);
+        DEBUG_LOG("total_samples_per_channel: %i", (int)total_samples_per_channel);
 
     while (1) {
         res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
         DEBUG_LOG("f_read bytes_read: %i", (int)bytes_read);
-        int total_samples = bytes_read / frame_size;
-        DEBUG_LOG("total_samples: %i", (int)total_samples);
+       
         if (res != FR_OK) {
             DEBUG_LOG("Error reading file: %i", (int)res);
             break;
@@ -145,7 +147,7 @@ void read_file_contents(const char *filename) {
         ft_printf("sending parameters...");
 
         int i;
-        for (i = 0; i  < total_samples; i ++) {
+        for (i = 0; i  < total_samples_per_channel; i ++) {
 
             int32_t value = pointer_to_int32[i*info.num_channels]; // Take first channel for simplicity
 
