@@ -141,7 +141,7 @@ t_sdcard_status dev_sdcard_read(uint32_t blk_nr, uint32_t blk_cnt, uint32_t* buf
 {
     if (!buf || blk_cnt == 0) return SDCARD_ERROR;
 
-    const uint32_t total_words = (blk_cnt * MMCSD_BLOCK_SIZE) / sizeof(uint32_t);
+    const uint32_t total_words = (blk_cnt * MMCSD_BLOCK_SIZE) >> 2;
     uint32_t i = 0;
 
     t_mmcsd_misc misc;
@@ -155,34 +155,46 @@ t_sdcard_status dev_sdcard_read(uint32_t blk_nr, uint32_t blk_cnt, uint32_t* buf
     t_sdcard_status r = _sdmmc_cmd(cmd_nr, arg);
     if (r != SDCARD_OK) return r;
 
-    t_mmcsd_dat_state ds;
+    volatile uint32_t *fifo = &MMCSDCON->MMCDRR;
+    volatile uint32_t *stat = &MMCSDCON->MMCST0;
 
-    while (i < total_words) {
-        ds = mmcsd_rd_state(MMCSDCON);
+    while (i < total_words)
+    {
+        // polling directo sin función
+        uint32_t s;
+        do {
+            s = *stat;
 
-        if (ds == MMCSD_SD_TOUT) return SDCARD_NO_RESPONSE;
-        if (ds == MMCSD_SD_CRC_ERR) return SDCARD_CRC_ERROR;
+            if (s & MMCST0_CRCRD_MASK) return SDCARD_CRC_ERROR;
+            if (s & MMCST0_TOUTRD_MASK) return SDCARD_NO_RESPONSE;
 
-        if (ds == MMCSD_SD_RECVED) {
-            // Read one FIFO chunk (32 bytes)
-            for (int ii = 0; ii < (32 / sizeof(uint32_t)); ii++) {
-                if (i < total_words) {
-                    buf[i++] = mmcsd_read(MMCSDCON);
-                }
-            }
-        }
+        } while (!(s & MMCST0_DRRDY_MASK));
+
+        uint32_t *p = &buf[i];
+
+        // 32 bytes exactos (FIFO chunk)
+        p[0] = fifo[0];
+        p[1] = fifo[0];
+        p[2] = fifo[0];
+        p[3] = fifo[0];
+        p[4] = fifo[0];
+        p[5] = fifo[0];
+        p[6] = fifo[0];
+        p[7] = fifo[0];
+
+        i += 8;
     }
 
-    // Esperar fin real de transferencia
+    // esperar fin real
+    uint32_t s;
     do {
-        ds = mmcsd_rd_state(MMCSDCON);
+        s = *stat;
 
-        if (ds == MMCSD_SD_TOUT) return SDCARD_NO_RESPONSE;
-        if (ds == MMCSD_SD_CRC_ERR) return SDCARD_CRC_ERROR;
+        if (s & MMCST0_CRCRD_MASK) return SDCARD_CRC_ERROR;
+        if (s & MMCST0_TOUTRD_MASK) return SDCARD_NO_RESPONSE;
 
-    } while (ds != MMCSD_SD_OK);
+    } while (!(s & MMCST0_DATDNE_MASK));
 
-    // STOP para multi-block
     if (blk_cnt > 1) {
         r = _sdmmc_cmd_noarg(CMD12R1b_STOP_TRANSMISSION);
         if (r != SDCARD_OK) return r;

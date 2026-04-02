@@ -92,8 +92,10 @@ void read_file_contents(const char *filename) {
     FRESULT res;
     FIL file;
     UINT bytes_read = 0;
-    const int buffer_size = 4096;
-    char buffer[buffer_size];
+    #define BUFFER_SIZE (2048*1024) // 2MB buffer
+
+    __attribute__((aligned(512)))
+    uint8_t buffer[BUFFER_SIZE]; //Importante char  puede quedar en cualquier alineación uint8_t  aligned(512)  garantizado correcto
 
     extern FATFS g_fatfs;
 
@@ -123,7 +125,7 @@ void read_file_contents(const char *filename) {
     
 
     // Read and print file contents
-    DEBUG_LOG("File contents:");
+    ft_printf("File contents:");
     // f_lseek(&file, 3); // seek to offset 3 for testing
     while (1) {
         res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
@@ -137,6 +139,7 @@ void read_file_contents(const char *filename) {
 static uint8_t temp[4];
 static int temp_index = 0;
 
+ft_printf("sending parameters...");
 for (UINT i = 0; i < bytes_read; i++) {
     temp[temp_index++] = buffer[i];
 
@@ -149,9 +152,11 @@ for (UINT i = 0; i < bytes_read; i++) {
         ft_set_module_param(0, 0, value);
         temp_index = 0;
     }
-}        // DEBUG_LOG("%s", buffer);
+}    
+ft_printf("params sent");
+// DEBUG_LOG("%s", buffer);
 
-        if (bytes_read < buffer_size) {
+        if (bytes_read < BUFFER_SIZE) {
             break; // End of file
         }
     }
@@ -198,7 +203,8 @@ t_status app_init(void) {
 
     // list_root();
     //read_file_contents("/clap.wav");
-    read_file_contents("/clap_i32t.wav");
+    //read_file_contents("/clap_i32t.wav");
+    read_file_contents("/brown.wav");
     //clap_f32.wav float
 
     status = SUCCESS;
