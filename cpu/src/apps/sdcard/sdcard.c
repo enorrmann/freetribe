@@ -96,6 +96,7 @@ void read_file_contents(const char *filename) {
         buffer[BUFFER_SIZE]; // Importante char  puede quedar en cualquier
                              // alineación uint8_t  aligned(512)  garantizado
                              // correcto
+    int32_t *pointer_to_int32 = (int32_t *)buffer;
 
     extern FATFS g_fatfs;
 
@@ -126,7 +127,7 @@ void read_file_contents(const char *filename) {
     // Read and print file contents
     ft_printf("File contents:");
     // f_lseek(&file, 3); // seek to offset 3 for testing
-        int bytes_per_sample = info.bits_per_sample / 8; // 4 para int32/float32
+        int bytes_per_sample = info.bits_per_sample  >> 3 ; // divided by 8; // 4 para int32/float32
         int frame_size = bytes_per_sample * info.num_channels; // 4=mono, 8=stereo
     DEBUG_LOG("bytes_per_sample %i", (int)bytes_per_sample);
     DEBUG_LOG("frame_size %i", (int)frame_size);
@@ -134,26 +135,19 @@ void read_file_contents(const char *filename) {
     while (1) {
         res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
         DEBUG_LOG("f_read bytes_read: %i", (int)bytes_read);
-        DEBUG_LOG("samples: %i", (int)bytes_read / 2);
+        int total_samples = bytes_read / frame_size;
+        DEBUG_LOG("total_samples: %i", (int)total_samples);
         if (res != FR_OK) {
             DEBUG_LOG("Error reading file: %i", (int)res);
             break;
         }
 
-        // Print each byte/character
-        static uint8_t temp[4];
-        static int temp_index = 0;
-
         ft_printf("sending parameters...");
 
-        UINT i;
+        int i;
+        for (i = 0; i  < total_samples; i ++) {
 
-        for (i = 0; i + bytes_per_sample <= bytes_read; i += frame_size) {
-
-            // tomar solo primer canal (LEFT)
-            int32_t value = (int32_t)buffer[i] | ((int32_t)buffer[i + 1] << 8) |
-                            ((int32_t)buffer[i + 2] << 16) |
-                            ((int32_t)buffer[i + 3] << 24);
+            int32_t value = pointer_to_int32[i*info.num_channels]; // Take first channel for simplicity
 
             if (info.audio_format == WAV_FORMAT_IEEE_FLOAT) {
                 float f_value = *(float *)&value; // reinterpret bytes as float
@@ -166,7 +160,7 @@ void read_file_contents(const char *filename) {
             ft_set_module_param(0, 0, value);
         }
         ft_printf("params sent");
-        // DEBUG_LOG("%s", buffer);
+
 
         if (bytes_read < BUFFER_SIZE) {
             break; // End of file
@@ -214,7 +208,8 @@ t_status app_init(void) {
     // list_root();
     // read_file_contents("/clap.wav");
     // read_file_contents("/clap_i32t.wav");
-     read_file_contents("/brown.wav");
+     //read_file_contents("/brown.wav");
+     read_file_contents("/brown_stereo.wav");
     //read_file_contents("/clap_f32.wav"); // float test
 
     status = SUCCESS;
