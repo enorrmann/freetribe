@@ -158,13 +158,9 @@ void read_file_contents(const char *filename) {
             if (info.audio_format == WAV_FORMAT_IEEE_FLOAT) {
                 float f_value = *(float *)&value; // reinterpret bytes as float
                 // clip por seguridad
-                if (f_value > 1.0f)
-                    f_value = 1.0f;
-                if (f_value < -1.0f)
-                    f_value = -1.0f;
+                //if (f_value > 1.0f) f_value = 1.0f; if (f_value < -1.0f) f_value = -1.0f;
 
-                value = (int32_t)(f_value *
-                                  (float)INT32_MAX); // convert float to Q1.31
+                value = (int32_t)(f_value * (float)INT32_MAX); // convert float to Q1.31
             }
 
             ft_set_module_param(0, 0, value);
@@ -218,8 +214,8 @@ t_status app_init(void) {
     // list_root();
     // read_file_contents("/clap.wav");
     // read_file_contents("/clap_i32t.wav");
-    // read_file_contents("/brown.wav");
-    read_file_contents("/clap_f32.wav"); // float test
+     read_file_contents("/brown.wav");
+    //read_file_contents("/clap_f32.wav"); // float test
 
     status = SUCCESS;
     return status;
