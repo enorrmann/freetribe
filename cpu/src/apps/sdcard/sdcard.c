@@ -93,8 +93,11 @@ void read_file_contents(const char *filename) {
 #define BUFFER_SIZE (2048 * 1024) // 2MB buffer
 
     __attribute__((aligned(512))) uint8_t
-        buffer[BUFFER_SIZE]; // not sure if this alignment is necessary, but it doesn't hurt and might help with SD card performance
-    int32_t *buffer_in_int32 = (int32_t *)buffer; // pointer to same buffer but as int32 for easier processing
+        buffer[BUFFER_SIZE]; // not sure if this alignment is necessary, but it
+                             // doesn't hurt and might help with SD card
+                             // performance
+    int32_t *buffer_in_int32 = (int32_t *)
+        buffer; // pointer to same buffer but as int32 for easier processing
 
     extern FATFS g_fatfs;
 
@@ -124,18 +127,27 @@ void read_file_contents(const char *filename) {
 
     // Read and print file contents
     ft_printf("File contents:");
-    
-        int bytes_per_sample = info.bits_per_sample  / 8; // 4 para int32/float32
-        int frame_size = bytes_per_sample * info.num_channels; // 4=mono, 8=stereo
+
+    int bytes_per_sample = info.bits_per_sample / 8; // 4 para int32/float32
+    int frame_size = bytes_per_sample * info.num_channels; // 4=mono, 8=stereo
     DEBUG_LOG("bytes_per_sample %i", (int)bytes_per_sample);
     DEBUG_LOG("frame_size %i", (int)frame_size);
+
+    read_sample_fn read_sample =
+        select_reader(info.bits_per_sample, info.audio_format);
+
+    if (!read_sample) {
+        DEBUG_LOG("no reader function: %i", (int)read_sample);
+        return;
+    }
 
     while (1) {
         // buffer is overwritten each loop
         res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
         DEBUG_LOG("f_read bytes_read: %i", (int)bytes_read);
         int total_samples_per_channel = bytes_read / frame_size;
-        DEBUG_LOG("total_samples_per_channel: %i", (int)total_samples_per_channel);
+        DEBUG_LOG("total_samples_per_channel: %i",
+                  (int)total_samples_per_channel);
         if (res != FR_OK) {
             DEBUG_LOG("Error reading file: %i", (int)res);
             break;
@@ -144,22 +156,26 @@ void read_file_contents(const char *filename) {
         ft_printf("sending parameters...");
 
         int i;
-        for (i = 0; i  < total_samples_per_channel; i ++) {
+        for (i = 0; i < total_samples_per_channel; i++) {
 
-            int32_t value = buffer_in_int32[i*info.num_channels]; // Take first channel for simplicity
+            // old way
+            /*int32_t value = buffer_in_int32[i*info.num_channels]; // Take
+              first channel for simplicity
 
-            if (info.audio_format == WAV_FORMAT_IEEE_FLOAT) {
+              if (info.audio_format == WAV_FORMAT_IEEE_FLOAT) {
                 float f_value = *(float *)&value; // reinterpret bytes as float
                 // clip por seguridad
-                //if (f_value > 1.0f) f_value = 1.0f; if (f_value < -1.0f) f_value = -1.0f;
+                //if (f_value > 1.0f) f_value = 1.0f; if (f_value < -1.0f)
+              f_value = -1.0f;
 
-                value = (int32_t)(f_value * (float)INT32_MAX); // convert float to Q1.31
-            }
+                value = (int32_t)(f_value * (float)INT32_MAX); // convert float
+              to Q1.31
+                }*/
+            int32_t value = read_sample(buffer, i * info.num_channels);
 
             ft_set_module_param(0, 0, value);
         }
         ft_printf("params sent");
-
 
         if (bytes_read < BUFFER_SIZE) {
             break; // End of file
@@ -207,9 +223,9 @@ t_status app_init(void) {
     // list_root();
     // read_file_contents("/clap.wav");
     // read_file_contents("/clap_i32t.wav");
-     //read_file_contents("/brown.wav");
-     read_file_contents("/brown_stereo.wav");
-    //read_file_contents("/clap_f32.wav"); // float test
+     read_file_contents("/brown.wav");
+    //read_file_contents("/brown_stereo.wav");
+    // read_file_contents("/clap_f32.wav"); // float test
 
     status = SUCCESS;
     return status;

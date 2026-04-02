@@ -77,3 +77,47 @@ FRESULT wav_read_info(FIL *file, wav_info_t *info)
 
     return FR_OK;
 }
+
+
+int32_t read_s16(uint8_t *buf, int idx)
+{
+    int16_t *p = (int16_t *)buf;
+    return ((int32_t)p[idx]) << 16;
+}
+int32_t read_s24(uint8_t *buf, int idx)
+{
+    uint8_t *p = buf + idx * 3;
+
+    int32_t v = ((int32_t)p[0]) |
+                ((int32_t)p[1] << 8) |
+                ((int32_t)p[2] << 16);
+
+    v = (v << 8) >> 8; // sign extend
+    return v << 8;     // to Q1.31
+}
+
+int32_t read_s32(uint8_t *buf, int idx)
+{
+    int32_t *p = (int32_t *)buf;
+    return p[idx];
+}
+int32_t read_f32(uint8_t *buf, int idx)
+{
+    float *p = (float *)buf;
+    float f = p[idx];
+    return (int32_t)(f * (float)INT32_MAX);
+}
+read_sample_fn select_reader(int bps, int format)
+{
+    if (bps == 16) {
+        return read_s16;
+    } else if (bps == 24) {
+        return read_s24;
+    } else if (bps == 32 && format == WAV_FORMAT_PCM) {
+        return read_s32;
+    } else if (bps == 32 && format == WAV_FORMAT_IEEE_FLOAT) {
+        return read_f32;
+    }
+
+    return 0; // unsupported format
+}

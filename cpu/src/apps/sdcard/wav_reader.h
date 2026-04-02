@@ -23,6 +23,9 @@ typedef struct {
     uint32_t data_size;   // size of sample data in bytes
 } wav_info_t;
 
+ // function for reading file data
+typedef int32_t (*read_sample_fn)(uint8_t *buf, int idx);
+
 /**
  * @brief Parse WAV file and extract basic info
  * 
@@ -32,4 +35,9 @@ typedef struct {
  */
 FRESULT wav_read_info(FIL *file, wav_info_t *info);
 
+int32_t read_s16(uint8_t *buf, int idx);
+int32_t read_s24(uint8_t *buf, int idx);
+int32_t read_s32(uint8_t *buf, int idx);
+int32_t read_f32(uint8_t *buf, int idx);
 #endif
+
