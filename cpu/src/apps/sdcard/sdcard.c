@@ -93,10 +93,8 @@ void read_file_contents(const char *filename) {
 #define BUFFER_SIZE (2048 * 1024) // 2MB buffer
 
     __attribute__((aligned(512))) uint8_t
-        buffer[BUFFER_SIZE]; // Importante char  puede quedar en cualquier
-                             // alineación uint8_t  aligned(512)  garantizado
-                             // correcto
-    int32_t *pointer_to_int32 = (int32_t *)buffer;
+        buffer[BUFFER_SIZE]; // not sure if this alignment is necessary, but it doesn't hurt and might help with SD card performance
+    int32_t *buffer_in_int32 = (int32_t *)buffer; // pointer to same buffer but as int32 for easier processing
 
     extern FATFS g_fatfs;
 
@@ -124,21 +122,19 @@ void read_file_contents(const char *filename) {
         f_lseek(&file, info.data_offset); // Seek to start of sample data
     }
 
-        // Read and print file contents
-        ft_printf("File contents:");
+    // Read and print file contents
+    ft_printf("File contents:");
     
         int bytes_per_sample = info.bits_per_sample  / 8; // 4 para int32/float32
         int frame_size = bytes_per_sample * info.num_channels; // 4=mono, 8=stereo
-        int total_samples_per_channel = bytes_read / frame_size;
-
-        DEBUG_LOG("bytes_per_sample %i", (int)bytes_per_sample);
-        DEBUG_LOG("frame_size %i", (int)frame_size);
-        DEBUG_LOG("total_samples_per_channel: %i", (int)total_samples_per_channel);
+    DEBUG_LOG("bytes_per_sample %i", (int)bytes_per_sample);
+    DEBUG_LOG("frame_size %i", (int)frame_size);
 
     while (1) {
         res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
         DEBUG_LOG("f_read bytes_read: %i", (int)bytes_read);
-       
+        int total_samples_per_channel = bytes_read / frame_size;
+        DEBUG_LOG("total_samples_per_channel: %i", (int)total_samples_per_channel);
         if (res != FR_OK) {
             DEBUG_LOG("Error reading file: %i", (int)res);
             break;
@@ -149,7 +145,7 @@ void read_file_contents(const char *filename) {
         int i;
         for (i = 0; i  < total_samples_per_channel; i ++) {
 
-            int32_t value = pointer_to_int32[i*info.num_channels]; // Take first channel for simplicity
+            int32_t value = buffer_in_int32[i*info.num_channels]; // Take first channel for simplicity
 
             if (info.audio_format == WAV_FORMAT_IEEE_FLOAT) {
                 float f_value = *(float *)&value; // reinterpret bytes as float
