@@ -81,8 +81,6 @@ void list_root(void) {
     } else {
         DEBUG_LOG("Failed to open root directory (%d)", res);
     }
-
-
 }
 
 void read_file_contents(const char *filename) {
@@ -92,10 +90,12 @@ void read_file_contents(const char *filename) {
     FRESULT res;
     FIL file;
     UINT bytes_read = 0;
-    #define BUFFER_SIZE (2048*1024) // 2MB buffer
+#define BUFFER_SIZE (2048 * 1024) // 2MB buffer
 
-    __attribute__((aligned(512)))
-    uint8_t buffer[BUFFER_SIZE]; //Importante char  puede quedar en cualquier alineación uint8_t  aligned(512)  garantizado correcto
+    __attribute__((aligned(512))) uint8_t
+        buffer[BUFFER_SIZE]; // Importante char  puede quedar en cualquier
+                             // alineación uint8_t  aligned(512)  garantizado
+                             // correcto
 
     extern FATFS g_fatfs;
 
@@ -122,39 +122,55 @@ void read_file_contents(const char *filename) {
         DEBUG_LOG("Audio format: %u", info.audio_format);
         f_lseek(&file, info.data_offset); // Seek to start of sample data
     }
-    
 
     // Read and print file contents
     ft_printf("File contents:");
     // f_lseek(&file, 3); // seek to offset 3 for testing
+        int bytes_per_sample = info.bits_per_sample / 8; // 4 para int32/float32
+        int frame_size = bytes_per_sample * info.num_channels; // 4=mono, 8=stereo
+    DEBUG_LOG("bytes_per_sample %i", (int)bytes_per_sample);
+    DEBUG_LOG("frame_size %i", (int)frame_size);
+
     while (1) {
         res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
         DEBUG_LOG("f_read bytes_read: %i", (int)bytes_read);
+        DEBUG_LOG("samples: %i", (int)bytes_read / 2);
         if (res != FR_OK) {
             DEBUG_LOG("Error reading file: %i", (int)res);
             break;
         }
 
         // Print each byte/character
-static uint8_t temp[4];
-static int temp_index = 0;
+        static uint8_t temp[4];
+        static int temp_index = 0;
 
-ft_printf("sending parameters...");
-for (UINT i = 0; i < bytes_read; i++) {
-    temp[temp_index++] = buffer[i];
+        ft_printf("sending parameters...");
 
-    if (temp_index == 4) {
-        int32_t value =  (int32_t)temp[0] |
-                        ((int32_t)temp[1] << 8) |
-                        ((int32_t)temp[2] << 16) |
-                        ((int32_t)temp[3] << 24);
+        UINT i;
 
-        ft_set_module_param(0, 0, value);
-        temp_index = 0;
-    }
-}    
-ft_printf("params sent");
-// DEBUG_LOG("%s", buffer);
+        for (i = 0; i + bytes_per_sample <= bytes_read; i += frame_size) {
+
+            // tomar solo primer canal (LEFT)
+            int32_t value = (int32_t)buffer[i] | ((int32_t)buffer[i + 1] << 8) |
+                            ((int32_t)buffer[i + 2] << 16) |
+                            ((int32_t)buffer[i + 3] << 24);
+
+            if (info.audio_format == WAV_FORMAT_IEEE_FLOAT) {
+                float f_value = *(float *)&value; // reinterpret bytes as float
+                // clip por seguridad
+                if (f_value > 1.0f)
+                    f_value = 1.0f;
+                if (f_value < -1.0f)
+                    f_value = -1.0f;
+
+                value = (int32_t)(f_value *
+                                  (float)INT32_MAX); // convert float to Q1.31
+            }
+
+            ft_set_module_param(0, 0, value);
+        }
+        ft_printf("params sent");
+        // DEBUG_LOG("%s", buffer);
 
         if (bytes_read < BUFFER_SIZE) {
             break; // End of file
@@ -167,8 +183,6 @@ ft_printf("params sent");
         DEBUG_LOG("Error closing file: %i", (int)res);
     }
 }
-
-
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -202,10 +216,10 @@ t_status app_init(void) {
     // _print_test_block();
 
     // list_root();
-    //read_file_contents("/clap.wav");
-    //read_file_contents("/clap_i32t.wav");
-    read_file_contents("/brown.wav");
-    //clap_f32.wav float
+    // read_file_contents("/clap.wav");
+    // read_file_contents("/clap_i32t.wav");
+    // read_file_contents("/brown.wav");
+    read_file_contents("/clap_f32.wav"); // float test
 
     status = SUCCESS;
     return status;

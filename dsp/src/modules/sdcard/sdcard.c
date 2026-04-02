@@ -64,7 +64,7 @@ typedef enum {
 fract32 *data_sdram =  (fract32 *)SDRAM_ADDRESS;
 static int record_index = 0;
 static int play_index = 0;
-#define MAX_SIZE 329144 // 48000  * 7 // 7 seconds at 48 kHz
+#define MAX_SIZE  48000  * 1
 
 
 /*----- Extern variable definitions ----------------------------------*/
