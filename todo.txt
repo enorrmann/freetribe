@@ -1,0 +1,4 @@
+DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
+    ft_print("disk_read called");
+	DEBUG_LOG("dread");
+   // DEBUG_LOG("disk_read(%i, %p, %i, %i)", (int)pdrv, (void*)buff, (int)sector, (int)count);

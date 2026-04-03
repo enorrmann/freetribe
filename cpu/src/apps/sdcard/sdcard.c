@@ -90,14 +90,10 @@ void read_file_contents(const char *filename) {
     FRESULT res;
     FIL file;
     UINT bytes_read = 0;
-#define BUFFER_SIZE (2048 * 1024) // 2MB buffer
+#define BUFFER_SIZE (2048 * 256) // 2MB buffer
 
-    __attribute__((aligned(512))) uint8_t
-        buffer[BUFFER_SIZE]; // not sure if this alignment is necessary, but it
-                             // doesn't hurt and might help with SD card
-                             // performance
-    int32_t *buffer_in_int32 = (int32_t *)
-        buffer; // pointer to same buffer but as int32 for easier processing
+    //__attribute__((aligned(512))) 
+    uint32_t buffer[BUFFER_SIZE]; 
 
     extern FATFS g_fatfs;
 
@@ -158,19 +154,6 @@ void read_file_contents(const char *filename) {
         int i;
         for (i = 0; i < total_samples_per_channel; i++) {
 
-            // old way
-            /*int32_t value = buffer_in_int32[i*info.num_channels]; // Take
-              first channel for simplicity
-
-              if (info.audio_format == WAV_FORMAT_IEEE_FLOAT) {
-                float f_value = *(float *)&value; // reinterpret bytes as float
-                // clip por seguridad
-                //if (f_value > 1.0f) f_value = 1.0f; if (f_value < -1.0f)
-              f_value = -1.0f;
-
-                value = (int32_t)(f_value * (float)INT32_MAX); // convert float
-              to Q1.31
-                }*/
             int32_t value = read_sample(buffer, i * info.num_channels);
 
             ft_set_module_param(0, 0, value);
