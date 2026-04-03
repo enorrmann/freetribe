@@ -90,10 +90,10 @@ void read_file_contents(const char *filename) {
     FRESULT res;
     FIL file;
     UINT bytes_read = 0;
-#define BUFFER_SIZE (2048 * 256) // 2MB buffer
-
-    //__attribute__((aligned(512))) 
-    uint32_t buffer[BUFFER_SIZE]; 
+    
+    __attribute__((aligned(512))) 
+    #define BUFFER_SIZE (1024 * 512 * 4) 
+    BYTE buffer[BUFFER_SIZE]; 
 
     extern FATFS g_fatfs;
 
@@ -142,8 +142,7 @@ void read_file_contents(const char *filename) {
         res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
         DEBUG_LOG("f_read bytes_read: %i", (int)bytes_read);
         int total_samples_per_channel = bytes_read / frame_size;
-        DEBUG_LOG("total_samples_per_channel: %i",
-                  (int)total_samples_per_channel);
+        DEBUG_LOG("total_samples_per_channel: %i", (int)total_samples_per_channel);
         if (res != FR_OK) {
             DEBUG_LOG("Error reading file: %i", (int)res);
             break;
@@ -204,7 +203,7 @@ t_status app_init(void) {
     // _print_test_block();
 
     // list_root();
-    // read_file_contents("/clap.wav");
+     //read_file_contents("/clap.wav");
     // read_file_contents("/clap_i32t.wav");
      read_file_contents("/brown.wav");
     //read_file_contents("/brown_stereo.wav");
