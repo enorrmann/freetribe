@@ -92,7 +92,7 @@ void read_file_contents(const char *filename) {
     UINT bytes_read = 0;
     
     __attribute__((aligned(512))) 
-    #define BUFFER_SIZE (1024 * 512 * 4) 
+    #define BUFFER_SIZE (1024 * 512 * 4)  // max ok size
     BYTE buffer[BUFFER_SIZE]; 
 
     extern FATFS g_fatfs;
@@ -205,8 +205,8 @@ t_status app_init(void) {
     // list_root();
      //read_file_contents("/clap.wav");
     // read_file_contents("/clap_i32t.wav");
-     read_file_contents("/brown.wav");
-    //read_file_contents("/brown_stereo.wav");
+    // read_file_contents("/brown.wav");
+    read_file_contents("/brown_stereo.wav");
     // read_file_contents("/clap_f32.wav"); // float test
 
     status = SUCCESS;
