@@ -43,8 +43,8 @@ under the terms of the GNU Affero General Public License as published by
 #include "ff.h"
 #include "macros.h"
 // END FF
-#include "wav_reader.h"
 #include "dev_dsp_ipc.h"
+#include "wav_reader.h"
 
 DIR dir;     // Directory object
 FILINFO fno; // File information structure
@@ -85,15 +85,48 @@ void list_root(void) {
 }
 
 static void _test(void *ctx, t_ipc_status status) {
-     if (IPC_FAILED == status) {
+    if (IPC_FAILED == status) {
         ft_printf("_test IPC_FAILED callback");
     } else {
         ft_printf("IPC transfer status from test: %i", (int)status);
-     }
+    }
 }
-#define STATIC_BUFFER_SIZE (1024 * 512 ) 
-#define MAX_TRANSFER_SIZE 32768 -1
-static int32_t static_buffer[STATIC_BUFFER_SIZE]; 
+
+#define STATIC_BUFFER_SIZE (1024 * 512)
+static const uint32_t MAX_TRANSFER_SIZE = 32768-1;
+
+static int32_t static_buffer[STATIC_BUFFER_SIZE];
+
+
+void send_buffer_chunked(uint32_t total_samples)
+{
+    uint32_t base_address = 0x00000080;
+
+    uint32_t num_chunks = (total_samples + MAX_TRANSFER_SIZE - 1) / MAX_TRANSFER_SIZE;
+    ft_printf("Total samples: %i, num_chunks: %i", (int)total_samples, (int)num_chunks);
+
+  for (uint32_t i = 0; i < num_chunks; i++) {
+
+    uint32_t offset = (uint32_t)i * (uint32_t)MAX_TRANSFER_SIZE;
+
+    uint16_t count = MAX_TRANSFER_SIZE;
+    if (offset + MAX_TRANSFER_SIZE > total_samples) {
+        count = total_samples - offset;
+    }
+
+    int status = dev_dsp_ipc_transfer(
+        base_address,
+        &static_buffer[offset],
+        count,
+        _test,
+        (void *)0x23AC1D23
+    );
+
+    ft_printf("status: %d, chunk %u, count: %u, offset: %u, address: 0x%08x\n", status, i, count, offset, base_address);
+
+    base_address += (uint32_t)count * sizeof(int32_t);
+}
+}
 
 void read_file_contents(const char *filename) {
 
@@ -102,10 +135,10 @@ void read_file_contents(const char *filename) {
     FRESULT res;
     FIL file;
     UINT bytes_read = 0;
-    
-    __attribute__((aligned(512))) 
-    #define BUFFER_SIZE (1024 * 512 * 4)  // max ok size
-    BYTE buffer[BUFFER_SIZE]; 
+
+    __attribute__((aligned(512)))
+#define BUFFER_SIZE (1024 * 512 * 4) // max ok size
+    BYTE buffer[BUFFER_SIZE];
 
     extern FATFS g_fatfs;
 
@@ -148,13 +181,14 @@ void read_file_contents(const char *filename) {
         DEBUG_LOG("no reader function: %i", (int)read_sample);
         return;
     }
-
+    int total_samples_read = 0;
     while (1) {
         // buffer is overwritten each loop
         res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
         DEBUG_LOG("f_read bytes_read: %i", (int)bytes_read);
         int total_samples_per_channel = bytes_read / frame_size;
-        DEBUG_LOG("total_samples_per_channel: %i", (int)total_samples_per_channel);
+        DEBUG_LOG("total_samples_per_channel: %i",
+                  (int)total_samples_per_channel);
         if (res != FR_OK) {
             DEBUG_LOG("Error reading file: %i", (int)res);
             break;
@@ -162,12 +196,14 @@ void read_file_contents(const char *filename) {
 
         ft_printf("sending parameters...");
         int i;
+
         for (i = 0; i < total_samples_per_channel; i++) {
 
             int32_t sample = read_sample(buffer, i * info.num_channels);
             static_buffer[i] = sample;
+            total_samples_read++;
 
-//            ft_set_module_param(0, 0, sample);
+            //            ft_set_module_param(0, 0, sample);
         }
         ft_printf("params sent");
 
@@ -176,15 +212,9 @@ void read_file_contents(const char *filename) {
         }
     }
     ft_printf("buffer size: %i", (int)STATIC_BUFFER_SIZE);
-int status = dev_dsp_ipc_transfer(0x00000060, static_buffer, MAX_TRANSFER_SIZE, _test, (void*)0x23AC1D23) ;
-    if (IPC_QUEUE_FULL == status) {
+
+    send_buffer_chunked(total_samples_read);
     
-             ft_printf("IPC_QUEUE_FULL");
-         } else {
-            ft_printf("IPC transfer: %i", (int)status);
-
-         }
-
     // Close file
     res = f_close(&file);
     if (res != FR_OK) {
@@ -224,11 +254,11 @@ t_status app_init(void) {
     // _print_test_block();
 
     // list_root();
-    //read_file_contents("/clap.wav");
+    // read_file_contents("/clap.wav");
     // read_file_contents("/clap_i32t.wav");
-     read_file_contents("/brown.wav");
-    //read_file_contents("/brown_stereo.wav");
-    // read_file_contents("/clap_f32.wav"); // float test
+    read_file_contents("/brown.wav");
+    // read_file_contents("/brown_stereo.wav");
+    //  read_file_contents("/clap_f32.wav"); // float test
 
     status = SUCCESS;
     return status;
