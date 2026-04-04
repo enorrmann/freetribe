@@ -93,7 +93,7 @@ static void _test(void *ctx, t_ipc_status status) {
 }
 
 #define STATIC_BUFFER_SIZE (1024 * 512)
-static const uint32_t MAX_TRANSFER_SIZE = 32768-1;
+static const uint32_t MAX_TRANSFER_SIZE = 16*1024; // Max transfer size in 32-bit words (must be <= 65535 for 16-bit word count in metadata)
 
 static int32_t static_buffer[STATIC_BUFFER_SIZE];
 
@@ -103,7 +103,7 @@ void send_buffer_chunked(uint32_t total_samples)
     uint32_t base_address = 0x00000080;
 
     uint32_t num_chunks = (total_samples + MAX_TRANSFER_SIZE - 1) / MAX_TRANSFER_SIZE;
-    ft_printf("Total samples: %i, num_chunks: %i", (int)total_samples, (int)num_chunks);
+    //ft_printf("Total samples: %i, num_chunks: %i", (int)total_samples, (int)num_chunks);
 
   for (uint32_t i = 0; i < num_chunks; i++) {
 
@@ -122,7 +122,7 @@ void send_buffer_chunked(uint32_t total_samples)
         (void *)0x23AC1D23
     );
 
-    ft_printf("status: %d, chunk %u, count: %u, offset: %u, address: 0x%08x\n", status, i, count, offset, base_address);
+   // ft_printf("status: %d, chunk %u, count: %u, offset: %u, address: 0x%08x", status, i, count, offset, base_address);
 
     base_address += (uint32_t)count * sizeof(int32_t);
 }
