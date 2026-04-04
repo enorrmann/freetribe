@@ -44,6 +44,7 @@ under the terms of the GNU Affero General Public License as published by
 #include "macros.h"
 // END FF
 #include "wav_reader.h"
+#include "dev_dsp_ipc.h"
 
 DIR dir;     // Directory object
 FILINFO fno; // File information structure
@@ -82,6 +83,16 @@ void list_root(void) {
         DEBUG_LOG("Failed to open root directory (%d)", res);
     }
 }
+
+static void _test(void *ctx, t_ipc_status status) {
+     if (IPC_FAILED == status) {
+        ft_printf("_test IPC_FAILED callback");
+    } else {
+        ft_printf("_test IPC_SUCCESS callback");
+     }
+}
+#define STATIC_BUFFER_SIZE (1024 * 512 ) 
+static int32_t static_buffer[STATIC_BUFFER_SIZE]; 
 
 void read_file_contents(const char *filename) {
 
@@ -149,13 +160,13 @@ void read_file_contents(const char *filename) {
         }
 
         ft_printf("sending parameters...");
-
         int i;
         for (i = 0; i < total_samples_per_channel; i++) {
 
-            int32_t value = read_sample(buffer, i * info.num_channels);
+            int32_t sample = read_sample(buffer, i * info.num_channels);
+            static_buffer[i] = sample;
 
-            ft_set_module_param(0, 0, value);
+//            ft_set_module_param(0, 0, sample);
         }
         ft_printf("params sent");
 
@@ -163,6 +174,12 @@ void read_file_contents(const char *filename) {
             break; // End of file
         }
     }
+
+    if (IPC_QUEUE_FULL == dev_dsp_ipc_transfer(0x00000060, static_buffer, STATIC_BUFFER_SIZE, _test, (void*)0x23AC1D23)) {
+             ft_printf("IPC_QUEUE_FULL");
+         } else {
+             ft_printf("IPC transfer queued");
+         }
 
     // Close file
     res = f_close(&file);
@@ -203,10 +220,10 @@ t_status app_init(void) {
     // _print_test_block();
 
     // list_root();
-     //read_file_contents("/clap.wav");
+    //read_file_contents("/clap.wav");
     // read_file_contents("/clap_i32t.wav");
-    // read_file_contents("/brown.wav");
-    read_file_contents("/brown_stereo.wav");
+     read_file_contents("/brown.wav");
+    //read_file_contents("/brown_stereo.wav");
     // read_file_contents("/clap_f32.wav"); // float test
 
     status = SUCCESS;

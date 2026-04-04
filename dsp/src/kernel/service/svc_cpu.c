@@ -45,6 +45,8 @@ under the terms of the GNU Affero General Public License as published by
 
 #include "per_gpio.h"
 #include "per_spi.h"
+#include "dev_cpu_spi.h"
+#include "dev_cpu_ipc.h"
 
 #include "module.h"
 
@@ -160,7 +162,16 @@ void svc_cpu_task(void) {
         /// TODO: case STATE_HANDSHAKE:
 
     case STATE_RUN:
-
+        
+        dev_cpu_ipc_tick();
+        // g_test++;
+        // if (g_test > 10000000) {
+        //     g_test = 0;
+        // }
+        // if (g_test == 0) {
+        //     dev_cpu_ipc_transfer(0xC0000000, (uint32_t*)0x00000060, 15, NULL, NULL);
+        // }
+        
         // Handle received bytes.
         if (dev_cpu_spi_rx_dequeue(&cpu_byte) == SUCCESS) {
             _cpu_receive(cpu_byte);
@@ -188,6 +199,8 @@ static t_status _cpu_init(void) {
 
     // Initialise CPU SPI device driver.
     dev_cpu_spi_init();
+
+    dev_cpu_ipc_init();
 
     // _transmit_message(MSG_TYPE_SYSTEM, SYSTEM_READY, NULL, 0);
 
