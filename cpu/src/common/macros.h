@@ -37,6 +37,8 @@ under the terms of the GNU Affero General Public License as published by
 #ifndef MACROS_H
 #define MACROS_H
 
+#define DEBUG
+
 #ifdef __cplusplus
 extern "C" {
 #endif

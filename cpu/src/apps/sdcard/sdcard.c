@@ -88,10 +88,11 @@ static void _test(void *ctx, t_ipc_status status) {
      if (IPC_FAILED == status) {
         ft_printf("_test IPC_FAILED callback");
     } else {
-        ft_printf("_test IPC_SUCCESS callback");
+        ft_printf("IPC transfer status from test: %i", (int)status);
      }
 }
 #define STATIC_BUFFER_SIZE (1024 * 512 ) 
+#define MAX_TRANSFER_SIZE 32768 -1
 static int32_t static_buffer[STATIC_BUFFER_SIZE]; 
 
 void read_file_contents(const char *filename) {
@@ -174,11 +175,14 @@ void read_file_contents(const char *filename) {
             break; // End of file
         }
     }
-
-    if (IPC_QUEUE_FULL == dev_dsp_ipc_transfer(0x00000060, static_buffer, STATIC_BUFFER_SIZE, _test, (void*)0x23AC1D23)) {
+    ft_printf("buffer size: %i", (int)STATIC_BUFFER_SIZE);
+int status = dev_dsp_ipc_transfer(0x00000060, static_buffer, MAX_TRANSFER_SIZE, _test, (void*)0x23AC1D23) ;
+    if (IPC_QUEUE_FULL == status) {
+    
              ft_printf("IPC_QUEUE_FULL");
          } else {
-             ft_printf("IPC transfer queued");
+            ft_printf("IPC transfer: %i", (int)status);
+
          }
 
     // Close file

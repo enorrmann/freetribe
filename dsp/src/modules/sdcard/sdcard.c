@@ -60,15 +60,15 @@ typedef enum {
 
 /*----- Static variable definitions ----------------------------------*/
 
-#define SDRAM_ADDRESS 0x00000000
-//#define SDRAM_ADDRESS 0x00000060 // for ipc transfer headers
+//#define SDRAM_ADDRESS 0x00000000
+#define SDRAM_ADDRESS 0x00000060 // for ipc transfer headers
 
 
 
 fract32 *data_sdram =  (fract32 *)SDRAM_ADDRESS;
 static int record_index = 0;
 static int play_index = 0;
-#define MAX_SIZE  48000  * 5
+#define MAX_SIZE  48000  
 
 
 /*----- Extern variable definitions ----------------------------------*/
@@ -84,7 +84,7 @@ void module_init(void) {
 // initialize data_sdram to 0
 int i;
     for ( i = 0; i < MAX_SIZE; i++) {
-        //data_sdram[i] = 0;
+        data_sdram[i] = 0;
     }
     //
 }
