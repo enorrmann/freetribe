@@ -84,7 +84,7 @@ void list_root(void) {
     }
 }
 
-static void _test(void *ctx, t_ipc_status status) {
+static void _ipc_callback(void *ctx, t_ipc_status status) {
     if (IPC_FAILED == status) {
         ft_printf("_test IPC_FAILED callback");
     } else {
@@ -118,8 +118,8 @@ void send_buffer_chunked(uint32_t total_samples)
         base_address,
         &static_buffer[offset],
         count,
-        _test,
-        (void *)0x23AC1D23
+        _ipc_callback,
+        (void *)0x23AC1D23 // arbitrary user context value for testing
     );
 
    // ft_printf("status: %d, chunk %u, count: %u, offset: %u, address: 0x%08x", status, i, count, offset, base_address);
@@ -139,6 +139,7 @@ void read_file_contents(const char *filename) {
     __attribute__((aligned(512)))
 #define BUFFER_SIZE (1024 * 512 * 4) // max ok size
     BYTE buffer[BUFFER_SIZE];
+    BYTE buffer_2[BUFFER_SIZE]; // this works so 512kB is definitely not the issue, maybe the issue is with the reader function?
 
     extern FATFS g_fatfs;
 
