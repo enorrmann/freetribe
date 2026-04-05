@@ -85,11 +85,7 @@ void list_root(void) {
 }
 
 static void _ipc_callback(void *ctx, t_ipc_status status) {
-    if (IPC_FAILED == status) {
-        ft_printf("_test IPC_FAILED callback");
-    } else {
-        ft_printf("IPC transfer status from test: %i", (int)status);
-    }
+        //ft_printf("IPC transfer status from test: %i", (int)status);
 }
 
 #define STATIC_BUFFER_SIZE (1024 * 512)
