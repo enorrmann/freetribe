@@ -96,10 +96,11 @@ static int32_t static_buffer[STATIC_BUFFER_SIZE];
 
 void send_buffer_chunked(uint32_t total_samples)
 {
+    ft_printf("total_samples: %u", total_samples);
     uint32_t base_address = 0x00000080;
 
     uint32_t num_chunks = (total_samples + MAX_TRANSFER_SIZE - 1) / MAX_TRANSFER_SIZE;
-    //ft_printf("Total samples: %i, num_chunks: %i", (int)total_samples, (int)num_chunks);
+    ft_printf("Total samples: %i, num_chunks: %i", (int)total_samples, (int)num_chunks);
 
   for (uint32_t i = 0; i < num_chunks; i++) {
 
@@ -118,7 +119,7 @@ void send_buffer_chunked(uint32_t total_samples)
         (void *)0x23AC1D23 // arbitrary user context value for testing
     );
 
-   // ft_printf("status: %d, chunk %u, count: %u, offset: %u, address: 0x%08x", status, i, count, offset, base_address);
+   ft_printf("status: %d, chunk %u, count: %u, offset: %u, address: 0x%08x", status, i, count, offset, base_address);
 
     base_address += (uint32_t)count * sizeof(int32_t);
 }
@@ -135,7 +136,7 @@ void read_file_contents(const char *filename) {
     __attribute__((aligned(512)))
 #define BUFFER_SIZE (1024 * 512 * 4) // max ok size
     BYTE buffer[BUFFER_SIZE];
-    BYTE buffer_2[BUFFER_SIZE]; // this works so 512kB is definitely not the issue, maybe the issue is with the reader function?
+    //BYTE buffer_2[BUFFER_SIZE]; // this works so 512kB is definitely not the issue, maybe the issue is with the reader function?
 
     extern FATFS g_fatfs;
 
@@ -179,6 +180,7 @@ void read_file_contents(const char *filename) {
         return;
     }
     int total_samples_read = 0;
+    int static_buffer_index = 0;
     while (1) {
         // buffer is overwritten each loop
         res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
@@ -191,25 +193,17 @@ void read_file_contents(const char *filename) {
             break;
         }
 
-        ft_printf("sending parameters...");
         int i;
-
         for (i = 0; i < total_samples_per_channel; i++) {
-
             int32_t sample = read_sample(buffer, i * info.num_channels);
-            static_buffer[i] = sample;
+            static_buffer[static_buffer_index++] = sample;
             total_samples_read++;
-
-            //            ft_set_module_param(0, 0, sample);
         }
-        ft_printf("params sent");
 
         if (bytes_read < BUFFER_SIZE) {
             break; // End of file
         }
     }
-    ft_printf("buffer size: %i", (int)STATIC_BUFFER_SIZE);
-
     send_buffer_chunked(total_samples_read);
     
     // Close file
@@ -250,11 +244,11 @@ t_status app_init(void) {
     dev_sdcard_init();
     // _print_test_block();
 
-    // list_root();
-    // read_file_contents("/clap.wav");
-    // read_file_contents("/clap_i32t.wav");
-    read_file_contents("/brown.wav");
-    // read_file_contents("/brown_stereo.wav");
+     //list_root();
+     //read_file_contents("/clap.wav");
+     //read_file_contents("/clap_i32t.wav");
+    //read_file_contents("/brown.wav");
+     read_file_contents("/brown_stereo.wav"); // some problems here
     //  read_file_contents("/clap_f32.wav"); // float test
 
     status = SUCCESS;
