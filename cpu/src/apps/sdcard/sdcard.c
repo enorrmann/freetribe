@@ -119,7 +119,7 @@ void send_buffer_chunked(uint32_t total_samples)
         (void *)0x23AC1D23 // arbitrary user context value for testing
     );
 
-   ft_printf("status: %d, chunk %u, count: %u, offset: %u, address: 0x%08x", status, i, count, offset, base_address);
+   //ft_printf("status: %d, chunk %u, count: %u, offset: %u, address: 0x%08x", status, i, count, offset, base_address);
 
     base_address += (uint32_t)count * sizeof(int32_t);
 }
