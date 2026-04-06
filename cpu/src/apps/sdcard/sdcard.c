@@ -50,6 +50,9 @@ under the terms of the GNU Affero General Public License as published by
 DIR dir;     // Directory object
 FILINFO fno; // File information structure
 
+
+void _trigger_callback(uint8_t pad, uint8_t vel, bool state);
+
 void list_root(void) {
     FRESULT res;
 
@@ -174,15 +177,11 @@ void read_file_contents(const char *filename) {
 // Bank 7 pin 15.
 #define GPIO_POWER_BUTTON 128
 
-/*----- Typedefs -----------------------------------------------------*/
-
-/*----- Static variable definitions ----------------------------------*/
-
-/*----- Extern variable definitions ----------------------------------*/
-
-/*----- Static function prototypes -----------------------------------*/
-
-/*----- Extern function implementations ------------------------------*/
+void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
+    if (state) {
+        read_file_contents("/clap_i32t.wav");
+    }
+}
 
 /**
  * @brief   Initialise application.
@@ -193,6 +192,7 @@ void read_file_contents(const char *filename) {
  *                  - ERROR
  */
 t_status app_init(void) {
+    ft_register_panel_callback(TRIGGER_EVENT, _trigger_callback);
 
     t_status status = ERROR;
 
@@ -204,7 +204,7 @@ t_status app_init(void) {
      //read_file_contents("/clap.wav");
      //read_file_contents("/clap_i32t.wav");
     //read_file_contents("/brown.wav");
-     read_file_contents("/brown_stereo.wav"); 
+     //read_file_contents("/brown_stereo.wav"); 
     //read_file_contents("/clap_f32.wav"); // float test
 
     status = SUCCESS;
