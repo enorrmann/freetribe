@@ -43,8 +43,9 @@ under the terms of the GNU Affero General Public License as published by
 #include "ff.h"
 #include "macros.h"
 // END FF
-#include "dev_dsp_ipc.h"
+
 #include "wav_reader.h"
+#include "ipc_helper.h"
 
 DIR dir;     // Directory object
 FILINFO fno; // File information structure
@@ -84,46 +85,6 @@ void list_root(void) {
     }
 }
 
-static void _ipc_callback(void *ctx, t_ipc_status status) {
-        //ft_printf("IPC transfer status from test: %i", (int)status);
-}
-
-#define STATIC_BUFFER_SIZE (1024 * 512)
-static const uint32_t MAX_TRANSFER_SIZE = 16*1024; // Max transfer size in 32-bit words (must be <= 65535 for 16-bit word count in metadata)
-
-static int32_t static_buffer[STATIC_BUFFER_SIZE];
-
-
-void send_buffer_chunked(uint32_t total_samples)
-{
-    ft_printf("total_samples: %u", total_samples);
-    uint32_t base_address = 0x00000080;
-
-    uint32_t num_chunks = (total_samples + MAX_TRANSFER_SIZE - 1) / MAX_TRANSFER_SIZE;
-    ft_printf("Total samples: %i, num_chunks: %i", (int)total_samples, (int)num_chunks);
-
-  for (uint32_t i = 0; i < num_chunks; i++) {
-
-    uint32_t offset = (uint32_t)i * (uint32_t)MAX_TRANSFER_SIZE;
-
-    uint16_t count = MAX_TRANSFER_SIZE;
-    if (offset + MAX_TRANSFER_SIZE > total_samples) {
-        count = total_samples - offset;
-    }
-
-    int status = dev_dsp_ipc_transfer(
-        base_address,
-        &static_buffer[offset],
-        count,
-        _ipc_callback,
-        (void *)0x23AC1D23 // arbitrary user context value for testing
-    );
-
-   //ft_printf("status: %d, chunk %u, count: %u, offset: %u, address: 0x%08x", status, i, count, offset, base_address);
-
-    base_address += (uint32_t)count * sizeof(int32_t);
-}
-}
 
 void read_file_contents(const char *filename) {
 
@@ -180,7 +141,7 @@ void read_file_contents(const char *filename) {
         return;
     }
     int total_samples_read = 0;
-    int static_buffer_index = 0;
+    ipc_init_buffer();
     while (1) {
         // buffer is overwritten each loop
         res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
@@ -196,7 +157,7 @@ void read_file_contents(const char *filename) {
         int i;
         for (i = 0; i < total_samples_per_channel; i++) {
             int32_t sample = read_sample(buffer, i * info.num_channels);
-            static_buffer[static_buffer_index++] = sample;
+            ipc_add_to_buffer(sample);
             total_samples_read++;
         }
 
@@ -204,7 +165,7 @@ void read_file_contents(const char *filename) {
             break; // End of file
         }
     }
-    send_buffer_chunked(total_samples_read);
+    ipc_send_buffer_chunked(total_samples_read);
     
     // Close file
     res = f_close(&file);
