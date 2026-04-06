@@ -60,15 +60,15 @@ typedef enum {
 
 /*----- Static variable definitions ----------------------------------*/
 
-//#define SDRAM_ADDRESS 0x00000000
+// #define SDRAM_ADDRESS 0x00000000
 #define SDRAM_ADDRESS 0x00000080 // for ipc transfer headers
 
-
-
-fract32 *data_sdram =  (fract32 *)SDRAM_ADDRESS;
+fract32 *data_sdram = (fract32 *)SDRAM_ADDRESS;
 static int play_index = 0;
-#define MAX_SIZE 329144// 329157// 48000  * 5
+static int playing = 0;
+static int total_samples = 0;
 
+#define MAX_SIZE 48000 * 20 // 20 seconds at 48kHz
 
 /*----- Extern variable definitions ----------------------------------*/
 
@@ -80,9 +80,9 @@ static int play_index = 0;
  * @brief   Initialise module.
  */
 void module_init(void) {
-// initialize data_sdram to 0
-int i;
-    for ( i = 0; i < MAX_SIZE; i++) {
+    // initialize data_sdram to 0
+    int i;
+    for (i = 0; i < MAX_SIZE; i++) {
         data_sdram[i] = 0;
     }
     //
@@ -95,14 +95,14 @@ int i;
  * @param[out]  out Pointer to input buffer.
  */
 void module_process(fract32 *in, fract32 *out) {
-    fract32 output = data_sdram[play_index++];
-    if (play_index >= MAX_SIZE) { // 1 second at 48 kHz
-        play_index = 0;
-    }
-        
-    out[0] = output;
-    out[1] = output;
 
+    if (playing && play_index < total_samples) {
+        fract32 output = data_sdram[play_index];
+        play_index++; // stop at the end
+
+        out[0] = output;
+        out[1] = output;
+    }
 }
 
 /**
@@ -114,6 +114,10 @@ void module_process(fract32 *in, fract32 *out) {
 void module_set_param(uint16_t param_index, int32_t value) {
     switch (param_index) {
     default:
+    // start playback
+        total_samples = value;
+        playing = 1;
+        play_index = 0;
         break;
     }
 }

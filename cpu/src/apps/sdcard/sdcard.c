@@ -142,15 +142,11 @@ void read_file_contents(const char *filename) {
     }
     int total_samples_read = 0;
     ipc_init_buffer();
-    while (1) {
+    do {
         // buffer is overwritten each loop
         res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
-        DEBUG_LOG("f_read bytes_read: %i", (int)bytes_read);
         int total_samples_per_channel = bytes_read / frame_size;
-        DEBUG_LOG("total_samples_per_channel: %i",
-                  (int)total_samples_per_channel);
         if (res != FR_OK) {
-            DEBUG_LOG("Error reading file: %i", (int)res);
             break;
         }
 
@@ -161,11 +157,10 @@ void read_file_contents(const char *filename) {
             total_samples_read++;
         }
 
-        if (bytes_read < BUFFER_SIZE) {
-            break; // End of file
-        }
-    }
+    } while (bytes_read == BUFFER_SIZE); // if we read less than the buffer size, we know we've reached the end of the file
+
     ipc_send_buffer_chunked(total_samples_read);
+    ft_set_module_param(0,0, total_samples_read); // send total samples to dsp for playback
     
     // Close file
     res = f_close(&file);
@@ -209,8 +204,8 @@ t_status app_init(void) {
      //read_file_contents("/clap.wav");
      //read_file_contents("/clap_i32t.wav");
     //read_file_contents("/brown.wav");
-     read_file_contents("/brown_stereo.wav"); // some problems here
-    //  read_file_contents("/clap_f32.wav"); // float test
+     read_file_contents("/brown_stereo.wav"); 
+    //read_file_contents("/clap_f32.wav"); // float test
 
     status = SUCCESS;
     return status;
