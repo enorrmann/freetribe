@@ -43,20 +43,13 @@ under the terms of the GNU Affero General Public License as published by
 #include "module.h"
 
 #include "utils.h"
+#include "parameters.h"
 
 /*----- Macros -------------------------------------------------------*/
 
 /*----- Typedefs -----------------------------------------------------*/
 
-/**
- * @brief   Enumeration of module parameters.
- *
- * Index of each external parameter of module.
- */
-typedef enum {
 
-    PARAM_COUNT /// Should remain last to return number of parameters.
-} e_param;
 
 /*----- Static variable definitions ----------------------------------*/
 
@@ -64,11 +57,12 @@ typedef enum {
 #define SDRAM_ADDRESS 0x00000080 // for ipc transfer headers
 
 fract32 *data_sdram = (fract32 *)SDRAM_ADDRESS;
-static int play_index = 0;
-static int playing = 0;
-static int total_samples = 0;
+uint32_t record_index = 0;
+uint32_t play_index = 0;
+uint32_t total_samples=0;
 
-#define MAX_SIZE 48000 * 20 // 20 seconds at 48kHz
+
+#define MAX_SIZE 48000 *1
 
 /*----- Extern variable definitions ----------------------------------*/
 
@@ -95,13 +89,13 @@ void module_init(void) {
  * @param[out]  out Pointer to input buffer.
  */
 void module_process(fract32 *in, fract32 *out) {
-
-    if (playing && play_index < total_samples) {
+   
+    if (play_index < total_samples) {
         fract32 output = data_sdram[play_index];
-        play_index++; // stop at the end
-
+        play_index++; 
         out[0] = output;
         out[1] = output;
+        
     }
 }
 
@@ -113,11 +107,19 @@ void module_process(fract32 *in, fract32 *out) {
  */
 void module_set_param(uint16_t param_index, int32_t value) {
     switch (param_index) {
+        case PARAM_TRANSMISSION_START:
+            record_index = 0; // reset record_index index at start of transmission
+            play_index = total_samples+1; //stop playing
+            break;
+        case PARAM_SAMPLE_LOAD:
+            data_sdram[record_index] = value; // load sample into SDRAM at current play index
+            record_index++;
+            break;
+            case PARAM_TRANSMISSION_END:
+            total_samples = value; 
+            play_index = 0;
+            break;
     default:
-    // start playback
-        total_samples = value;
-        playing = 1;
-        play_index = 0;
         break;
     }
 }

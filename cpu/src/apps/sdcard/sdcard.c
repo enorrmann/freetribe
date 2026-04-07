@@ -44,12 +44,12 @@ under the terms of the GNU Affero General Public License as published by
 #include "macros.h"
 // END FF
 
-#include "wav_reader.h"
 #include "ipc_helper.h"
+#include "wav_reader.h"
+#include "parameters.h"
 
 DIR dir;     // Directory object
 FILINFO fno; // File information structure
-
 
 void _trigger_callback(uint8_t pad, uint8_t vel, bool state);
 
@@ -88,7 +88,6 @@ void list_root(void) {
     }
 }
 
-
 void read_file_contents(const char *filename) {
 
     wav_info_t info;
@@ -100,7 +99,8 @@ void read_file_contents(const char *filename) {
     __attribute__((aligned(512)))
 #define BUFFER_SIZE (1024 * 512 * 4) // max ok size
     BYTE buffer[BUFFER_SIZE];
-    //BYTE buffer_2[BUFFER_SIZE]; // this works so 512kB is definitely not the issue, maybe the issue is with the reader function?
+    // BYTE buffer_2[BUFFER_SIZE]; // this works so 512kB is definitely not the
+    // issue, maybe the issue is with the reader function?
 
     extern FATFS g_fatfs;
 
@@ -160,11 +160,14 @@ void read_file_contents(const char *filename) {
             total_samples_read++;
         }
 
-    } while (bytes_read == BUFFER_SIZE); // if we read less than the buffer size, we know we've reached the end of the file
+    } while (bytes_read ==
+             BUFFER_SIZE); // if we read less than the buffer size, we know
+                           // we've reached the end of the file
 
-    ipc_send_buffer_chunked(total_samples_read);
-    ft_set_module_param(0,0, total_samples_read); // send total samples to dsp for playback
-    
+    //ipc_send_buffer_chunked(total_samples_read);
+    ipc_send_buffer_via_param(total_samples_read);
+    //ft_set_module_param( 0, 0, total_samples_read); // send total samples to dsp for playback
+
     // Close file
     res = f_close(&file);
     if (res != FR_OK) {
@@ -179,7 +182,20 @@ void read_file_contents(const char *filename) {
 
 void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
     if (state) {
-        read_file_contents("/clap_i32t.wav");
+        switch (pad) {
+        case 0:
+            read_file_contents("/clap.wav");
+            break;
+        case 1:
+            read_file_contents("/kick-1985.wav");
+            break;
+        case 2:
+            read_file_contents("/hh-808.wav");
+            break;
+
+        default:
+            break;
+        }
     }
 }
 
@@ -200,12 +216,12 @@ t_status app_init(void) {
     dev_sdcard_init();
     // _print_test_block();
 
-     //list_root();
-     //read_file_contents("/clap.wav");
-     //read_file_contents("/clap_i32t.wav");
-    //read_file_contents("/brown.wav");
-     //read_file_contents("/brown_stereo.wav"); 
-    //read_file_contents("/clap_f32.wav"); // float test
+    // list_root();
+    // read_file_contents("/clap.wav");
+    // read_file_contents("/clap_i32t.wav");
+    // read_file_contents("/brown.wav");
+    // read_file_contents("/brown_stereo.wav");
+    // read_file_contents("/clap_f32.wav"); // float test
 
     status = SUCCESS;
     return status;

@@ -4,9 +4,10 @@
 #include "dev_dsp_ipc.h"
 #include "freetribe.h"
 
-
+void ipc_callback(void *ctx, t_ipc_status status);
 void ipc_init_buffer();
 void ipc_send_buffer_chunked(uint32_t total_samples) ;
 void ipc_add_to_buffer (uint32_t sample) ;
+void ipc_send_buffer_via_param(uint32_t total_samples) ; // for testing
 
 #endif // IPC_HELPER_H
