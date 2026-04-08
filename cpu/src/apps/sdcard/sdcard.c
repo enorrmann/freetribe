@@ -164,9 +164,9 @@ void read_file_contents(const char *filename) {
              BUFFER_SIZE); // if we read less than the buffer size, we know
                            // we've reached the end of the file
 
-    //ipc_send_buffer_chunked(total_samples_read);
-    ipc_send_buffer_via_param(total_samples_read);
-    //ft_set_module_param( 0, 0, total_samples_read); // send total samples to dsp for playback
+    ipc_send_buffer_chunked(total_samples_read);
+    //ipc_send_buffer_via_param(total_samples_read);
+    ft_set_module_param( 0, PARAM_TRANSMISSION_END, total_samples_read); // send total samples to dsp for playback
 
     // Close file
     res = f_close(&file);
@@ -182,6 +182,7 @@ void read_file_contents(const char *filename) {
 
 void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
     if (state) {
+        
         switch (pad) {
         case 0:
             read_file_contents("/clap.wav");
@@ -194,6 +195,7 @@ void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
             break;
 
         default:
+        ipc_simple_send(pad); // for testing    
             break;
         }
     }

@@ -7,6 +7,7 @@ uint32_t MAX_IPC_TRANSFER_SIZE =
 #define IPC_BUFFER_SIZE (1024 * 512)
 int32_t ipc_buffer[IPC_BUFFER_SIZE];
 uint32_t ipc_buffer_index = 0; // Index for current position in ipc_buffer
+uint32_t base_address = 0x00000060;
 
 void ipc_init_buffer() { 
     ipc_buffer_index = 0;
@@ -20,6 +21,22 @@ void ipc_init_buffer() {
 void ipc_callback(void *ctx, t_ipc_status status) {
     ft_printf("IPC callback called with user context");
     ft_printf("IPC transfer status from test: %i", (int)status);
+}
+
+void ipc_simple_send(uint32_t value) {
+            uint32_t to_send [1] = { value };
+        int status = dev_dsp_ipc_transfer(
+            base_address, to_send, sizeof(to_send), ipc_callback,
+            (void *)0x23AC1D23 // arbitrary user context value for testing
+        );
+         ft_printf("simple sent: %u, status %i", value, status);
+         status = dev_dsp_ipc_transfer(
+            base_address+1, to_send, sizeof(to_send), ipc_callback,
+            (void *)0x23AC1D23 // arbitrary user context value for testing
+        );
+
+         ft_printf("simple sent: %u, status %i", value, status);
+
 }
 
 void ipc_add_to_buffer(uint32_t sample) {
@@ -37,7 +54,7 @@ void ipc_send_buffer_via_param(uint32_t total_samples) {
 }
 
 void ipc_send_buffer_chunked(uint32_t total_samples) {
-    uint32_t base_address = 0x00000080;
+    
 
     uint32_t num_chunks = (total_samples + MAX_IPC_TRANSFER_SIZE - 1) / MAX_IPC_TRANSFER_SIZE;
     ft_printf("Total samples: %i, num_chunks: %i", (int)total_samples, (int)num_chunks);
@@ -46,10 +63,11 @@ void ipc_send_buffer_chunked(uint32_t total_samples) {
 
         uint32_t offset = (uint32_t)i * (uint32_t)MAX_IPC_TRANSFER_SIZE;
 
+        // ALWAYS SEND IN MULTIPLES OF 32, EVEN IF THERE IS NO MORE DATA TO SEND, OTHERWISE THE DSP WILL HANG WAITING FOR MORE DATA
         uint16_t count = MAX_IPC_TRANSFER_SIZE;
-        if (offset + MAX_IPC_TRANSFER_SIZE > total_samples) {
+        /*if (offset + MAX_IPC_TRANSFER_SIZE > total_samples) {
             count = total_samples - offset;
-        }
+        }*/
 
         int status = dev_dsp_ipc_transfer(
             base_address, &ipc_buffer[offset], count, ipc_callback,

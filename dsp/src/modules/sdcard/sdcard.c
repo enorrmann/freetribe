@@ -54,7 +54,7 @@ under the terms of the GNU Affero General Public License as published by
 /*----- Static variable definitions ----------------------------------*/
 
 // #define SDRAM_ADDRESS 0x00000000
-#define SDRAM_ADDRESS 0x00000080 // for ipc transfer headers
+#define SDRAM_ADDRESS 0x00000060 // for ipc transfer headers
 
 fract32 *data_sdram = (fract32 *)SDRAM_ADDRESS;
 uint32_t record_index = 0;
