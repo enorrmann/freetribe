@@ -39,7 +39,8 @@ void ipc_add_to_buffer(uint32_t sample) {
     ipc_buffer[ipc_buffer_index++] = sample;
 }
 
-void ipc_send_buffer_via_param(uint32_t total_samples) {
+void ipc_send_buffer_via_param() {
+    uint32_t total_samples = ipc_buffer_index; 
     uint32_t i;
     ft_set_module_param(0, PARAM_TRANSMISSION_START, 0);
     for (i = 0; i < total_samples; i++) {

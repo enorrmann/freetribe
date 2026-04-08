@@ -69,6 +69,50 @@ FILINFO fno; // File information structure
 
 void _trigger_callback(uint8_t pad, uint8_t vel, bool state);
 
+
+#define MAX_WAV_FILES 16
+
+FIL wav_files[MAX_WAV_FILES];
+char wav_names[MAX_WAV_FILES][64]; // store names if needed
+uint8_t wav_count = 0;
+
+void _preload_files(void) {
+    FRESULT res;
+
+    ft_printf("Opening root directory...");
+    res = f_opendir(&dir, "/");
+    DEBUG_LOG("f_opendir result: %i", (int)res);
+
+    if (res != FR_OK)
+        return;
+
+    for (;;) {
+        res = f_readdir(&dir, &fno);
+        if (res != FR_OK || fno.fname[0] == 0)
+            break;
+
+        if (!(fno.fattrib & AM_DIR)) {
+            // check .wav extension
+            const char *name = fno.fname;
+            int len = strlen(name);
+
+            if (len > 4 && strcasecmp(&name[len - 4], ".wav") == 0) {
+                if (wav_count < MAX_WAV_FILES) {
+                    strcpy(wav_names[wav_count], name);
+
+                    // open file
+                    if (f_open(&wav_files[wav_count], name, FA_READ) == FR_OK) {
+                        ft_printf("WAV[%d]: %s", wav_count, name);
+                        wav_count++;
+                    }
+                }
+            }
+        }
+    }
+
+    f_closedir(&dir);
+}
+
 void list_root(void) {
     FRESULT res;
 
@@ -161,8 +205,8 @@ void read_file_contents(const char *filename) {
              BUFFER_SIZE); // if we read less than the buffer size, we know
                            // we've reached the end of the file
 
-    ipc_send_buffer_chunked();
-    //ipc_send_buffer_via_param(total_samples_read);
+    //ipc_send_buffer_chunked();
+    ipc_send_buffer_via_param();
     
 
     // Close file
@@ -215,7 +259,7 @@ t_status app_init(void) {
     //dev_sdcard_init();
     // _print_test_block();
     _mount_fs();
-
+_preload_files();
     // list_root();
     // read_file_contents("/clap.wav");
     // read_file_contents("/clap_i32t.wav");
