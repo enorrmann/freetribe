@@ -48,6 +48,22 @@ under the terms of the GNU Affero General Public License as published by
 #include "wav_reader.h"
 #include "parameters.h"
 
+
+void _mount_fs();
+
+void _mount_fs(){
+    extern FATFS g_fatfs;
+    DEBUG_LOG("Mounting filesystem...");
+    FRESULT res = f_mount(&g_fatfs, "", 0);
+    DEBUG_LOG("f_mount result: %i", (int)res);
+    if (FR_OK != res) {
+        DEBUG_LOG("f_mount failed: %i", (int)res);
+        
+    }
+}
+
+
+
 DIR dir;     // Directory object
 FILINFO fno; // File information structure
 
@@ -55,15 +71,6 @@ void _trigger_callback(uint8_t pad, uint8_t vel, bool state);
 
 void list_root(void) {
     FRESULT res;
-
-    extern FATFS g_fatfs;
-    DEBUG_LOG("Mounting filesystem...");
-    res = f_mount(&g_fatfs, "", 0);
-    DEBUG_LOG("f_mount result: %i", (int)res);
-    if (FR_OK != res) {
-        DEBUG_LOG("f_mount failed: %i", (int)res);
-        return;
-    }
 
     // Open root directory
     DEBUG_LOG("Opening root directory...");
@@ -100,16 +107,6 @@ void read_file_contents(const char *filename) {
 #define BUFFER_SIZE (1024 * 512 * 4) // max ok size
     BYTE buffer[BUFFER_SIZE];
     // BYTE buffer_2[BUFFER_SIZE]; // this works so 512kB is definitely not the
-    // issue, maybe the issue is with the reader function?
-
-    extern FATFS g_fatfs;
-
-    DEBUG_LOG("Mounting filesystem...");
-    res = f_mount(&g_fatfs, "", 0);
-    if (FR_OK != res) {
-        DEBUG_LOG("f_mount failed: %i", (int)res);
-        return;
-    }
 
     // Open file for reading
     DEBUG_LOG("Opening file: %s", filename);
@@ -129,7 +126,7 @@ void read_file_contents(const char *filename) {
     }
 
     // Read and print file contents
-    ft_printf("File contents:");
+    DEBUG_LOG("File contents:");
 
     int bytes_per_sample = info.bits_per_sample / 8; // 4 para int32/float32
     int frame_size = bytes_per_sample * info.num_channels; // 4=mono, 8=stereo
@@ -215,8 +212,9 @@ t_status app_init(void) {
     t_status status = ERROR;
 
     // Nothing to do here.
-    dev_sdcard_init();
+    //dev_sdcard_init();
     // _print_test_block();
+    _mount_fs();
 
     // list_root();
     // read_file_contents("/clap.wav");

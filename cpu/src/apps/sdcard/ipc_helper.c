@@ -1,5 +1,6 @@
 #include "ipc_helper.h"
 #include "parameters.h"
+#include "macros.h"
 
 uint32_t IPC_CHUNK_TRANSFER_SIZE =
     16 * 1024; // Max transfer size in 32-bit words (must be <= 65535 for 16-bit
@@ -19,8 +20,8 @@ void ipc_init_buffer() {
 }
 
 void ipc_callback(void *ctx, t_ipc_status status) {
-    ft_printf("IPC callback called with user context");
-    ft_printf("IPC transfer status from test: %i", (int)status);
+    DEBUG_LOG("IPC callback called with user context");
+    DEBUG_LOG("IPC transfer status from test: %i", (int)status);
 }
 
 void ipc_simple_send(uint32_t value) {
@@ -30,7 +31,7 @@ void ipc_simple_send(uint32_t value) {
             (void *)0x23AC1D23 // arbitrary user context value for testing
         );
 
-         ft_printf("simple sent: %u, status %i", value, status);
+         DEBUG_LOG("simple sent: %u, status %i", value, status);
 
 }
 
@@ -53,7 +54,7 @@ uint32_t total_samples = ipc_buffer_index; // total number of samples currently 
     
 
     uint32_t num_chunks = (total_samples + IPC_CHUNK_TRANSFER_SIZE - 1) / IPC_CHUNK_TRANSFER_SIZE;
-    ft_printf("Total samples: %i, num_chunks: %i", (int)total_samples, (int)num_chunks);
+    DEBUG_LOG("Total samples: %i, num_chunks: %i", (int)total_samples, (int)num_chunks);
     uint32_t base_address = initial_base_address;
     for (uint32_t i = 0; i < num_chunks; i++) {
 
@@ -64,7 +65,7 @@ uint32_t total_samples = ipc_buffer_index; // total number of samples currently 
             (void *)0x23AC1D23 // arbitrary user context value for testing
         );
 
-         ft_printf("status: %d, chunk %u, count: %u, offset: %u, address: 0x%08x", status, i, IPC_CHUNK_TRANSFER_SIZE, offset, base_address);
+         DEBUG_LOG("status: %d, chunk %u, count: %u, offset: %u, address: 0x%08x", status, i, IPC_CHUNK_TRANSFER_SIZE, offset, base_address);
 
         base_address += (uint32_t)IPC_CHUNK_TRANSFER_SIZE * sizeof(int32_t);
     }
