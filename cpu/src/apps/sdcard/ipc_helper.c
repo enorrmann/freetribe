@@ -7,7 +7,7 @@ uint32_t IPC_CHUNK_TRANSFER_SIZE =
 #define IPC_BUFFER_SIZE (1024 * 512)
 uint32_t ipc_buffer[IPC_BUFFER_SIZE];
 uint32_t ipc_buffer_index = 0; // Index for current position in ipc_buffer
-uint32_t base_address = 0x00000060;
+const uint32_t initial_base_address = 0x00000060;
 
 void ipc_init_buffer() { 
     ipc_buffer_index = 0;
@@ -59,7 +59,7 @@ uint32_t total_samples = ipc_buffer_index; // total number of samples currently 
 
     uint32_t num_chunks = (total_samples + IPC_CHUNK_TRANSFER_SIZE - 1) / IPC_CHUNK_TRANSFER_SIZE;
     ft_printf("Total samples: %i, num_chunks: %i", (int)total_samples, (int)num_chunks);
-
+    uint32_t base_address = initial_base_address;
     for (uint32_t i = 0; i < num_chunks; i++) {
 
         uint32_t offset = (uint32_t)i * (uint32_t)IPC_CHUNK_TRANSFER_SIZE;
