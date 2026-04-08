@@ -143,7 +143,7 @@ void read_file_contents(const char *filename) {
         DEBUG_LOG("no reader function: %i", (int)read_sample);
         return;
     }
-    int total_samples_read = 0;
+
     ipc_init_buffer();
     do {
         // buffer is overwritten each loop
@@ -157,16 +157,16 @@ void read_file_contents(const char *filename) {
         for (i = 0; i < total_samples_per_channel; i++) {
             int32_t sample = read_sample(buffer, i * info.num_channels);
             ipc_add_to_buffer(sample);
-            total_samples_read++;
+
         }
 
     } while (bytes_read ==
              BUFFER_SIZE); // if we read less than the buffer size, we know
                            // we've reached the end of the file
 
-    ipc_send_buffer_chunked(total_samples_read);
+    ipc_send_buffer_chunked();
     //ipc_send_buffer_via_param(total_samples_read);
-    ft_set_module_param( 0, PARAM_TRANSMISSION_END, total_samples_read); // send total samples to dsp for playback
+    
 
     // Close file
     res = f_close(&file);

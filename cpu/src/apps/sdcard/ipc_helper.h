@@ -6,7 +6,7 @@
 
 void ipc_callback(void *ctx, t_ipc_status status);
 void ipc_init_buffer();
-void ipc_send_buffer_chunked(uint32_t total_samples) ;
+void ipc_send_buffer_chunked() ;
 void ipc_add_to_buffer (uint32_t sample) ;
 void ipc_send_buffer_via_param(uint32_t total_samples) ; // for testing
 void ipc_simple_send(uint32_t value) ; // for testing
