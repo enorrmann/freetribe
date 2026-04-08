@@ -5,7 +5,7 @@ uint32_t IPC_CHUNK_TRANSFER_SIZE =
     16 * 1024; // Max transfer size in 32-bit words (must be <= 65535 for 16-bit
                // word count in metadata)
 #define IPC_BUFFER_SIZE (1024 * 512)
-int32_t ipc_buffer[IPC_BUFFER_SIZE];
+uint32_t ipc_buffer[IPC_BUFFER_SIZE];
 uint32_t ipc_buffer_index = 0; // Index for current position in ipc_buffer
 uint32_t base_address = 0x00000060;
 
@@ -64,20 +64,14 @@ uint32_t total_samples = ipc_buffer_index; // total number of samples currently 
 
         uint32_t offset = (uint32_t)i * (uint32_t)IPC_CHUNK_TRANSFER_SIZE;
 
-        // ALWAYS SEND IN MULTIPLES OF 32, EVEN IF THERE IS NO MORE DATA TO SEND, OTHERWISE THE DSP WILL HANG WAITING FOR MORE DATA
-        uint16_t count = IPC_CHUNK_TRANSFER_SIZE;
-        /*if (offset + IPC_CHUNK_TRANSFER_SIZE > total_samples) {
-            count = total_samples - offset;
-        }*/
-
         int status = dev_dsp_ipc_transfer(
-            base_address, &ipc_buffer[offset], count, ipc_callback,
+            base_address, &ipc_buffer[offset], IPC_CHUNK_TRANSFER_SIZE, ipc_callback,
             (void *)0x23AC1D23 // arbitrary user context value for testing
         );
 
-         ft_printf("status: %d, chunk %u, count: %u, offset: %u, address: 0x%08x", status, i, count, offset, base_address);
+         ft_printf("status: %d, chunk %u, count: %u, offset: %u, address: 0x%08x", status, i, IPC_CHUNK_TRANSFER_SIZE, offset, base_address);
 
-        base_address += (uint32_t)count * sizeof(int32_t);
+        base_address += (uint32_t)IPC_CHUNK_TRANSFER_SIZE * sizeof(int32_t);
     }
 
     ft_set_module_param( 0, PARAM_TRANSMISSION_END, total_samples); // send total samples to dsp for playback
