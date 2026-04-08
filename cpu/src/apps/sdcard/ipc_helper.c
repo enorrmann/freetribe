@@ -1,7 +1,7 @@
 #include "ipc_helper.h"
 #include "parameters.h"
 
-uint32_t MAX_IPC_TRANSFER_SIZE =
+uint32_t IPC_CHUNK_TRANSFER_SIZE =
     16 * 1024; // Max transfer size in 32-bit words (must be <= 65535 for 16-bit
                // word count in metadata)
 #define IPC_BUFFER_SIZE (1024 * 512)
@@ -57,16 +57,16 @@ void ipc_send_buffer_chunked() {
 uint32_t total_samples = ipc_buffer_index; // total number of samples currently in the buffer    total_samples_read
     
 
-    uint32_t num_chunks = (total_samples + MAX_IPC_TRANSFER_SIZE - 1) / MAX_IPC_TRANSFER_SIZE;
+    uint32_t num_chunks = (total_samples + IPC_CHUNK_TRANSFER_SIZE - 1) / IPC_CHUNK_TRANSFER_SIZE;
     ft_printf("Total samples: %i, num_chunks: %i", (int)total_samples, (int)num_chunks);
 
     for (uint32_t i = 0; i < num_chunks; i++) {
 
-        uint32_t offset = (uint32_t)i * (uint32_t)MAX_IPC_TRANSFER_SIZE;
+        uint32_t offset = (uint32_t)i * (uint32_t)IPC_CHUNK_TRANSFER_SIZE;
 
         // ALWAYS SEND IN MULTIPLES OF 32, EVEN IF THERE IS NO MORE DATA TO SEND, OTHERWISE THE DSP WILL HANG WAITING FOR MORE DATA
-        uint16_t count = MAX_IPC_TRANSFER_SIZE;
-        /*if (offset + MAX_IPC_TRANSFER_SIZE > total_samples) {
+        uint16_t count = IPC_CHUNK_TRANSFER_SIZE;
+        /*if (offset + IPC_CHUNK_TRANSFER_SIZE > total_samples) {
             count = total_samples - offset;
         }*/
 
