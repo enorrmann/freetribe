@@ -195,7 +195,7 @@ void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
             break;
 
         default:
-        ipc_simple_send(pad); // for testing    
+       // ipc_simple_send(pad); // for testing    
             break;
         }
     }
