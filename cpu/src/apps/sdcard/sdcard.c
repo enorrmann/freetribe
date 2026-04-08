@@ -139,34 +139,38 @@ void list_root(void) {
     }
 }
 
-void read_file_contents(const char *filename) {
+void read_file_contents(const char *filename, int file_number) {
+
+    __attribute__((aligned(512)))
+#define BUFFER_SIZE (1024 * 512 * 4) // max ok size
+    BYTE buffer[BUFFER_SIZE];
 
     wav_info_t info;
 
     FRESULT res;
     FIL file;
+    //FIL * pFile  = &file;
+    FIL * pFile =  &wav_files[file_number];
     UINT bytes_read = 0;
 
-    __attribute__((aligned(512)))
-#define BUFFER_SIZE (1024 * 512 * 4) // max ok size
-    BYTE buffer[BUFFER_SIZE];
-    // BYTE buffer_2[BUFFER_SIZE]; // this works so 512kB is definitely not the
-
-    // Open file for reading
-    DEBUG_LOG("Opening file: %s", filename);
-    res = f_open(&file, filename, FA_READ);
-    if (res != FR_OK) {
-        DEBUG_LOG("Failed to open file: %i", (int)res);
-        return;
+    // Open file for reading if using local file instead of preloaded
+    if (pFile == &file) {
+        DEBUG_LOG("Opening file: %s", filename);
+        res = f_open(pFile, filename, FA_READ);
+        if (res != FR_OK) {
+            DEBUG_LOG("Failed to open file: %i", (int)res);
+            return;
+        }
     }
-    if (wav_read_info(&file, &info) == FR_OK) {
+    
+    if (wav_read_info(pFile, &info) == FR_OK) {
         DEBUG_LOG("SR: %lu", info.sample_rate);
         DEBUG_LOG("Bits: %u", info.bits_per_sample);
         DEBUG_LOG("Ch: %u", info.num_channels);
         DEBUG_LOG("Data offset: %lu", info.data_offset);
         DEBUG_LOG("Data size: %lu", info.data_size);
         DEBUG_LOG("Audio format: %u", info.audio_format);
-        f_lseek(&file, info.data_offset); // Seek to start of sample data
+        f_lseek(pFile, info.data_offset); // Seek to start of sample data
     }
 
     // Read and print file contents
@@ -188,7 +192,7 @@ void read_file_contents(const char *filename) {
     ipc_init_buffer();
     do {
         // buffer is overwritten each loop
-        res = f_read(&file, buffer, sizeof(buffer), &bytes_read);
+        res = f_read(pFile, buffer, sizeof(buffer), &bytes_read);
         int total_samples_per_channel = bytes_read / frame_size;
         if (res != FR_OK) {
             break;
@@ -205,12 +209,14 @@ void read_file_contents(const char *filename) {
              BUFFER_SIZE); // if we read less than the buffer size, we know
                            // we've reached the end of the file
 
-    //ipc_send_buffer_chunked();
-    ipc_send_buffer_via_param();
+    ipc_send_buffer_chunked();
+    //ipc_send_buffer_via_param();
     
 
-    // Close file
-    res = f_close(&file);
+    // Close file if it was opened here and not part of array
+    if (pFile == &file) {
+        res = f_close(pFile);
+    }
     if (res != FR_OK) {
         DEBUG_LOG("Error closing file: %i", (int)res);
     }
@@ -223,23 +229,8 @@ void read_file_contents(const char *filename) {
 
 void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
     if (state) {
-        
-        switch (pad) {
-        case 0:
-            read_file_contents("/clap.wav");
-            break;
-        case 1:
-            read_file_contents("/kick-1985.wav");
-            break;
-        case 2:
-            read_file_contents("/hh-808.wav");
-            break;
-
-        default:
-       // ipc_simple_send(pad); // for testing    
-            break;
+            read_file_contents("",pad);
         }
-    }
 }
 
 /**
