@@ -26,12 +26,7 @@ void ipc_callback(void *ctx, t_ipc_status status) {
 void ipc_simple_send(uint32_t value) {
             uint32_t to_send [1] = { value };
         int status = dev_dsp_ipc_transfer(
-            base_address, to_send, sizeof(to_send), ipc_callback,
-            (void *)0x23AC1D23 // arbitrary user context value for testing
-        );
-         ft_printf("simple sent: %u, status %i", value, status);
-         status = dev_dsp_ipc_transfer(
-            base_address+1, to_send, sizeof(to_send), ipc_callback,
+            initial_base_address, to_send, sizeof(to_send), ipc_callback,
             (void *)0x23AC1D23 // arbitrary user context value for testing
         );
 
