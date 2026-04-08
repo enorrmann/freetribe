@@ -71,6 +71,8 @@ void ipc_simple_send(uint32_t value) {
 
 
          ft_printf("simple sent: %u, status %i", value, status);
+             ft_get_module_param(0, 0);
+
 
 }
 
@@ -81,7 +83,10 @@ void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
         
     }
 }
+void param_callback(uint16_t module_id, uint16_t param_index, int32_t param_value){
+    ft_printf("Received param callback! module_id: %u, param_index: %u, param_value: %d", module_id, param_index, param_value);
 
+}
 /**
  * @brief   Initialise application.
  *
@@ -93,6 +98,7 @@ void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
 t_status app_init(void) {
 
     ft_register_panel_callback(TRIGGER_EVENT, _trigger_callback);
+ft_register_dsp_callback(MSG_TYPE_MODULE, MODULE_PARAM_VALUE, param_callback);
 
     t_status status = ERROR;
 
