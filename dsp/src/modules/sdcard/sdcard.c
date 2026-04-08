@@ -62,7 +62,7 @@ uint32_t play_index = 0;
 uint32_t total_samples=0;
 
 
-#define MAX_SIZE 48000 *1
+#define MAX_SIZE 48000 *10
 
 /*----- Extern variable definitions ----------------------------------*/
 
