@@ -208,13 +208,8 @@ void read_file_contents(const char *filename, int file_number) {
     ipc_init_buffer();
     uint32_t bytes_remaining = pInfo->data_size;
     do {
-        // Calculate offset into 'buffer' to guarantee 4-byte alignment for DMA
-        // when FatFs crosses the next 512-byte sector boundary.
-        uint32_t current_fpos = f_tell(pFile);
-        uint32_t bytes_to_next_sector = 512 - (current_fpos % 512);
-        if (bytes_to_next_sector == 512) bytes_to_next_sector = 0;
-        
-        uint32_t pad_offset = (4 - (bytes_to_next_sector % 4)) % 4;
+       // Forzamos alineación par calculando el remanente contra 4 bytes
+        uint32_t pad_offset = f_tell(pFile) % 4;
         BYTE *working_buffer = buffer + pad_offset;
 
         UINT bytes_to_read = sizeof(buffer) - pad_offset;
