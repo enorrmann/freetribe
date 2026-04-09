@@ -1,6 +1,7 @@
 #include "wav_reader.h"
 #include "freetribe.h"
 #include <string.h>
+#include "macros.h"
 
 FRESULT wav_read_info(FIL *file, wav_info_t *info)
 {
@@ -128,35 +129,35 @@ read_sample_fn select_reader(const wav_info_t *wav)
     uint16_t bytes_per_sample = block_align / wav->num_channels;
 
     if (bps == 16){
-        ft_printf("selecting 16-bit reader");
+        DEBUG_LOG("selecting 16-bit reader");
         return read_s16;
     }
     
     else  if (bps == 24) {
         if (bytes_per_sample == 3){
-        ft_printf("selecting packed 24-bit reader");
+        DEBUG_LOG("selecting packed 24-bit reader");
             return read_s24;      // packed 24-bit
             }
         else if (bytes_per_sample == 4){
-            ft_printf("selecting 24-bit in 32-bit container reader");
+            DEBUG_LOG("selecting 24-bit in 32-bit container reader");
             return read_s24_32;   // 24-bit in 32-bit container
         }
         else {
 
-            ft_printf("selecting unsupported reader");
+            DEBUG_LOG("selecting unsupported reader");
 
             return 0;             // unsupported
         }
     } else if (bps == 32 && wav->audio_format == WAV_FORMAT_PCM){
-        ft_printf("selecting 32-bit reader");
+        DEBUG_LOG("selecting 32-bit reader");
         return read_s32;
     }
     else if (bps == 32 && wav->audio_format == WAV_FORMAT_IEEE_FLOAT){
-        ft_printf("selecting IEEE float reader");
+        DEBUG_LOG("selecting IEEE float reader");
         return read_f32;
     }
         
-            ft_printf("selecting unsupported reader");  
+            DEBUG_LOG("selecting unsupported reader");  
 
 
     return 0; // unsupported
