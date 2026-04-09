@@ -202,11 +202,17 @@ void read_file_contents(const char *filename, int file_number) {
     }
 
     ipc_init_buffer();
+    uint32_t bytes_remaining = info.data_size;
     do {
+        UINT bytes_to_read = sizeof(buffer);
+        if (bytes_remaining < (uint32_t)bytes_to_read) {
+            bytes_to_read = (UINT)bytes_remaining;
+        }
+
         // buffer is overwritten each loop
-        res = f_read(pFile, buffer, sizeof(buffer), &bytes_read);
+        res = f_read(pFile, buffer, bytes_to_read, &bytes_read);
         int total_samples_per_channel = bytes_read / frame_size;
-        if (res != FR_OK) {
+        if (res != FR_OK || bytes_read == 0) {
             break;
         }
 
@@ -217,9 +223,9 @@ void read_file_contents(const char *filename, int file_number) {
 
         }
 
-    } while (bytes_read ==
-             BUFFER_SIZE); // if we read less than the buffer size, we know
-                           // we've reached the end of the file
+        bytes_remaining -= bytes_read;
+
+    } while (bytes_remaining > 0);
 
     ipc_send_buffer_chunked();
     //ipc_send_buffer_via_param();
@@ -262,8 +268,8 @@ t_status app_init(void) {
     //dev_sdcard_init();
     // _print_test_block();
     _mount_fs();
-//_preload_files("/");
-_preload_files("/samples/clean");
+_preload_files("/");
+//_preload_files("/samples/clean");
     // list_root();
     // read_file_contents("/clap.wav");
     // read_file_contents("/clap_i32t.wav");
