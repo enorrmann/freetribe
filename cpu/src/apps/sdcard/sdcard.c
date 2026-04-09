@@ -208,7 +208,10 @@ void read_file_contents(const char *filename, int file_number) {
     ipc_init_buffer();
     uint32_t bytes_remaining = pInfo->data_size;
     do {
-       // Forzamos alineación par calculando el remanente contra 4 bytes
+        // Shift our destination RAM pointer to guarantee that when FatFs reaches the 
+        // next 512-byte sector and triggers a hardware direct DMA transfer (disk_read), 
+        // the target RAM address is perfectly 4-byte aligned. This prevents DMA offset
+        // truncation bugs when reading WAVs that have odd-sized metadata chunks.
         uint32_t pad_offset = f_tell(pFile) % 4;
         BYTE *working_buffer = buffer + pad_offset;
 
