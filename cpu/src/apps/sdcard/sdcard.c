@@ -153,7 +153,7 @@ void list_root(void) {
 
 void read_file_contents(const char *filename, int file_number) {
 
-    __attribute__((aligned(512)))
+    __attribute__((aligned(4)))
 #define BUFFER_SIZE (1024 * 512 * 4) // max ok size
     BYTE buffer[BUFFER_SIZE];
 
@@ -204,13 +204,25 @@ void read_file_contents(const char *filename, int file_number) {
     ipc_init_buffer();
     uint32_t bytes_remaining = info.data_size;
     do {
-        UINT bytes_to_read = sizeof(buffer);
+        // Calculate offset into 'buffer' to guarantee 4-byte alignment for DMA
+        // when FatFs crosses the next 512-byte sector boundary.
+        uint32_t current_fpos = f_tell(pFile);
+        uint32_t bytes_to_next_sector = 512 - (current_fpos % 512);
+        if (bytes_to_next_sector == 512) bytes_to_next_sector = 0;
+        
+        uint32_t pad_offset = (4 - (bytes_to_next_sector % 4)) % 4;
+        BYTE *working_buffer = buffer + pad_offset;
+
+        UINT bytes_to_read = sizeof(buffer) - pad_offset;
+        // Ensure aligned chunk reading so we don't split frames
+        bytes_to_read -= (bytes_to_read % frame_size);
+        
         if (bytes_remaining < (uint32_t)bytes_to_read) {
             bytes_to_read = (UINT)bytes_remaining;
         }
 
         // buffer is overwritten each loop
-        res = f_read(pFile, buffer, bytes_to_read, &bytes_read);
+        res = f_read(pFile, working_buffer, bytes_to_read, &bytes_read);
         int total_samples_per_channel = bytes_read / frame_size;
         if (res != FR_OK || bytes_read == 0) {
             break;
@@ -218,9 +230,8 @@ void read_file_contents(const char *filename, int file_number) {
 
         int i;
         for (i = 0; i < total_samples_per_channel; i++) {
-            int32_t sample = read_sample(buffer, i * info.num_channels);
+            int32_t sample = read_sample(working_buffer, i * info.num_channels);
             ipc_add_to_buffer(sample);
-
         }
 
         bytes_remaining -= bytes_read;
@@ -268,8 +279,8 @@ t_status app_init(void) {
     //dev_sdcard_init();
     // _print_test_block();
     _mount_fs();
-_preload_files("/");
-//_preload_files("/samples/clean");
+//_preload_files("/");
+_preload_files("/samples/clean");
     // list_root();
     // read_file_contents("/clap.wav");
     // read_file_contents("/clap_i32t.wav");

@@ -90,29 +90,23 @@ int32_t read_s24(uint8_t *buf, int idx)
     // pointer to the sample
     uint8_t *p = buf + idx * 3;
 
-    // assemble little-endian 24-bit sample
-    int32_t v = ((int32_t)p[0]) |
-                ((int32_t)p[1] << 8) |
-                ((int32_t)p[2] << 16);
+    // Direct placement of 24-bit little endian into top 24 bits of a 32-bit int
+    // This perfectly sign extends and scales to Q1.31 without complex math or UB.
+    uint32_t uv = ((uint32_t)p[0] << 8) | 
+                  ((uint32_t)p[1] << 16) | 
+                  ((uint32_t)p[2] << 24);
 
-    // safe sign extend 24->32 bit
-    v = (v ^ 0x800000) - 0x800000;
-
-    // convert to Q1.31 (shift left 8)
-    return v << 8;
+    return (int32_t)uv;
 }
 int32_t read_s24_32(uint8_t *buf, int idx)
 {
     uint8_t *p = buf + idx * 4;
 
-    int32_t v = (int32_t)p[0] |
-                ((int32_t)p[1] << 8) |
-                ((int32_t)p[2] << 16);
+    uint32_t uv = ((uint32_t)p[0] << 8) | 
+                  ((uint32_t)p[1] << 16) | 
+                  ((uint32_t)p[2] << 24);
 
-    if (v & 0x800000)
-        v |= ~0xFFFFFF;
-
-    return v << 8;
+    return (int32_t)uv;
 }
 
 int32_t read_s32(uint8_t *buf, int idx)
@@ -131,6 +125,7 @@ read_sample_fn select_reader(const wav_info_t *wav)
 {
     uint16_t bps = wav->bits_per_sample;
     uint16_t block_align = (wav->num_channels * bps + 7) / 8;
+    uint16_t bytes_per_sample = block_align / wav->num_channels;
 
     if (bps == 16){
         ft_printf("selecting 16-bit reader");
@@ -138,11 +133,11 @@ read_sample_fn select_reader(const wav_info_t *wav)
     }
     
     else  if (bps == 24) {
-        if (block_align == 3){
+        if (bytes_per_sample == 3){
         ft_printf("selecting packed 24-bit reader");
             return read_s24;      // packed 24-bit
             }
-        else if (block_align == 4){
+        else if (bytes_per_sample == 4){
             ft_printf("selecting 24-bit in 32-bit container reader");
             return read_s24_32;   // 24-bit in 32-bit container
         }
