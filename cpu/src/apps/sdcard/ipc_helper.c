@@ -52,6 +52,7 @@ void ipc_send_buffer_via_param() {
 
 void ipc_send_buffer_chunked() {
 uint32_t total_samples = ipc_buffer_index; // total number of samples currently in the buffer    total_samples_read
+ft_set_module_param( 0, PARAM_TRANSMISSION_END, total_samples); // send total samples to dsp for playback before sending chunks to avoid delay and may cause glitche but is faster
     
 
     uint32_t num_chunks = (total_samples + IPC_CHUNK_TRANSFER_SIZE - 1) / IPC_CHUNK_TRANSFER_SIZE;
@@ -71,5 +72,4 @@ uint32_t total_samples = ipc_buffer_index; // total number of samples currently 
         base_address += (uint32_t)IPC_CHUNK_TRANSFER_SIZE * sizeof(int32_t);
     }
 
-    ft_set_module_param( 0, PARAM_TRANSMISSION_END, total_samples); // send total samples to dsp for playback
 }

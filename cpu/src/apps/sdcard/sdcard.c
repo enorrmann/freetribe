@@ -74,6 +74,7 @@ void _trigger_callback(uint8_t pad, uint8_t vel, bool state);
 #define MAX_WAV_FILES 16
 
 FIL wav_files[MAX_WAV_FILES];
+wav_info_t wav_info[MAX_WAV_FILES];
 //char wav_names[MAX_WAV_FILES][64]; // store names if needed
 uint8_t wav_count = 0;
 
@@ -87,7 +88,7 @@ void _preload_files(const char *base_path) {
 
     // abrir directorio
     res = f_opendir(&dir, base_path);
-    ft_printf("f_opendir('%s') = %d", base_path, (int)res);
+    DEBUG_LOG("f_opendir('%s') = %d", base_path, (int)res);
 
     if (res != FR_OK)
         return;
@@ -112,10 +113,12 @@ void _preload_files(const char *base_path) {
                         snprintf(fullpath, sizeof(fullpath), "%s/%s", base_path, name);
 
                     if (f_open(&wav_files[wav_count], fullpath, FA_READ) == FR_OK) {
-                        ft_printf("WAV[%d]: %s", wav_count, fullpath);
+                        DEBUG_LOG("WAV[%d]: %s", wav_count, fullpath);
+                        int res = wav_read_info(&wav_files[wav_count], &wav_info[wav_count]);
+                        DEBUG_LOG("wav_read_info result: %i", (int)res);
                         wav_count++;
                     } else {
-                        ft_printf("FAIL open: %s", fullpath);
+                        DEBUG_LOG("FAIL open: %s", fullpath);
                     }
                 }
             }
@@ -157,12 +160,12 @@ void read_file_contents(const char *filename, int file_number) {
 #define BUFFER_SIZE (1024 * 512 * 4) // max ok size
     BYTE buffer[BUFFER_SIZE];
 
-    wav_info_t info;
-
+    
     FRESULT res;
     FIL file;
     //FIL * pFile  = &file;
     FIL * pFile =  &wav_files[file_number];
+    wav_info_t * pInfo = &wav_info[file_number];
     f_lseek(pFile, 0); // Ensure we're at the start of the file
     UINT bytes_read = 0;
 
@@ -176,7 +179,7 @@ void read_file_contents(const char *filename, int file_number) {
         }
     }
     
-    if (wav_read_info(pFile, &info) == FR_OK) {
+    /*if (wav_read_info(pFile, &info) == FR_OK) {
         DEBUG_LOG("SR: %lu", info.sample_rate);
         DEBUG_LOG("Bits: %u", info.bits_per_sample);
         DEBUG_LOG("Ch: %u", info.num_channels);
@@ -184,17 +187,18 @@ void read_file_contents(const char *filename, int file_number) {
         DEBUG_LOG("Data size: %lu", info.data_size);
         DEBUG_LOG("Audio format: %u", info.audio_format);
         f_lseek(pFile, info.data_offset); // Seek to start of sample data
-    }
+    }*/
+    f_lseek(pFile, pInfo->data_offset); // Seek to start of sample data
 
     // Read and print file contents
     DEBUG_LOG("File contents:");
 
-    int bytes_per_sample = info.bits_per_sample / 8; // 4 para int32/float32
-    int frame_size = bytes_per_sample * info.num_channels; // 4=mono, 8=stereo
+    int bytes_per_sample = pInfo->bits_per_sample / 8; // 4 para int32/float32
+    int frame_size = bytes_per_sample * pInfo->num_channels; // 4=mono, 8=stereo
     DEBUG_LOG("bytes_per_sample %i", (int)bytes_per_sample);
     DEBUG_LOG("frame_size %i", (int)frame_size);
 
-    read_sample_fn read_sample = select_reader(&info);
+    read_sample_fn read_sample = select_reader(pInfo);
 
     if (!read_sample) {
         DEBUG_LOG("no reader function: %i", (int)read_sample);
@@ -202,7 +206,7 @@ void read_file_contents(const char *filename, int file_number) {
     }
 
     ipc_init_buffer();
-    uint32_t bytes_remaining = info.data_size;
+    uint32_t bytes_remaining = pInfo->data_size;
     do {
         // Calculate offset into 'buffer' to guarantee 4-byte alignment for DMA
         // when FatFs crosses the next 512-byte sector boundary.
@@ -230,7 +234,7 @@ void read_file_contents(const char *filename, int file_number) {
 
         int i;
         for (i = 0; i < total_samples_per_channel; i++) {
-            int32_t sample = read_sample(working_buffer, i * info.num_channels);
+            int32_t sample = read_sample(working_buffer, i * pInfo->num_channels);
             ipc_add_to_buffer(sample);
         }
 
