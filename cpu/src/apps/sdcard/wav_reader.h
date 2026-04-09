@@ -26,6 +26,9 @@ typedef struct {
  // function for reading file data
 typedef int32_t (*read_sample_fn)(uint8_t *buf, int idx);
 
+// select reader based on WAV info
+read_sample_fn select_reader(const wav_info_t *wav);
+
 /**
  * @brief Parse WAV file and extract basic info
  * 

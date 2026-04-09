@@ -1,4 +1,5 @@
 #include "wav_reader.h"
+#include "freetribe.h"
 #include <string.h>
 
 FRESULT wav_read_info(FIL *file, wav_info_t *info)
@@ -86,14 +87,32 @@ int32_t read_s16(uint8_t *buf, int idx)
 }
 int32_t read_s24(uint8_t *buf, int idx)
 {
+    // pointer to the sample
     uint8_t *p = buf + idx * 3;
 
+    // assemble little-endian 24-bit sample
     int32_t v = ((int32_t)p[0]) |
                 ((int32_t)p[1] << 8) |
                 ((int32_t)p[2] << 16);
 
-    v = (v << 8) >> 8; // sign extend
-    return v << 8;     // to Q1.31
+    // safe sign extend 24->32 bit
+    v = (v ^ 0x800000) - 0x800000;
+
+    // convert to Q1.31 (shift left 8)
+    return v << 8;
+}
+int32_t read_s24_32(uint8_t *buf, int idx)
+{
+    uint8_t *p = buf + idx * 4;
+
+    int32_t v = (int32_t)p[0] |
+                ((int32_t)p[1] << 8) |
+                ((int32_t)p[2] << 16);
+
+    if (v & 0x800000)
+        v |= ~0xFFFFFF;
+
+    return v << 8;
 }
 
 int32_t read_s32(uint8_t *buf, int idx)
@@ -107,17 +126,43 @@ int32_t read_f32(uint8_t *buf, int idx)
     float f = p[idx];
     return (int32_t)(f * (float)INT32_MAX);
 }
-read_sample_fn select_reader(int bps, int format)
+
+read_sample_fn select_reader(const wav_info_t *wav)
 {
-    if (bps == 16) {
+    uint16_t bps = wav->bits_per_sample;
+    uint16_t block_align = (wav->num_channels * bps + 7) / 8;
+
+    if (bps == 16){
+        ft_printf("selecting 16-bit reader");
         return read_s16;
-    } else if (bps == 24) {
-        return read_s24;
-    } else if (bps == 32 && format == WAV_FORMAT_PCM) {
+    }
+    
+    else  if (bps == 24) {
+        if (block_align == 3){
+        ft_printf("selecting packed 24-bit reader");
+            return read_s24;      // packed 24-bit
+            }
+        else if (block_align == 4){
+            ft_printf("selecting 24-bit in 32-bit container reader");
+            return read_s24_32;   // 24-bit in 32-bit container
+        }
+        else {
+
+            ft_printf("selecting unsupported reader");
+
+            return 0;             // unsupported
+        }
+    } else if (bps == 32 && wav->audio_format == WAV_FORMAT_PCM){
+        ft_printf("selecting 32-bit reader");
         return read_s32;
-    } else if (bps == 32 && format == WAV_FORMAT_IEEE_FLOAT) {
+    }
+    else if (bps == 32 && wav->audio_format == WAV_FORMAT_IEEE_FLOAT){
+        ft_printf("selecting IEEE float reader");
         return read_f32;
     }
+        
+            ft_printf("selecting unsupported reader");  
 
-    return 0; // unsupported format
+
+    return 0; // unsupported
 }

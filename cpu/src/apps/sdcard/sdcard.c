@@ -47,6 +47,7 @@ under the terms of the GNU Affero General Public License as published by
 #include "ipc_helper.h"
 #include "wav_reader.h"
 #include "parameters.h"
+#include <string.h>
 
 
 void _mount_fs();
@@ -73,15 +74,20 @@ void _trigger_callback(uint8_t pad, uint8_t vel, bool state);
 #define MAX_WAV_FILES 16
 
 FIL wav_files[MAX_WAV_FILES];
-char wav_names[MAX_WAV_FILES][64]; // store names if needed
+//char wav_names[MAX_WAV_FILES][64]; // store names if needed
 uint8_t wav_count = 0;
 
-void _preload_files(void) {
+void _preload_files(const char *base_path) {
     FRESULT res;
+    DIR dir;
+    FILINFO fno;
 
-    ft_printf("Opening root directory...");
-    res = f_opendir(&dir, "/");
-    DEBUG_LOG("f_opendir result: %i", (int)res);
+    char fullpath[256];
+    size_t base_len = strlen(base_path);
+
+    // abrir directorio
+    res = f_opendir(&dir, base_path);
+    ft_printf("f_opendir('%s') = %d", base_path, (int)res);
 
     if (res != FR_OK)
         return;
@@ -92,18 +98,24 @@ void _preload_files(void) {
             break;
 
         if (!(fno.fattrib & AM_DIR)) {
-            // check .wav extension
             const char *name = fno.fname;
             int len = strlen(name);
 
             if (len > 4 && strcasecmp(&name[len - 4], ".wav") == 0) {
-                if (wav_count < MAX_WAV_FILES) {
-                    strcpy(wav_names[wav_count], name);
 
-                    // open file
-                    if (f_open(&wav_files[wav_count], name, FA_READ) == FR_OK) {
-                        ft_printf("WAV[%d]: %s", wav_count, name);
+                if (wav_count < MAX_WAV_FILES) {
+
+                    // construir path completo
+                    if (base_path[base_len - 1] == '/')
+                        snprintf(fullpath, sizeof(fullpath), "%s%s", base_path, name);
+                    else
+                        snprintf(fullpath, sizeof(fullpath), "%s/%s", base_path, name);
+
+                    if (f_open(&wav_files[wav_count], fullpath, FA_READ) == FR_OK) {
+                        ft_printf("WAV[%d]: %s", wav_count, fullpath);
                         wav_count++;
+                    } else {
+                        ft_printf("FAIL open: %s", fullpath);
                     }
                 }
             }
@@ -151,6 +163,7 @@ void read_file_contents(const char *filename, int file_number) {
     FIL file;
     //FIL * pFile  = &file;
     FIL * pFile =  &wav_files[file_number];
+    f_lseek(pFile, 0); // Ensure we're at the start of the file
     UINT bytes_read = 0;
 
     // Open file for reading if using local file instead of preloaded
@@ -181,8 +194,7 @@ void read_file_contents(const char *filename, int file_number) {
     DEBUG_LOG("bytes_per_sample %i", (int)bytes_per_sample);
     DEBUG_LOG("frame_size %i", (int)frame_size);
 
-    read_sample_fn read_sample =
-        select_reader(info.bits_per_sample, info.audio_format);
+    read_sample_fn read_sample = select_reader(&info);
 
     if (!read_sample) {
         DEBUG_LOG("no reader function: %i", (int)read_sample);
@@ -250,7 +262,8 @@ t_status app_init(void) {
     //dev_sdcard_init();
     // _print_test_block();
     _mount_fs();
-_preload_files();
+//_preload_files("/");
+_preload_files("/samples/clean");
     // list_root();
     // read_file_contents("/clap.wav");
     // read_file_contents("/clap_i32t.wav");
