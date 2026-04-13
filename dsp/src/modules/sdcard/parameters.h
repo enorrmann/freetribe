@@ -10,6 +10,7 @@ typedef enum {
     PARAM_TRANSMISSION_START,
     PARAM_TRANSMISSION_END,
     PARAM_SAMPLE_LOAD,
+    PARAM_SAMPLE_COUNT_UPDATE,
     PARAM_COUNT /// Should remain last to return number of parameters.
 } e_param;
 

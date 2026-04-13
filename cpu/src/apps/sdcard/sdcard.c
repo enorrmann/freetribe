@@ -155,9 +155,9 @@ void list_root(void) {
 }
 
 void read_file_contents(const char *filename, int file_number) {
-
     __attribute__((aligned(4)))
-#define BUFFER_SIZE (1024 * 512 * 4) // max ok size
+    //#define BUFFER_SIZE (1024 * 1024 * 2) // max ok size
+    #define BUFFER_SIZE (32*24* 128) // smaller buffer to test chunking 
     BYTE buffer[BUFFER_SIZE];
 
     
@@ -179,15 +179,6 @@ void read_file_contents(const char *filename, int file_number) {
         }
     }
     
-    /*if (wav_read_info(pFile, &info) == FR_OK) {
-        DEBUG_LOG("SR: %lu", info.sample_rate);
-        DEBUG_LOG("Bits: %u", info.bits_per_sample);
-        DEBUG_LOG("Ch: %u", info.num_channels);
-        DEBUG_LOG("Data offset: %lu", info.data_offset);
-        DEBUG_LOG("Data size: %lu", info.data_size);
-        DEBUG_LOG("Audio format: %u", info.audio_format);
-        f_lseek(pFile, info.data_offset); // Seek to start of sample data
-    }*/
     f_lseek(pFile, pInfo->data_offset); // Seek to start of sample data
 
     // Read and print file contents
@@ -233,6 +224,90 @@ void read_file_contents(const char *filename, int file_number) {
         int i;
         for (i = 0; i < total_samples_per_channel; i++) {
             int32_t sample = read_sample(working_buffer, i * pInfo->num_channels);
+            ipc_add_to_buffer(sample);
+        }
+
+        bytes_remaining -= bytes_read;
+
+    } while (bytes_remaining > 0);
+ipc_send_last_chunk();
+    //ipc_send_buffer_chunked();
+    //ipc_send_buffer_via_param();
+    
+
+    // Close file if it was opened here and not part of array
+    if (pFile == &file) {
+        res = f_close(pFile);
+    }
+    if (res != FR_OK) {
+        DEBUG_LOG("Error closing file: %i", (int)res);
+    }
+}
+void test_read_file_contents(const char *filename, int file_number) {
+    __attribute__((aligned(4)))
+    #define BUFFER_SIZE_IN_BYTES (1024 * 1024 * 2) // max ok size
+    BYTE file_read_buffer[BUFFER_SIZE_IN_BYTES];
+
+    
+    FRESULT res;
+    FIL file;
+    //FIL * pFile  = &file;
+    FIL * pFile =  &wav_files[file_number];
+    wav_info_t * pInfo = &wav_info[file_number];
+    f_lseek(pFile, 0); // Ensure we're at the start of the file
+    UINT bytes_read = 0;
+
+    // Open file for reading if using local file instead of preloaded
+    if (pFile == &file) {
+        DEBUG_LOG("Opening file: %s", filename);
+        res = f_open(pFile, filename, FA_READ);
+        if (res != FR_OK) {
+            DEBUG_LOG("Failed to open file: %i", (int)res);
+            return;
+        }
+    }
+    
+    f_lseek(pFile, pInfo->data_offset); // Seek to start of sample data
+
+    // Read and print file contents
+    DEBUG_LOG("File contents:");
+
+    int bytes_per_sample = pInfo->bits_per_sample / 8; // 4 para int32/float32
+    int frame_size = bytes_per_sample * pInfo->num_channels; // 4=mono, 8=stereo
+    DEBUG_LOG("bytes_per_sample %i", (int)bytes_per_sample);
+    DEBUG_LOG("frame_size %i", (int)frame_size);
+
+    read_sample_fn read_sample = select_reader(pInfo);
+
+    if (!read_sample) {
+        DEBUG_LOG("no reader function: %i", (int)read_sample);
+        return;
+    }
+
+    ipc_init_buffer();
+    uint32_t bytes_remaining = pInfo->data_size;
+    do {
+
+        UINT bytes_to_read = sizeof(file_read_buffer);
+        // Ensure aligned chunk reading so we don't split frames
+        bytes_to_read -= (bytes_to_read % frame_size);
+        
+        if (bytes_remaining < (uint32_t)bytes_to_read) {
+            bytes_to_read = (UINT)bytes_remaining;
+        }
+
+        // buffer is overwritten each loop
+        res = f_read(pFile, file_read_buffer, bytes_to_read, &bytes_read);
+        int total_samples_per_channel = bytes_read / frame_size;
+        if (res != FR_OK || bytes_read == 0) {
+            break;
+        }
+
+        int i;
+        int stride = 4; // stride para 32 bits mono
+        for (i = 0; i < total_samples_per_channel; i+=stride) {
+            // this buffer is in bytes
+            int32_t sample = file_read_buffer[i]; // test for signed 32 bits mono
             ipc_add_to_buffer(sample);
         }
 

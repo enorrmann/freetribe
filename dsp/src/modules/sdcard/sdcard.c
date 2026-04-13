@@ -119,6 +119,9 @@ void module_set_param(uint16_t param_index, int32_t value) {
             total_samples = value; 
             play_index = 0;
             break;
+            case PARAM_SAMPLE_COUNT_UPDATE:
+            total_samples = value; 
+            break;
     default:
         break;
     }

@@ -10,5 +10,5 @@ void ipc_send_buffer_chunked() ;
 void ipc_add_to_buffer (uint32_t sample) ;
 void ipc_send_buffer_via_param() ; // for testing
 void ipc_simple_send(uint32_t value) ; // for testing
-
+void ipc_send_last_chunk();
 #endif // IPC_HELPER_H
