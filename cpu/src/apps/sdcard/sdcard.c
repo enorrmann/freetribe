@@ -154,7 +154,7 @@ void list_root(void) {
     }
 }
 
-void read_file_contents(const char *filename, int file_number) {
+void OK_read_file_contents(const char *filename, int file_number) {
     __attribute__((aligned(4)))
     //#define BUFFER_SIZE (1024 * 1024 * 2) // max ok size
     #define BUFFER_SIZE (32*24* 128) // smaller buffer to test chunking 
@@ -243,10 +243,13 @@ ipc_send_last_chunk();
         DEBUG_LOG("Error closing file: %i", (int)res);
     }
 }
-void test_read_file_contents(const char *filename, int file_number) {
+
+
+void read_file_contents(const char *filename, int file_number) { // testing version
     __attribute__((aligned(4)))
-    #define BUFFER_SIZE_IN_BYTES (1024 * 1024 * 2) // max ok size
-    BYTE file_read_buffer[BUFFER_SIZE_IN_BYTES];
+    //#define BUFFER_SIZE (1024 * 1024 * 2) // max ok size
+    #define BUFFER_SIZE (32*24* 128) // smaller buffer to test chunking 
+    BYTE file_read_buffer[BUFFER_SIZE];
 
     
     FRESULT res;
@@ -287,6 +290,7 @@ void test_read_file_contents(const char *filename, int file_number) {
     ipc_init_buffer();
     uint32_t bytes_remaining = pInfo->data_size;
     do {
+        
 
         UINT bytes_to_read = sizeof(file_read_buffer);
         // Ensure aligned chunk reading so we don't split frames
@@ -304,18 +308,18 @@ void test_read_file_contents(const char *filename, int file_number) {
         }
 
         int i;
-        int stride = 4; // stride para 32 bits mono
-        for (i = 0; i < total_samples_per_channel; i+=stride) {
-            // this buffer is in bytes
-            int32_t sample = file_read_buffer[i]; // test for signed 32 bits mono
+        for (i = 0; i < total_samples_per_channel; i+=frame_size) {
+            //int32_t sample = read_sample(file_read_buffer, i * pInfo->num_channels);
+            int32_t sample = read_sample(file_read_buffer, i);
+            //int32_t sample = *(int32_t*)&file_read_buffer[i];
             ipc_add_to_buffer(sample);
         }
 
         bytes_remaining -= bytes_read;
 
     } while (bytes_remaining > 0);
-
-    ipc_send_buffer_chunked();
+ipc_send_last_chunk();
+    //ipc_send_buffer_chunked();
     //ipc_send_buffer_via_param();
     
 
@@ -327,6 +331,8 @@ void test_read_file_contents(const char *filename, int file_number) {
         DEBUG_LOG("Error closing file: %i", (int)res);
     }
 }
+
+
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -356,8 +362,8 @@ t_status app_init(void) {
     //dev_sdcard_init();
     // _print_test_block();
     _mount_fs();
-//_preload_files("/");
-_preload_files("/samples/clean");
+_preload_files("/");
+//_preload_files("/samples/clean");
     // list_root();
     // read_file_contents("/clap.wav");
     // read_file_contents("/clap_i32t.wav");
