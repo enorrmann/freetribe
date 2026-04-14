@@ -154,7 +154,7 @@ void list_root(void) {
     }
 }
 
-void OK_read_file_contents(const char *filename, int file_number) {
+void read_file_contents(const char *filename, int file_number) {
     __attribute__((aligned(4)))
     //#define BUFFER_SIZE (1024 * 1024 * 2) // max ok size
     #define BUFFER_SIZE (32*24* 128) // smaller buffer to test chunking 
@@ -245,7 +245,7 @@ ipc_send_last_chunk();
 }
 
 
-void read_file_contents(const char *filename, int file_number) { // testing version
+void TEST__read_file_contents(const char *filename, int file_number) { // testing version, NOT WORKING  
     __attribute__((aligned(4)))
     //#define BUFFER_SIZE (1024 * 1024 * 2) // max ok size
     #define BUFFER_SIZE (32*24* 128) // smaller buffer to test chunking 
@@ -277,8 +277,10 @@ void read_file_contents(const char *filename, int file_number) { // testing vers
 
     int bytes_per_sample = pInfo->bits_per_sample / 8; // 4 para int32/float32
     int frame_size = bytes_per_sample * pInfo->num_channels; // 4=mono, 8=stereo
+    DEBUG_LOG("bits_per_sample %i", (int)pInfo->bits_per_sample);
     DEBUG_LOG("bytes_per_sample %i", (int)bytes_per_sample);
     DEBUG_LOG("frame_size %i", (int)frame_size);
+    DEBUG_LOG("num_channels %i", (int)pInfo->num_channels);
 
     read_sample_fn read_sample = select_reader(pInfo);
 
@@ -303,22 +305,22 @@ void read_file_contents(const char *filename, int file_number) { // testing vers
         // buffer is overwritten each loop
         res = f_read(pFile, file_read_buffer, bytes_to_read, &bytes_read);
         int total_samples_per_channel = bytes_read / frame_size;
+        DEBUG_LOG("total_samples_per_channel: %i", (int)total_samples_per_channel);
+        DEBUG_LOG("bytes_read: %u", (uint32_t)bytes_read);
         if (res != FR_OK || bytes_read == 0) {
             break;
         }
 
         int i;
-        for (i = 0; i < total_samples_per_channel; i+=frame_size) {
-            //int32_t sample = read_sample(file_read_buffer, i * pInfo->num_channels);
-            int32_t sample = read_sample(file_read_buffer, i);
-            //int32_t sample = *(int32_t*)&file_read_buffer[i];
+        for (i = 0; i < total_samples_per_channel; i++) {
+            int32_t sample = read_sample(file_read_buffer, i * pInfo->num_channels);
             ipc_add_to_buffer(sample);
         }
 
         bytes_remaining -= bytes_read;
 
     } while (bytes_remaining > 0);
-ipc_send_last_chunk();
+    ipc_send_last_chunk();
     //ipc_send_buffer_chunked();
     //ipc_send_buffer_via_param();
     
@@ -362,8 +364,8 @@ t_status app_init(void) {
     //dev_sdcard_init();
     // _print_test_block();
     _mount_fs();
-_preload_files("/");
-//_preload_files("/samples/clean");
+//_preload_files("/");
+_preload_files("/samples/clean");
     // list_root();
     // read_file_contents("/clap.wav");
     // read_file_contents("/clap_i32t.wav");

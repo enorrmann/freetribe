@@ -1,0 +1,35 @@
+bytes_per_sample 4
+frame_size 4
+num_channels 1
+selecting 32-bit reader
+total_samples_per_channel: 16226
+
+
+bytes_per_sample 2
+frame_size 2
+num_channels 1
+selecting 16-bit reader
+total_samples_per_channel: 16226
+
+
+bytes_per_sample 3
+frame_size 3
+num_channels 1
+selecting packed 24-bit reader
+total_samples_per_channel: 16226
+
+
+
+File contents:
+bits_per_sample 24
+bytes_per_sample 3
+frame_size 3
+num_channels 1
+selecting packed 24-bit reader
+disk_read(0, 0xc0608a0a, 53988290, 27)
+disk_read(0, 0xc021efb4, 53988317, 1)
+total_samples_per_channel: 4764
+bytes_read: 14292
+per_emifa_transfer
+status: 0, chunk 0, count: 16384, offset: 0, address: 0x00000060
+_on_hostwr_done

@@ -89,7 +89,7 @@ int32_t read_s16(uint8_t *buf, int idx)
 int32_t read_s24(uint8_t *buf, int idx)
 {
     // pointer to the sample
-    uint8_t *p = buf + idx ;/// * 3; 
+    uint8_t *p = buf + idx * 3; 
 
     // Direct placement of 24-bit little endian into top 24 bits of a 32-bit int
     // This perfectly sign extends and scales to Q1.31 without complex math or UB.
