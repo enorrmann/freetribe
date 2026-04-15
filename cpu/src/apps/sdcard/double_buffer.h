@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define DOUBLE_BUFFER_SIZE (24*32)
+#define DOUBLE_BUFFER_SIZE (16 * 1024)
 
 
 

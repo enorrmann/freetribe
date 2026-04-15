@@ -17,7 +17,7 @@ double_buffer_t double_buffer;
 static void ipc_send_chunk(uint32_t chunk_number) ;
 
 void buffer_callback(uint32_t *buf, uint32_t len,uint32_t total){
-  //  ft_printf("Buffer %u called with %u samples", len, total); this is working
+    ft_printf("Buffer %u called with %u samples", len, total); //this is working
 
 }
 
@@ -59,7 +59,7 @@ void ipc_send_last_chunk() {
 }
 
 void ipc_add_to_buffer(uint32_t sample) {
-    if (total_samples >= IPC_BUFFER_SIZE) {
+    if (total_samples >= DOUBLE_BUFFER_SIZE) {
         // writing  log here hangs all
         return;
     }
