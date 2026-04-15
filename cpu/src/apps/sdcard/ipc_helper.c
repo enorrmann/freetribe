@@ -1,6 +1,7 @@
 #include "ipc_helper.h"
 #include "parameters.h"
 #include "macros.h"
+#include "double_buffer.h"
 
 uint32_t IPC_CHUNK_TRANSFER_SIZE =
     16 * 1024; // Max transfer size in 32-bit words (must be <= 65535 for 16-bit
@@ -11,9 +12,17 @@ uint32_t total_samples = 0; // Index for current position in ipc_buffer
 uint32_t total_chunks_sent = 0; // Number of chunks sent
 const uint32_t initial_base_address = 0x00000060;
 
+double_buffer_t double_buffer;
+
 static void ipc_send_chunk(uint32_t chunk_number) ;
 
+void buffer_callback(uint32_t *buf, uint32_t len,uint32_t total){
+  //  ft_printf("Buffer %u called with %u samples", len, total); this is working
+
+}
+
 void ipc_init_buffer() { 
+    db_init(&double_buffer, buffer_callback);
     total_samples = 0;
     total_chunks_sent = 0;
     // zero out the buffer
@@ -50,7 +59,12 @@ void ipc_send_last_chunk() {
 }
 
 void ipc_add_to_buffer(uint32_t sample) {
+    if (total_samples >= IPC_BUFFER_SIZE) {
+        // writing  log here hangs all
+        return;
+    }
     ipc_buffer[total_samples++] = sample;
+    db_push(&double_buffer, sample); // add to double buffer as well for testing
     static uint32_t partial_samples_sent = 0;
     partial_samples_sent++;
     if (partial_samples_sent == IPC_CHUNK_TRANSFER_SIZE) {
