@@ -1,7 +1,7 @@
 #include "ipc_helper.h"
 #include "parameters.h"
 #include "macros.h"
-#include "double_buffer.h"
+//#include "double_buffer.h"
 
 uint32_t IPC_CHUNK_TRANSFER_SIZE =
     16 * 1024; // Max transfer size in 32-bit words (must be <= 65535 for 16-bit
@@ -12,17 +12,30 @@ uint32_t total_samples = 0; // Index for current position in ipc_buffer
 uint32_t total_chunks_sent = 0; // Number of chunks sent
 const uint32_t initial_base_address = 0x00000060;
 
-double_buffer_t double_buffer;
+//double_buffer_t double_buffer;
 
 static void ipc_send_chunk(uint32_t chunk_number) ;
 
-void buffer_callback(uint32_t *buf, uint32_t len,uint32_t total){
-    ft_printf("Buffer %u called with %u samples", len, total); //this is working
+/*void buffer_callback(uint32_t *full_buffer, uint32_t len,uint32_t total_samples){
+    // ignore chunk num for now only 1
+    //ft_printf("Buffer %u called with %u samples", len, total_samples); //this is working
+
+    uint32_t local_buffer[DOUBLE_BUFFER_SIZE];
+    memcpy(local_buffer, full_buffer, DOUBLE_BUFFER_SIZE * sizeof(uint32_t));
+
+
+        ft_set_module_param(0, PARAM_TRANSMISSION_END, total_samples);
+        int status = dev_dsp_ipc_transfer(
+        initial_base_address, full_buffer, DOUBLE_BUFFER_SIZE, ipc_callback,
+        (void *)0x23AC1D23
+    );
+
+
 
 }
-
+*/
 void ipc_init_buffer() { 
-    db_init(&double_buffer, buffer_callback);
+  //  db_init(&double_buffer, buffer_callback);
     total_samples = 0;
     total_chunks_sent = 0;
     // zero out the buffer
@@ -31,6 +44,7 @@ void ipc_init_buffer() {
         ipc_buffer[i] = 0;  
     } 
 }
+    
 
 void ipc_callback(void *ctx, t_ipc_status status) {
     DEBUG_LOG("IPC callback called with user context");
@@ -59,12 +73,12 @@ void ipc_send_last_chunk() {
 }
 
 void ipc_add_to_buffer(uint32_t sample) {
-    if (total_samples >= DOUBLE_BUFFER_SIZE) {
+    if (total_samples >= IPC_BUFFER_SIZE) {
         // writing  log here hangs all
         return;
     }
     ipc_buffer[total_samples++] = sample;
-    db_push(&double_buffer, sample); // add to double buffer as well for testing
+
     static uint32_t partial_samples_sent = 0;
     partial_samples_sent++;
     if (partial_samples_sent == IPC_CHUNK_TRANSFER_SIZE) {
