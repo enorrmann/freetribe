@@ -354,7 +354,8 @@ void _handle_host_read_config() {
  */
 void _handle_host_read_done() {
 
-    if (_is_dma_complete() && (EMIFA_ERROR != g_state)) {
+    if ((0 == g_rx_state.words_total || _is_dma_complete())
+        && (EMIFA_ERROR != g_state)) {
         g_state = EMIFA_IDLE;
         g_rx_callback(g_rx_state.metadata);
     }
@@ -478,7 +479,9 @@ static inline void _isr_host_read_header() {
     g_rx_state.metadata.meta3 = COMBINE16(meta3_hi, meta3_lo);
     g_rx_state.metadata.meta4 = COMBINE16(meta4_hi, meta4_lo);
 
-    g_state = EMIFA_HOST_READ_CONFIG;
+    bool header_only = (0 == word_count);
+    g_state = header_only ? EMIFA_HOST_READ_DONE
+                          : EMIFA_HOST_READ_CONFIG;
 
 }
 

@@ -49,6 +49,13 @@ under the terms of the GNU Affero General Public License as published by
 #include "parameters.h"
 #include <string.h>
 
+uint32_t to_send [32] ;
+
+void module_param_callback(uint16_t module_id, uint16_t param_index, int32_t param_value);
+
+void module_param_callback(uint16_t module_id, uint16_t param_index, int32_t param_value){
+    ft_printf("Got param value: module %u, param %u, value %d", module_id, param_index, param_value);
+}
 
 void _mount_fs();
 
@@ -252,7 +259,10 @@ ipc_send_last_chunk();
 
 void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
     if (state) {
-            read_file_contents("",pad);
+        to_send[0] = pad;
+        ft_set_module_param(0, PARAM_TRANSFER_MEMORY, to_send);
+        ft_get_module_param(0, PARAM_TRANSFER_MEMORY);
+            //read_file_contents("",pad);
         }
 }
 
@@ -266,6 +276,8 @@ void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
  */
 t_status app_init(void) {
     ft_register_panel_callback(TRIGGER_EVENT, _trigger_callback);
+    ft_register_dsp_callback(MSG_TYPE_MODULE, MODULE_PARAM_VALUE, module_param_callback);
+
 
     t_status status = ERROR;
 

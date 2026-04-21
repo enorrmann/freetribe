@@ -44,6 +44,7 @@ under the terms of the GNU Affero General Public License as published by
 
 #include "utils.h"
 #include "parameters.h"
+#include "dev_cpu_ipc.h"
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -60,7 +61,8 @@ fract32 *data_sdram = (fract32 *)SDRAM_ADDRESS;
 uint32_t record_index = 0;
 uint32_t play_index = 0;
 uint32_t total_samples=0;
-
+int response = 666;
+uint32_t to_request [32] ;
 
 #define MAX_SIZE 48000 *10
 
@@ -69,6 +71,15 @@ uint32_t total_samples=0;
 /*----- Static function prototypes -----------------------------------*/
 
 /*----- Extern function implementations ------------------------------*/
+
+
+
+void ipc_callback(void *ctx, t_ipc_status status) ;
+
+void ipc_callback(void *ctx, t_ipc_status status) {
+    // this is never called, becasue response is still 666 after this
+    response = 16; // just to test that callback is being called at all
+}
 
 /**
  * @brief   Initialise module.
@@ -79,7 +90,8 @@ void module_init(void) {
     for (i = 0; i < MAX_SIZE; i++) {
         data_sdram[i] = 0;
     }
-    //
+    
+    
 }
 
 /**
@@ -122,6 +134,16 @@ void module_set_param(uint16_t param_index, int32_t value) {
             case PARAM_SAMPLE_COUNT_UPDATE:
             total_samples = value; 
             break;
+            
+            case PARAM_TRANSFER_MEMORY:{
+                // address 0 arbitrary       
+                // reads the value of address 0 and stores it in to_request
+                 dev_cpu_ipc_request_data(
+                        value, to_request, 32, ipc_callback,
+                        (void *)0x23AC1D23 // arbitrary user context value for testing
+                    );
+                }
+                break;
     default:
         break;
     }
@@ -144,7 +166,7 @@ int32_t module_get_param(uint16_t param_index) {
         break;
     }
 
-    return value;
+    return to_request[0]; // just to test that value is being set by callback
 }
 
 /**

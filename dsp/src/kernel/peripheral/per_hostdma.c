@@ -544,7 +544,7 @@ __attribute__((interrupt_handler)) static void _hostdp_dma1_isr(void) {
 
         case HOSTDMA_HOST_WRITE: {
             
-            bool last_block = (0 == g_rx_state.blocks_remaining);
+            bool last_block = (1 == g_rx_state.blocks_remaining);
             if (last_block) {
 
                 _host_control(BURST_MODE_ON_BY_DEFAULT, 0x0000);
@@ -553,7 +553,7 @@ __attribute__((interrupt_handler)) static void _hostdp_dma1_isr(void) {
 
             } else {
 
-                bool burst_next = (g_rx_state.blocks_remaining > 1);
+                bool burst_next = (g_rx_state.blocks_remaining > 2);
                 _host_control(burst_next, 0x0000);
 
             }
