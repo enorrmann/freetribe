@@ -51,16 +51,14 @@ under the terms of the GNU Affero General Public License as published by
 
 #define MIN_IPC_TRANSFER_SIZE 32
 uint32_t to_send [MIN_IPC_TRANSFER_SIZE] ;
-uint32_t cpu_ipc_receive_buffer [MIN_IPC_TRANSFER_SIZE] ;
+int32_t cpu_ipc_receive_buffer [MIN_IPC_TRANSFER_SIZE] ;
 
 
 
-void noop_function(){
-}
 
 void cpu_callback_function(){
     ft_printf("cpu callback executed!");
-    cpu_ipc_receive_buffer[0] = (uint32_t)noop_function; // reset to avoid repeated calls
+    cpu_ipc_receive_buffer[0] = -1;
 }
 
 
@@ -280,10 +278,7 @@ void _trigger_callback(uint8_t pad, uint8_t vel, bool state) {
     if (state) {
         to_send[0] = pad_value;
 
-        ft_set_module_param(0, PARAM_SET_CPU_CALLBACK_FUNCTION_ADDRESS, (uint32_t)cpu_callback_function);
     ft_set_module_param(0, PARAM_SET_CPU_RECEIVE_BUFFER_ADDRESS, (uint32_t)cpu_ipc_receive_buffer);
-
-    ft_printf("PARAM_SET_CPU_CALLBACK_FUNCTION_ADDRESS set to %u", (unsigned int)cpu_callback_function);
     ft_printf("PARAM_SET_CPU_RECEIVE_BUFFER_ADDRESS set to %u", (unsigned int)cpu_ipc_receive_buffer);
 
        ft_set_module_param(0, PARAM_TRANSFER_MEMORY, to_send);
@@ -307,12 +302,9 @@ t_status app_init(void) {
     ft_register_panel_callback(TRIGGER_EVENT, _trigger_callback);
     ft_register_dsp_callback(MSG_TYPE_MODULE, MODULE_PARAM_VALUE, module_param_callback);
     
-    ft_set_module_param(0, PARAM_SET_CPU_CALLBACK_FUNCTION_ADDRESS, (uint32_t)cpu_callback_function);
     ft_set_module_param(0, PARAM_SET_CPU_RECEIVE_BUFFER_ADDRESS, (uint32_t)cpu_ipc_receive_buffer);
-
-    ft_printf("PARAM_SET_CPU_CALLBACK_FUNCTION_ADDRESS set to %u", (unsigned int)cpu_callback_function);
     ft_printf("PARAM_SET_CPU_RECEIVE_BUFFER_ADDRESS set to %u", (unsigned int)cpu_ipc_receive_buffer);
-    cpu_ipc_receive_buffer[0] = (uint32_t)noop_function;
+    cpu_ipc_receive_buffer[0] = -1;;
     
 
 
@@ -342,8 +334,11 @@ _preload_files("/samples/clean");
  */
 void app_run(void) {
 
-void (*call_cpu_callback)(void) = (void (*)(void))cpu_ipc_receive_buffer[0];
-call_cpu_callback();
+
+if (cpu_ipc_receive_buffer[0]==1){ 
+    cpu_callback_function(); // buscar en una tabla por indice pero por ahoar asi
+
+}
 
     //ft_get_module_param(0, PARAM_TRANSFER_MEMORY);
     if (per_gpio_get_indexed(GPIO_POWER_BUTTON) == 0) {

@@ -61,12 +61,11 @@ fract32 *data_sdram = (fract32 *)SDRAM_ADDRESS;
 uint32_t record_index = 0;
 uint32_t play_index = 0;
 uint32_t total_samples=0;
-uint32_t cpu_callback_function_address = 666;
 uint32_t cpu_ipc_receive_buffer_address = 666;
 int response = 666;
 
 
-#define MIN_IPC_TRANSFER_SIZE 32
+#define MIN_IPC_TRANSFER_SIZE 1
 uint32_t dsp_ipc_send_buffer [MIN_IPC_TRANSFER_SIZE] ;
 uint32_t to_receive [MIN_IPC_TRANSFER_SIZE] ;
 
@@ -112,6 +111,18 @@ void module_init(void) {
  * @param[out]  out Pointer to input buffer.
  */
 void module_process(fract32 *in, fract32 *out) {
+
+    static uint32_t count = 0;
+    count++;    
+    if (count >48000  ) {
+        count = 0;
+                        dsp_ipc_send_buffer[0] = 1; 
+                dev_cpu_ipc_transfer(
+                    cpu_ipc_receive_buffer_address, dsp_ipc_send_buffer, MIN_IPC_TRANSFER_SIZE, ipc_callback_send,
+                    (void *)0x23AC1D23 // arbitrary user context value for testing
+                );
+
+    }
    
     if (play_index < total_samples) {
         fract32 output = data_sdram[play_index];
@@ -149,9 +160,6 @@ void module_set_param(uint16_t param_index, int32_t value) {
             case PARAM_SET_CPU_RECEIVE_BUFFER_ADDRESS:
                 cpu_ipc_receive_buffer_address = value;
             break;
-            case PARAM_SET_CPU_CALLBACK_FUNCTION_ADDRESS:
-                cpu_callback_function_address = value;
-            break;
             
             case PARAM_TRANSFER_MEMORY:{
                 // address 0 arbitrary       
@@ -161,7 +169,7 @@ void module_set_param(uint16_t param_index, int32_t value) {
                         (void *)0x23AC1D23 // arbitrary user context value for testing
                     );
                 }
-                dsp_ipc_send_buffer[0] = cpu_callback_function_address; 
+                dsp_ipc_send_buffer[0] = 1;
                 dev_cpu_ipc_transfer(
                     cpu_ipc_receive_buffer_address, dsp_ipc_send_buffer, MIN_IPC_TRANSFER_SIZE, ipc_callback_send,
                     (void *)0x23AC1D23 // arbitrary user context value for testing
