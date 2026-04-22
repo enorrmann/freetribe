@@ -61,8 +61,15 @@ fract32 *data_sdram = (fract32 *)SDRAM_ADDRESS;
 uint32_t record_index = 0;
 uint32_t play_index = 0;
 uint32_t total_samples=0;
+uint32_t cpu_callback_function_address = 666;
+uint32_t cpu_ipc_receive_buffer_address = 666;
 int response = 666;
-uint32_t to_request [32] ;
+
+
+#define MIN_IPC_TRANSFER_SIZE 32
+uint32_t dsp_ipc_send_buffer [MIN_IPC_TRANSFER_SIZE] ;
+uint32_t to_receive [MIN_IPC_TRANSFER_SIZE] ;
+
 
 #define MAX_SIZE 48000 *10
 
@@ -77,6 +84,10 @@ uint32_t to_request [32] ;
 void ipc_callback(void *ctx, t_ipc_status status) ;
 
 void ipc_callback(void *ctx, t_ipc_status status) {
+    // this is never called, becasue response is still 666 after this
+    //response = 16; // just to test that callback is being called at all
+}
+void ipc_callback_send(void *ctx, t_ipc_status status) {
     // this is never called, becasue response is still 666 after this
     response = 16; // just to test that callback is being called at all
 }
@@ -134,15 +145,27 @@ void module_set_param(uint16_t param_index, int32_t value) {
             case PARAM_SAMPLE_COUNT_UPDATE:
             total_samples = value; 
             break;
+
+            case PARAM_SET_CPU_RECEIVE_BUFFER_ADDRESS:
+                cpu_ipc_receive_buffer_address = value;
+            break;
+            case PARAM_SET_CPU_CALLBACK_FUNCTION_ADDRESS:
+                cpu_callback_function_address = value;
+            break;
             
             case PARAM_TRANSFER_MEMORY:{
                 // address 0 arbitrary       
-                // reads the value of address 0 and stores it in to_request
+                // reads the value of address 0 and stores it in to_receive
                  dev_cpu_ipc_request_data(
-                        value, to_request, 32, ipc_callback,
+                        value, to_receive, MIN_IPC_TRANSFER_SIZE, ipc_callback,
                         (void *)0x23AC1D23 // arbitrary user context value for testing
                     );
                 }
+                dsp_ipc_send_buffer[0] = cpu_callback_function_address; 
+                dev_cpu_ipc_transfer(
+                    cpu_ipc_receive_buffer_address, dsp_ipc_send_buffer, MIN_IPC_TRANSFER_SIZE, ipc_callback_send,
+                    (void *)0x23AC1D23 // arbitrary user context value for testing
+                );
                 break;
     default:
         break;
@@ -166,7 +189,7 @@ int32_t module_get_param(uint16_t param_index) {
         break;
     }
 
-    return to_request[0]; // just to test that value is being set by callback
+    return cpu_ipc_receive_buffer_address; // just to test that value is being updated at all
 }
 
 /**
