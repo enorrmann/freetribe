@@ -14,6 +14,11 @@
 
 /*----- Includes -----------------------------------------------------*/
 
+#include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+
 #include "freetribe.h"
 #include "hw_types.h"
 #include "hw_usb.h"
@@ -24,8 +29,62 @@
 #include "hw_usbphyGS60.h"
 #include "hw_syscfg0_AM1808.h"
 
+#define USB_0_OTGBASE SOC_USB_0_OTG_BASE
+#define USB_0_INTR_MASK_SET 0x30
+#define USB_0_INTR_SRC_CLEAR 0x28
+#define USB_0_END_OF_INTR 0x3c
+
 static const uint8_t* g_pEP0Data = 0;
 static uint32_t g_uEP0Len = 0;
+
+/*----- USB Serial Buffer --------------------------------------------*/
+
+#define USB_SERIAL_BUF_SIZE 512
+static uint8_t g_usbRxBuf[USB_SERIAL_BUF_SIZE];
+static uint32_t g_usbRxHead = 0;
+static uint32_t g_usbRxTail = 0;
+
+static void usb_rx_push(uint8_t c) {
+    uint32_t next = (g_usbRxHead + 1) % USB_SERIAL_BUF_SIZE;
+    if (next != g_usbRxTail) {
+        g_usbRxBuf[g_usbRxHead] = c;
+        g_usbRxHead = next;
+    }
+}
+
+static int usb_rx_pop(uint8_t *c) {
+    if (g_usbRxHead == g_usbRxTail) return 0;
+    *c = g_usbRxBuf[g_usbRxTail];
+    g_usbRxTail = (g_usbRxTail + 1) % USB_SERIAL_BUF_SIZE;
+    return 1;
+}
+
+volatile static uint8_t isConfigured = 0;
+
+void USBSerial_Send(const uint8_t* data, uint32_t len) {
+    if (!isConfigured) return;
+    while (len > 0) {
+        uint32_t sendLen = (len > 64) ? 64 : len;
+        // Wait for EP1 to be ready (TXRDY cleared) with timeout
+        uint32_t timeout = 1000000;
+        while ((HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01) && --timeout);
+        if (timeout == 0) return; // Drop packet on timeout to avoid hang
+
+        USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t*)data, sendLen);
+        USBEndpointDataSend(USB0_BASE, USB_EP_1, USB_TRANS_IN);
+        data += sendLen;
+        len -= sendLen;
+    }
+}
+
+void USBSerial_Printf(const char* format, ...) {
+    va_list ap;
+    static char str[256];
+    va_start(ap, format);
+    vsnprintf(str, sizeof(str), format, ap);
+    USBSerial_Send((uint8_t*)str, strlen(str));
+    va_end(ap);
+}
 
 static void EP0SendData(void) {
     uint32_t sendLen = (g_uEP0Len > 64) ? 64 : g_uEP0Len;
@@ -121,9 +180,11 @@ static const uint8_t stringLens[] = { sizeof(string0), sizeof(string1), sizeof(s
 static uint16_t pendingAddress = 0;
 static uint8_t pendingSetAddress = 0;
 static uint8_t cdcLineCoding[7] = {0x00, 0xC2, 0x01, 0x00, 0, 0, 8}; // 115200 8N1
-static uint8_t isConfigured = 0;
 
 void USB0DeviceIntHandler(void) {
+    // Ack interrupt at OTG wrapper level
+    HWREG(USB_0_OTGBASE + USB_0_END_OF_INTR) = 0;
+
     uint16_t csrl0 = HWREGH(USB0_BASE + USB_0_CSRL0);
     static uint16_t last_csrl0 = 0;
 
@@ -245,9 +306,76 @@ void USB0DeviceIntHandler(void) {
         uint8_t rxBuf[64];
         unsigned int rxSz = 0;
         USBEndpointDataGet(USB0_BASE, USB_EP_2, rxBuf, &rxSz);
-        if (rxSz > 0) {
-            USBEndpointDataPut(USB0_BASE, USB_EP_1, rxBuf, rxSz);
-            USBEndpointDataSend(USB0_BASE, USB_EP_1, USB_TRANS_IN);
+        for (uint32_t i = 0; i < rxSz; i++) {
+            usb_rx_push(rxBuf[i]);
+        }
+    }
+}
+
+/*----- Command Processing -------------------------------------------*/
+
+static void ProcessCommand(char* cmd) {
+    if (strlen(cmd) == 0) return;
+
+    if (strcmp(cmd, "help") == 0) {
+        USBSerial_Printf("Available commands:\r\n");
+        USBSerial_Printf("  help          - Show this help\r\n");
+        USBSerial_Printf("  info          - Show device info\r\n");
+        USBSerial_Printf("  echo <msg>    - Echo message\r\n");
+        USBSerial_Printf("  led <val>     - Set Play LED brightness (0-255)\r\n");
+        USBSerial_Printf("  reboot        - Shutdown system\r\n");
+    } else if (strcmp(cmd, "info") == 0) {
+        USBSerial_Printf("Manufacturer: Freetribe\r\n");
+        USBSerial_Printf("Product: CDC ACM Command Service\r\n");
+        USBSerial_Printf("Serial: 1234\r\n");
+    } else if (strncmp(cmd, "echo ", 5) == 0) {
+        USBSerial_Printf("%s\r\n", cmd + 5);
+    } else if (strncmp(cmd, "led ", 4) == 0) {
+        int val = atoi(cmd + 4);
+        ft_set_led(LED_PLAY, (uint8_t)val);
+        USBSerial_Printf("LED Play set to %d\r\n", val);
+    } else if (strcmp(cmd, "reboot") == 0) {
+        USBSerial_Printf("Rebooting...\r\n");
+        ft_shutdown();
+    } else {
+        USBSerial_Printf("Unknown command: %s\r\n", cmd);
+    }
+    USBSerial_Printf("> ");
+}
+
+static void ProcessUSBSerial(void) {
+    static char lineBuf[128];
+    static uint32_t lineIdx = 0;
+    volatile static uint8_t welcomeShown = 0;
+    uint8_t c;
+
+    if (!isConfigured) {
+        welcomeShown = 0;
+        return;
+    }
+
+    if (!welcomeShown) {
+        ft_printf("USB: Sending welcome banner\n");
+        USBSerial_Printf("\r\n\n--- Freetribe USB Command Service ---\r\n");
+        USBSerial_Printf("Type 'help' for available commands.\r\n> ");
+        welcomeShown = 1;
+    }
+
+    while (usb_rx_pop(&c)) {
+        if (c == '\r' || c == '\n') {
+            lineBuf[lineIdx] = '\0';
+            USBSerial_Printf("\r\n");
+            ProcessCommand(lineBuf);
+            lineIdx = 0;
+        } else if (c == 0x08 || c == 0x7F) { // Backspace
+            if (lineIdx > 0) {
+                lineIdx--;
+                USBSerial_Printf("\b \b");
+            }
+        } else if (lineIdx < sizeof(lineBuf) - 1) {
+            lineBuf[lineIdx++] = c;
+            uint8_t echoBuf[1] = {c};
+            USBSerial_Send(echoBuf, 1);
         }
     }
 }
@@ -282,14 +410,19 @@ t_status app_init(void) {
     USBIntEnableEndpoint(USB0_BASE, USB_INTEP_ALL);
 
     USBDevConnect(USB0_BASE);
+    
+    // Enable interrupts in TI OTG wrapper
+    HWREG(USB_0_OTGBASE + USB_0_INTR_MASK_SET) = 0x01; // Enable Core interrupt
+    
     ft_printf("USB: Connected\n");
     return SUCCESS;
 }
 
 #define GPIO_POWER_BUTTON 128
 void app_run(void) {
-    // Poll USB handler
-    USB0DeviceIntHandler();
+    // Poll USB handler (manual polling needed for enumeration to work reliably)
+    //USB0DeviceIntHandler();
+    ProcessUSBSerial();
 
     if (per_gpio_get_indexed(GPIO_POWER_BUTTON) == 0) {
         ft_shutdown();
