@@ -24,6 +24,25 @@
 #include "hw_usbphyGS60.h"
 #include "hw_syscfg0_AM1808.h"
 
+static const uint8_t* g_pEP0Data = 0;
+static uint32_t g_uEP0Len = 0;
+
+static void EP0SendData(void) {
+    uint32_t sendLen = (g_uEP0Len > 64) ? 64 : g_uEP0Len;
+    ft_printf("USB: EP0 Send chunk sz=%d rem=%d\n", sendLen, g_uEP0Len - sendLen);
+    if (sendLen > 0) {
+        USBEndpointDataPut(USB0_BASE, USB_EP_0, (uint8_t*)g_pEP0Data, sendLen);
+        g_pEP0Data += sendLen;
+        g_uEP0Len -= sendLen;
+    }
+    if (g_uEP0Len == 0) {
+        USBEndpointDataSend(USB0_BASE, USB_EP_0, USB_TRANS_IN_LAST);
+    } else {
+        USBEndpointDataSend(USB0_BASE, USB_EP_0, USB_TRANS_IN);
+    }
+}
+
+
 #ifndef USB0_BASE
 #define USB0_BASE SOC_USB_0_BASE
 #endif
@@ -60,7 +79,7 @@ typedef struct __attribute__((packed)) {
 #define CDC_EP_INT  USB_EP_3
 
 static const uint8_t deviceDescriptor[] = {
-    18, 1, 0x00, 0x02, 0x02, 0x00, 0x00, 64,
+    18, 1, 0x10, 0x01, 0x02, 0x00, 0x00, 64,
     0x1C, 0x1C, 0x10, 0x00, 0x00, 0x02, 1, 2, 3, 1
 };
 
@@ -105,96 +124,122 @@ static uint8_t cdcLineCoding[7] = {0x00, 0xC2, 0x01, 0x00, 0, 0, 8}; // 115200 8
 static uint8_t isConfigured = 0;
 
 void USB0DeviceIntHandler(void) {
-    uint32_t statusCtrl = USBIntStatusControl(USB0_BASE);
-    uint32_t statusEp = USBIntStatusEndpoint(USB0_BASE);
+    uint16_t csrl0 = HWREGH(USB0_BASE + USB_0_CSRL0);
+    static uint16_t last_csrl0 = 0;
 
+    // Only log if something changed or important
+    if ((csrl0 & 0x11) || ((last_csrl0 & 0x02) && !(csrl0 & 0x02))) {
+        // ft_printf("USB: CSR0=%04x\n", csrl0);
+    }
+    
+    if (csrl0 & 0x10) { // SETUPEND
+        HWREGB(USB0_BASE + USB_0_CSRL0) |= 0x80; // Clear SETUPEND
+    }
+
+    uint32_t statusCtrl = USBIntStatusControl(USB0_BASE);
     if (statusCtrl & USB_INTCTRL_RESET) {
+        ft_printf("USB: Reset\n");
         pendingAddress = 0;
         pendingSetAddress = 0;
         isConfigured = 0;
         USBDevAddrSet(USB0_BASE, 0);
     }
 
-    if (statusEp & 0x00010001) { // EP0 Rx/Tx
+    uint32_t statusEp = USBIntStatusEndpoint(USB0_BASE);
+
+    // EP0 handling
+    if (csrl0 & 0x01) { // RXRDY
         USB_SetupPacket setup;
         unsigned int sz;
-        if (USBEndpointDataAvail(USB0_BASE, USB_EP_0)) {
-            USBEndpointDataGet(USB0_BASE, USB_EP_0, (uint8_t*)&setup, &sz);
+        USBEndpointDataGet(USB0_BASE, USB_EP_0, (uint8_t*)&setup, &sz);
+        
+        if (sz == 8) {
+            ft_printf("USB: Setup %02x %02x %04x %04x %04x\n", 
+                      setup.bmRequestType, setup.bRequest, setup.wValue, setup.wIndex, setup.wLength);
             
-            if (sz == 8) {
-                if ((setup.bmRequestType & 0x60) == 0) { // Standard Request
-                    switch(setup.bRequest) {
-                        case USB_REQ_GET_DESCRIPTOR: {
-                            uint8_t type = setup.wValue >> 8;
-                            uint8_t idx = setup.wValue & 0xFF;
-                            const uint8_t* desc = 0;
-                            uint16_t len = 0;
-                            if (type == USB_DESC_DEVICE) {
-                                desc = deviceDescriptor; len = sizeof(deviceDescriptor);
-                            } else if (type == USB_DESC_CONFIGURATION) {
-                                desc = configDescriptor; len = sizeof(configDescriptor);
-                            } else if (type == USB_DESC_DEVICE_QUAL) {
-                                desc = devQualDescriptor; len = sizeof(devQualDescriptor);
-                            } else if (type == USB_DESC_STRING && idx < 4) {
-                                desc = strings[idx]; len = stringLens[idx];
-                            }
-                            if (desc) {
-                                if (len > setup.wLength) len = setup.wLength;
-                                USBEndpointDataPut(USB0_BASE, USB_EP_0, (uint8_t*)desc, len);
-                                USBEndpointDataSend(USB0_BASE, USB_EP_0, USB_TRANS_IN);
-                            } else {
-                                USBDevEndpointStall(USB0_BASE, USB_EP_0, USB_EP_DEV_IN);
-                            }
-                            break;
+            // Clear RXRDY
+            USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
+
+            if ((setup.bmRequestType & 0x60) == 0) { // Standard Request
+                switch(setup.bRequest) {
+                    case USB_REQ_GET_DESCRIPTOR: {
+                        uint8_t type = setup.wValue >> 8;
+                        uint8_t idx = setup.wValue & 0xFF;
+                        const uint8_t* desc = 0;
+                        uint16_t len = 0;
+                        if (type == USB_DESC_DEVICE) {
+                            desc = deviceDescriptor; len = sizeof(deviceDescriptor);
+                        } else if (type == USB_DESC_CONFIGURATION) {
+                            desc = configDescriptor; len = sizeof(configDescriptor);
+                        } else if (type == USB_DESC_DEVICE_QUAL) {
+                            desc = devQualDescriptor; len = sizeof(devQualDescriptor);
+                        } else if (type == USB_DESC_STRING && idx < 4) {
+                            desc = strings[idx]; len = stringLens[idx];
                         }
-                        case USB_REQ_SET_ADDRESS:
-                            pendingAddress = setup.wValue;
-                            pendingSetAddress = 1;
-                            USBEndpointDataSend(USB0_BASE, USB_EP_0, USB_TRANS_IN);
-                            break;
-                        case USB_REQ_SET_CONFIGURATION:
-                            USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, 64, USB_EP_MODE_BULK | USB_EP_DEV_IN);
-                            USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, 64, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
-                            isConfigured = 1;
-                            USBEndpointDataSend(USB0_BASE, USB_EP_0, USB_TRANS_IN);
-                            break;
-                        case USB_REQ_GET_CONFIGURATION: {
-                            uint8_t cfg = isConfigured;
-                            USBEndpointDataPut(USB0_BASE, USB_EP_0, &cfg, 1);
-                            USBEndpointDataSend(USB0_BASE, USB_EP_0, USB_TRANS_IN);
-                            break;
+                        if (desc) {
+                            if (len > setup.wLength) len = setup.wLength;
+                            ft_printf("USB: Get Desc type=%d len=%d\n", type, len);
+                            g_pEP0Data = desc;
+                            g_uEP0Len = len;
+                            EP0SendData();
+                        } else {
+                            USBDevEndpointStall(USB0_BASE, USB_EP_0, USB_EP_DEV_IN);
                         }
-                        default:
-                            USBDevEndpointStall(USB0_BASE, USB_EP_0, USB_EP_DEV_IN);
-                            break;
+                        break;
                     }
-                } else if ((setup.bmRequestType & 0x60) == 0x20) { // Class request
-                    switch(setup.bRequest) {
-                        case USB_CDC_SET_LINE_CODING:
-                            USBEndpointDataSend(USB0_BASE, USB_EP_0, USB_TRANS_IN);
-                            break;
-                        case USB_CDC_GET_LINE_CODING:
-                            USBEndpointDataPut(USB0_BASE, USB_EP_0, cdcLineCoding, 7);
-                            USBEndpointDataSend(USB0_BASE, USB_EP_0, USB_TRANS_IN);
-                            break;
-                        case USB_CDC_SET_CONTROL_LINE_STATE:
-                            USBEndpointDataSend(USB0_BASE, USB_EP_0, USB_TRANS_IN);
-                            break;
-                        default:
-                            USBDevEndpointStall(USB0_BASE, USB_EP_0, USB_EP_DEV_IN);
-                            break;
-                    }
+                    case USB_REQ_SET_ADDRESS:
+                        pendingAddress = setup.wValue;
+                        pendingSetAddress = 1;
+                        USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
+                        break;
+                    case USB_REQ_SET_CONFIGURATION:
+                        USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, 64, USB_EP_MODE_BULK | USB_EP_DEV_IN);
+                        USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, 64, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
+                        isConfigured = 1;
+                        USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
+                        break;
+                    default:
+                        USBDevEndpointStall(USB0_BASE, USB_EP_0, USB_EP_DEV_IN);
+                        break;
                 }
-            } else {
-                USBEndpointDataSend(USB0_BASE, USB_EP_0, USB_TRANS_IN);
+            } else if ((setup.bmRequestType & 0x60) == 0x20) { // Class request
+                switch(setup.bRequest) {
+                    case USB_CDC_GET_LINE_CODING:
+                        g_pEP0Data = cdcLineCoding;
+                        g_uEP0Len = 7;
+                        EP0SendData();
+                        break;
+                    case USB_CDC_SET_LINE_CODING:
+                    case USB_CDC_SET_CONTROL_LINE_STATE:
+                        USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
+                        break;
+                    default:
+                        USBDevEndpointStall(USB0_BASE, USB_EP_0, USB_EP_DEV_IN);
+                        break;
+                }
             }
+        } else if (sz == 0) {
+            // Status phase ZLP from host
+            ft_printf("USB: ZLP Ack\n");
+            USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
         } else {
-            if (pendingSetAddress) {
-                USBDevAddrSet(USB0_BASE, pendingAddress);
-                pendingSetAddress = 0;
-            }
+            // Unexpected data size
+            ft_printf("USB: Unexpected sz=%d\n", sz);
+            USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
+        }
+    } else if (((last_csrl0 & 0x02) && !(csrl0 & 0x02)) || ((last_csrl0 & 0x08) && !(csrl0 & 0x08))) { 
+        // TX Complete (TXRDY cleared) OR Status phase complete (DATAEND cleared)
+        if (g_uEP0Len > 0) {
+            EP0SendData();
+        } else if (pendingSetAddress) {
+            USBDevAddrSet(USB0_BASE, pendingAddress);
+            pendingSetAddress = 0;
+            ft_printf("USB: Addr applied\n");
         }
     }
+
+    last_csrl0 = csrl0;
+
 
     if (statusEp & 0x00040000) { // EP2 Rx
         uint8_t rxBuf[64];
@@ -208,8 +253,26 @@ void USB0DeviceIntHandler(void) {
 }
 
 t_status app_init(void) {
+    ft_printf("USB: Starting init...\n");
     PSCModuleControl(SOC_PSC_1_REGS, HW_PSC_USB0, 0, PSC_MDCTL_NEXT_ENABLE);
     UsbPhyOn();
+    // Fix CFGCHIP2 for 24MHz crystal and device mode
+    uint32_t cfgchip2 = HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2);
+    cfgchip2 &= ~(0x0000000F | (3 << 13) | (1 << 12)); // Clear REFFREQ, OTGMODE, CLKMUX
+    cfgchip2 |= (2 << 0) | (2 << 13) | (1 << 6); // Set REFFREQ=24MHz, OTGMODE=Device, PHY_PLLON=1
+    HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) = cfgchip2;
+    
+    // Wait for PHY clock to be good
+    ft_printf("USB: Waiting for PHY Clock...\n");
+    int timeout = 1000000;
+    while (!(HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) & (1 << 17)) && timeout--);
+    
+    cfgchip2 = HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2);
+    ft_printf("USB: PHY ON & Configured (CFGCHIP2=%08x)\n", cfgchip2);
+
+    // Force Full Speed (disable High Speed)
+    HWREGB(USB0_BASE + USB_0_POWER) &= ~0x20;
+    ft_printf("USB: Forced Full Speed\n");
 
     IntRegister(SYS_INT_USB0, USB0DeviceIntHandler);
     IntChannelSet(SYS_INT_USB0, 2);
@@ -219,16 +282,16 @@ t_status app_init(void) {
     USBIntEnableEndpoint(USB0_BASE, USB_INTEP_ALL);
 
     USBDevConnect(USB0_BASE);
+    ft_printf("USB: Connected\n");
     return SUCCESS;
 }
 
 #define GPIO_POWER_BUTTON 128
 void app_run(void) {
-        if (per_gpio_get_indexed(GPIO_POWER_BUTTON) == 0) {
+    // Poll USB handler
+    USB0DeviceIntHandler();
 
+    if (per_gpio_get_indexed(GPIO_POWER_BUTTON) == 0) {
         ft_shutdown();
-
-        // Should never reach here.
     }
-
 }
