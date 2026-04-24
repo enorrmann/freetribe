@@ -88,7 +88,6 @@ void USBSerial_Printf(const char* format, ...) {
 
 static void EP0SendData(void) {
     uint32_t sendLen = (g_uEP0Len > 64) ? 64 : g_uEP0Len;
-    ft_printf("USB: EP0 Send chunk sz=%d rem=%d\n", sendLen, g_uEP0Len - sendLen);
     if (sendLen > 0) {
         USBEndpointDataPut(USB0_BASE, USB_EP_0, (uint8_t*)g_pEP0Data, sendLen);
         g_pEP0Data += sendLen;
@@ -182,15 +181,12 @@ static uint8_t pendingSetAddress = 0;
 static uint8_t cdcLineCoding[7] = {0x00, 0xC2, 0x01, 0x00, 0, 0, 8}; // 115200 8N1
 
 void USB0DeviceIntHandler(void) {
-    // Ack interrupt at OTG wrapper level
-    HWREG(USB_0_OTGBASE + USB_0_END_OF_INTR) = 0;
-
     uint16_t csrl0 = HWREGH(USB0_BASE + USB_0_CSRL0);
     static uint16_t last_csrl0 = 0;
 
     // Only log if something changed or important
     if ((csrl0 & 0x11) || ((last_csrl0 & 0x02) && !(csrl0 & 0x02))) {
-        // ft_printf("USB: CSR0=%04x\n", csrl0);
+        // //ft_printf("USB: CSR0=%04x\n", csrl0);
     }
     
     if (csrl0 & 0x10) { // SETUPEND
@@ -199,7 +195,6 @@ void USB0DeviceIntHandler(void) {
 
     uint32_t statusCtrl = USBIntStatusControl(USB0_BASE);
     if (statusCtrl & USB_INTCTRL_RESET) {
-        ft_printf("USB: Reset\n");
         pendingAddress = 0;
         pendingSetAddress = 0;
         isConfigured = 0;
@@ -215,9 +210,6 @@ void USB0DeviceIntHandler(void) {
         USBEndpointDataGet(USB0_BASE, USB_EP_0, (uint8_t*)&setup, &sz);
         
         if (sz == 8) {
-            ft_printf("USB: Setup %02x %02x %04x %04x %04x\n", 
-                      setup.bmRequestType, setup.bRequest, setup.wValue, setup.wIndex, setup.wLength);
-            
             // Clear RXRDY
             USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
 
@@ -239,7 +231,6 @@ void USB0DeviceIntHandler(void) {
                         }
                         if (desc) {
                             if (len > setup.wLength) len = setup.wLength;
-                            ft_printf("USB: Get Desc type=%d len=%d\n", type, len);
                             g_pEP0Data = desc;
                             g_uEP0Len = len;
                             EP0SendData();
@@ -281,11 +272,9 @@ void USB0DeviceIntHandler(void) {
             }
         } else if (sz == 0) {
             // Status phase ZLP from host
-            ft_printf("USB: ZLP Ack\n");
             USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
         } else {
             // Unexpected data size
-            ft_printf("USB: Unexpected sz=%d\n", sz);
             USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
         }
     } else if (((last_csrl0 & 0x02) && !(csrl0 & 0x02)) || ((last_csrl0 & 0x08) && !(csrl0 & 0x08))) { 
@@ -295,7 +284,6 @@ void USB0DeviceIntHandler(void) {
         } else if (pendingSetAddress) {
             USBDevAddrSet(USB0_BASE, pendingAddress);
             pendingSetAddress = 0;
-            ft_printf("USB: Addr applied\n");
         }
     }
 
@@ -310,6 +298,10 @@ void USB0DeviceIntHandler(void) {
             usb_rx_push(rxBuf[i]);
         }
     }
+
+    // Clear interrupt in AINTC and OTG wrapper to prevent infinite loop
+    IntSystemStatusClear(SYS_INT_USB0);
+    HWREG(USB_0_OTGBASE + USB_0_END_OF_INTR) = 0;
 }
 
 /*----- Command Processing -------------------------------------------*/
@@ -355,7 +347,6 @@ static void ProcessUSBSerial(void) {
     }
 
     if (!welcomeShown) {
-        ft_printf("USB: Sending welcome banner\n");
         USBSerial_Printf("\r\n\n--- Freetribe USB Command Service ---\r\n");
         USBSerial_Printf("Type 'help' for available commands.\r\n> ");
         welcomeShown = 1;
@@ -381,7 +372,7 @@ static void ProcessUSBSerial(void) {
 }
 
 t_status app_init(void) {
-    ft_printf("USB: Starting init...\n");
+    //ft_printf("USB: Starting init...\n");
     PSCModuleControl(SOC_PSC_1_REGS, HW_PSC_USB0, 0, PSC_MDCTL_NEXT_ENABLE);
     UsbPhyOn();
     // Fix CFGCHIP2 for 24MHz crystal and device mode
@@ -391,16 +382,16 @@ t_status app_init(void) {
     HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) = cfgchip2;
     
     // Wait for PHY clock to be good
-    ft_printf("USB: Waiting for PHY Clock...\n");
+    //ft_printf("USB: Waiting for PHY Clock...\n");
     int timeout = 1000000;
     while (!(HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) & (1 << 17)) && timeout--);
     
     cfgchip2 = HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2);
-    ft_printf("USB: PHY ON & Configured (CFGCHIP2=%08x)\n", cfgchip2);
+    //ft_printf("USB: PHY ON & Configured (CFGCHIP2=%08x)\n", cfgchip2);
 
     // Force Full Speed (disable High Speed)
     HWREGB(USB0_BASE + USB_0_POWER) &= ~0x20;
-    ft_printf("USB: Forced Full Speed\n");
+    //ft_printf("USB: Forced Full Speed\n");
 
     IntRegister(SYS_INT_USB0, USB0DeviceIntHandler);
     IntChannelSet(SYS_INT_USB0, 2);
@@ -411,17 +402,25 @@ t_status app_init(void) {
 
     USBDevConnect(USB0_BASE);
     
-    // Enable interrupts in TI OTG wrapper
-    HWREG(USB_0_OTGBASE + USB_0_INTR_MASK_SET) = 0x01; // Enable Core interrupt
+    // Disable interrupts in TI OTG wrapper for now to test stability with polling
+    HWREG(USB_0_OTGBASE + USB_0_INTR_MASK_SET) = 0x00; 
     
-    ft_printf("USB: Connected\n");
     return SUCCESS;
 }
 
 #define GPIO_POWER_BUTTON 128
 void app_run(void) {
-    // Poll USB handler (manual polling needed for enumeration to work reliably)
-    //USB0DeviceIntHandler();
+    static int heartbeat = 0;
+    heartbeat++;
+    if (heartbeat >= 100000) {
+        heartbeat = 0;
+        static int ledState = 0;
+        ledState = !ledState;
+        ft_set_led(LED_PLAY, ledState ? 255 : 0);
+    }
+        
+    // Manual poll (safer than current interrupt config which causes hangs)
+    USB0DeviceIntHandler();
     ProcessUSBSerial();
 
     if (per_gpio_get_indexed(GPIO_POWER_BUTTON) == 0) {
