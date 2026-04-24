@@ -301,19 +301,20 @@ case USB_REQ_SET_CONFIGURATION:
 
 
         
-        if (HWREGH(USB0_BASE + USB_0_RXCSRL2) & 0x01) { // RXRDY
-                uint8_t rxBuf[64];
-                unsigned int rxSz = 0;
+if (HWREGH(USB0_BASE + USB_0_RXCSRL2) & 0x01) { // RXRDY
 
-                USBEndpointDataGet(USB0_BASE, USB_EP_2, rxBuf, &rxSz);
+    //USBSerial_Printf("RX IRQ\r\n");  //acas1
 
-                for (uint32_t i = 0; i < rxSz; i++) {
-                    usb_rx_push(rxBuf[i]);
-                }
+    uint32_t count = HWREGH(USB0_BASE + USB_0_RXCOUNT2);
 
-                // Clear RXRDY
-                        HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~0x01;
-                    }
+    for (uint32_t i = 0; i < count; i++) {
+        uint8_t c = HWREGB(USB0_BASE + 0x20 + (2 * 4));
+        usb_rx_push(c);
+    }
+
+    // Clear RXRDY AFTER reading FIFO
+    HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~0x01;
+}
 
     // Clear interrupt in AINTC and OTG wrapper to prevent infinite loop
     IntSystemStatusClear(SYS_INT_USB0);
@@ -363,13 +364,14 @@ static void ProcessUSBSerial(void) {
         return;
     }
 
-    if (!welcomeShown) {
-        USBSerial_Printf("\r\n\n--- Freetribe USB Command Service ---\r\n");
+
+    while (usb_rx_pop(&c)) {
+
+            if (!welcomeShown) {
+        USBSerial_Printf("\r\n--- Freetribe USB Command Service ---\r\n");
         USBSerial_Printf("Type 'help' for available commands.\r\n> ");
         welcomeShown = 1;
     }
-
-    while (usb_rx_pop(&c)) {
         if (c == '\r' || c == '\n') {
             lineBuf[lineIdx] = '\0';
             USBSerial_Printf("\r\n");
@@ -434,7 +436,7 @@ void app_run(void) {
         static int ledState = 0;
         ledState = !ledState;
         ft_set_led(LED_PLAY, ledState ? 255 : 0);
-            //USBSerial_Printf("TEST"); // este funciona
+//            USBSerial_Printf("TEST"); // este funciona
 
     }
         
