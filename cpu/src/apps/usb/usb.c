@@ -36,6 +36,7 @@
 
 static const uint8_t* g_pEP0Data = 0;
 static uint32_t g_uEP0Len = 0;
+static volatile uint8_t cdcConnected = 0;
 
 /*----- USB Serial Buffer --------------------------------------------*/
 
@@ -63,15 +64,13 @@ volatile static uint8_t isConfigured = 0;
 
 void USBSerial_Send(const uint8_t* data, uint32_t len) {
     if (!isConfigured) return;
+
     while (len > 0) {
         uint32_t sendLen = (len > 64) ? 64 : len;
-        // Wait for EP1 to be ready (TXRDY cleared) with timeout
-        uint32_t timeout = 1000000;
-        while ((HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01) && --timeout);
-        if (timeout == 0) return; // Drop packet on timeout to avoid hang
 
         USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t*)data, sendLen);
         USBEndpointDataSend(USB0_BASE, USB_EP_1, USB_TRANS_IN);
+
         data += sendLen;
         len -= sendLen;
     }
@@ -80,10 +79,12 @@ void USBSerial_Send(const uint8_t* data, uint32_t len) {
 void USBSerial_Printf(const char* format, ...) {
     va_list ap;
     static char str[256];
+
     va_start(ap, format);
     vsnprintf(str, sizeof(str), format, ap);
-    USBSerial_Send((uint8_t*)str, strlen(str));
     va_end(ap);
+
+    USBSerial_Send((uint8_t*)str, strlen(str));
 }
 
 static void EP0SendData(void) {
@@ -263,6 +264,7 @@ void USB0DeviceIntHandler(void) {
                         break;
                     case USB_CDC_SET_LINE_CODING:
                     case USB_CDC_SET_CONTROL_LINE_STATE:
+                        cdcConnected = (setup.wValue & 0x01); // DTR
                         USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
                         break;
                     default:
@@ -297,6 +299,8 @@ void USB0DeviceIntHandler(void) {
         for (uint32_t i = 0; i < rxSz; i++) {
             usb_rx_push(rxBuf[i]);
         }
+          // >>> AGREGAR ESTA LINEA <<<
+        USBDevEndpointDataAck(USB0_BASE, USB_EP_2, false);
     }
 
     // Clear interrupt in AINTC and OTG wrapper to prevent infinite loop
@@ -417,6 +421,8 @@ void app_run(void) {
         static int ledState = 0;
         ledState = !ledState;
         ft_set_led(LED_PLAY, ledState ? 255 : 0);
+            USBSerial_Printf("TEST");
+
     }
         
     // Manual poll (safer than current interrupt config which causes hangs)
