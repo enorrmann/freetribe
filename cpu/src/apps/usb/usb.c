@@ -36,7 +36,7 @@
 
 static const uint8_t* g_pEP0Data = 0;
 static uint32_t g_uEP0Len = 0;
-static volatile uint8_t cdcConnected = 0;
+static  uint8_t cdcConnected = 0;
 
 /*----- USB Serial Buffer --------------------------------------------*/
 
@@ -60,7 +60,7 @@ static int usb_rx_pop(uint8_t *c) {
     return 1;
 }
 
-volatile static uint8_t isConfigured = 0;
+ static uint8_t isConfigured = 0;
 
 void USBSerial_Send(const uint8_t* data, uint32_t len) {
     if (!isConfigured) return;
@@ -68,8 +68,13 @@ void USBSerial_Send(const uint8_t* data, uint32_t len) {
     while (len > 0) {
         uint32_t sendLen = (len > 64) ? 64 : len;
 
+        // Esperar que el endpoint esté libre
+        while (HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
+
         USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t*)data, sendLen);
-        USBEndpointDataSend(USB0_BASE, USB_EP_1, USB_TRANS_IN);
+
+        // Set TXRDY manualmente (más robusto)
+        HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
 
         data += sendLen;
         len -= sendLen;
@@ -187,7 +192,7 @@ void USB0DeviceIntHandler(void) {
 
     // Only log if something changed or important
     if ((csrl0 & 0x11) || ((last_csrl0 & 0x02) && !(csrl0 & 0x02))) {
-        // //ft_printf("USB: CSR0=%04x\n", csrl0);
+        // ////ft_printff("USB: CSR0=%04x\n", csrl0);
     }
     
     if (csrl0 & 0x10) { // SETUPEND
@@ -245,12 +250,15 @@ void USB0DeviceIntHandler(void) {
                         pendingSetAddress = 1;
                         USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
                         break;
-                    case USB_REQ_SET_CONFIGURATION:
-                        USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, 64, USB_EP_MODE_BULK | USB_EP_DEV_IN);
-                        USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, 64, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
-                        isConfigured = 1;
-                        USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
-                        break;
+case USB_REQ_SET_CONFIGURATION:
+    USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, 64, USB_EP_MODE_BULK | USB_EP_DEV_IN);
+    USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, 64, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
+
+    USBIntEnableEndpoint(USB0_BASE, (1 << 18));   // EP2 RX IRQ
+
+    isConfigured = 1;
+    USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
+    break;
                     default:
                         USBDevEndpointStall(USB0_BASE, USB_EP_0, USB_EP_DEV_IN);
                         break;
@@ -292,16 +300,20 @@ void USB0DeviceIntHandler(void) {
     last_csrl0 = csrl0;
 
 
-    if (statusEp & 0x00040000) { // EP2 Rx
-        uint8_t rxBuf[64];
-        unsigned int rxSz = 0;
-        USBEndpointDataGet(USB0_BASE, USB_EP_2, rxBuf, &rxSz);
-        for (uint32_t i = 0; i < rxSz; i++) {
-            usb_rx_push(rxBuf[i]);
-        }
-          // >>> AGREGAR ESTA LINEA <<<
-        USBDevEndpointDataAck(USB0_BASE, USB_EP_2, false);
-    }
+        
+        if (HWREGH(USB0_BASE + USB_0_RXCSRL2) & 0x01) { // RXRDY
+                uint8_t rxBuf[64];
+                unsigned int rxSz = 0;
+
+                USBEndpointDataGet(USB0_BASE, USB_EP_2, rxBuf, &rxSz);
+
+                for (uint32_t i = 0; i < rxSz; i++) {
+                    usb_rx_push(rxBuf[i]);
+                }
+
+                // Clear RXRDY
+                        HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~0x01;
+                    }
 
     // Clear interrupt in AINTC and OTG wrapper to prevent infinite loop
     IntSystemStatusClear(SYS_INT_USB0);
@@ -340,9 +352,10 @@ static void ProcessCommand(char* cmd) {
 }
 
 static void ProcessUSBSerial(void) {
+    //ft_printf("USB Serial: Processing command\n");
     static char lineBuf[128];
     static uint32_t lineIdx = 0;
-    volatile static uint8_t welcomeShown = 0;
+     static uint8_t welcomeShown = 0;
     uint8_t c;
 
     if (!isConfigured) {
@@ -376,7 +389,7 @@ static void ProcessUSBSerial(void) {
 }
 
 t_status app_init(void) {
-    //ft_printf("USB: Starting init...\n");
+    ////ft_printff("USB: Starting init...\n");
     PSCModuleControl(SOC_PSC_1_REGS, HW_PSC_USB0, 0, PSC_MDCTL_NEXT_ENABLE);
     UsbPhyOn();
     // Fix CFGCHIP2 for 24MHz crystal and device mode
@@ -386,16 +399,16 @@ t_status app_init(void) {
     HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) = cfgchip2;
     
     // Wait for PHY clock to be good
-    //ft_printf("USB: Waiting for PHY Clock...\n");
+    ////ft_printff("USB: Waiting for PHY Clock...\n");
     int timeout = 1000000;
     while (!(HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) & (1 << 17)) && timeout--);
     
     cfgchip2 = HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2);
-    //ft_printf("USB: PHY ON & Configured (CFGCHIP2=%08x)\n", cfgchip2);
+    ////ft_printff("USB: PHY ON & Configured (CFGCHIP2=%08x)\n", cfgchip2);
 
     // Force Full Speed (disable High Speed)
     HWREGB(USB0_BASE + USB_0_POWER) &= ~0x20;
-    //ft_printf("USB: Forced Full Speed\n");
+    ////ft_printff("USB: Forced Full Speed\n");
 
     IntRegister(SYS_INT_USB0, USB0DeviceIntHandler);
     IntChannelSet(SYS_INT_USB0, 2);
@@ -421,7 +434,7 @@ void app_run(void) {
         static int ledState = 0;
         ledState = !ledState;
         ft_set_led(LED_PLAY, ledState ? 255 : 0);
-            USBSerial_Printf("TEST");
+            //USBSerial_Printf("TEST"); // este funciona
 
     }
         
