@@ -84,6 +84,27 @@ void USBSerial_Printf(const char *format, ...) {
 static uint8_t g_audioOutPacket[AUDIO_EP_MAX_PACKET_SIZE];
 static uint32_t g_audioOutLen = 0;
 static uint8_t g_audioInPacket[AUDIO_EP_MAX_PACKET_SIZE];
+static uint32_t g_squarePhase = 0;
+
+static void USBAudio_GenerateSquareWave(void) {
+    const int16_t amplitude = 0x4000;
+    const uint32_t sampleRate = 48000;
+    const uint32_t frequency = 440/2;
+
+    for (uint32_t frame = 0; frame < AUDIO_EP_MAX_PACKET_SIZE / 4; frame++) {
+        int16_t sample = (g_squarePhase < (sampleRate / 2)) ? amplitude : -amplitude;
+
+        uint32_t index = frame * 4;
+        g_audioInPacket[index + 0] = (uint8_t)(sample & 0xFF);
+        g_audioInPacket[index + 1] = (uint8_t)((sample >> 8) & 0xFF);
+        g_audioInPacket[index + 2] = g_audioInPacket[index + 0];
+        g_audioInPacket[index + 3] = g_audioInPacket[index + 1];
+
+        g_squarePhase += frequency;
+        if (g_squarePhase >= sampleRate)
+            g_squarePhase -= sampleRate;
+    }
+}
 
 static void USBAudio_HandleOutPacket(const uint8_t *data, uint32_t len) {
     if (len > AUDIO_EP_MAX_PACKET_SIZE)
@@ -95,6 +116,10 @@ static void USBAudio_HandleOutPacket(const uint8_t *data, uint32_t len) {
 static void USBAudio_SendCapture(void) {
     if (!isConfigured)
         return;
+
+    if (g_audioOutLen == 0) {
+        USBAudio_GenerateSquareWave();
+    }
 
     uint32_t packetLen = g_audioOutLen ? g_audioOutLen : AUDIO_EP_MAX_PACKET_SIZE;
     if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, g_audioOutLen ? g_audioOutPacket : g_audioInPacket,
@@ -382,40 +407,6 @@ void USB0DeviceIntHandler(void) {
     IntSystemStatusClear(SYS_INT_USB0);
     HWREG(USB_0_OTGBASE + USB_0_END_OF_INTR) = 0;
 }
-
-/*----- Command Processing -------------------------------------------*/
-
-static void ProcessCommand(char *cmd) {
-    if (strlen(cmd) == 0)
-        return;
-
-    if (strcmp(cmd, "help") == 0) {
-        USBSerial_Printf("Available commands:\r\n");
-        USBSerial_Printf("  help          - Show this help\r\n");
-        USBSerial_Printf("  info          - Show device info\r\n");
-        USBSerial_Printf("  echo <msg>    - Echo message\r\n");
-        USBSerial_Printf(
-            "  led <val>     - Set Play LED brightness (0-255)\r\n");
-        USBSerial_Printf("  reboot        - Shutdown system\r\n");
-    } else if (strcmp(cmd, "info") == 0) {
-        USBSerial_Printf("Manufacturer: Freetribe\r\n");
-        USBSerial_Printf("Product: USB Audio Device\r\n");
-        USBSerial_Printf("Serial: 1234\r\n");
-    } else if (strncmp(cmd, "echo ", 5) == 0) {
-        USBSerial_Printf("%s\r\n", cmd + 5);
-    } else if (strncmp(cmd, "led ", 4) == 0) {
-        int val = atoi(cmd + 4);
-        ft_set_led(LED_PLAY, (uint8_t)val);
-        USBSerial_Printf("LED Play set to %d\r\n", val);
-    } else if (strcmp(cmd, "reboot") == 0) {
-        USBSerial_Printf("Rebooting...\r\n");
-        ft_shutdown();
-    } else {
-        USBSerial_Printf("Unknown command: %s\r\n", cmd);
-    }
-    USBSerial_Printf("> ");
-}
-
 
 t_status app_init(void) {
     ////ft_printff("USB: Starting init...\n");
