@@ -71,9 +71,15 @@ void USBSerial_Send(const uint8_t *data, uint32_t len) {
     while (len > 0) {
         uint32_t sendLen = (len > 64) ? 64 : len;
 
-        // Esperar que el endpoint esté libre
-        while (HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01)
+        // Esperar que el endpoint esté libre con timeout
+        int timeout = 1000000;
+        while ((HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01) && timeout--)
             ;
+
+        if (timeout <= 0) {
+            // Timeout: no enviar este chunk, continuar con el siguiente
+            break;
+        }
 
         USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t *)data, sendLen);
 
