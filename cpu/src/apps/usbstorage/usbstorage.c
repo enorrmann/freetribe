@@ -1,10 +1,9 @@
 /*----------------------------------------------------------------------
-                     Freetribe - USB MSC Fixed (Template from MIDI)
+                     Freetribe - USB MSC (Pure Polling + Fixed EP0)
 ----------------------------------------------------------------------*/
 
 #include <string.h>
 #include <stdint.h>
-#include <stdarg.h>
 
 #include "freetribe.h"
 #include "hw_types.h"
@@ -16,15 +15,39 @@
 #include "hw_usbphyGS60.h"
 #include "hw_syscfg0_AM1808.h"
 
-/* Definiciones de Hardware */
 #ifndef USB0_BASE
 #define USB0_BASE             SOC_USB_0_BASE
 #endif
 #define USB_0_OTGBASE         SOC_USB_0_OTG_BASE
-#define USB_0_INTR_MASK_SET   0x30
 #define USB_0_END_OF_INTR     0x3C
+#define USB_0_INTR_MASK_SET   0x30
 
-/* Descriptores MSC (BCD 2.00 para compatibilidad xHCI) */
+/* --- Declaración de GPIO --- */
+extern int per_gpio_get_indexed(unsigned int id);
+
+/*====================================================================
+ * Estructuras BOT (Bulk-Only Transport)
+ *==================================================================*/
+typedef struct {
+    uint32_t dCBWSignature;
+    uint32_t dCBWTag;
+    uint32_t dCBWDataTransferLength;
+    uint8_t  bmCBWFlags;
+    uint8_t  bCBWLUN;
+    uint8_t  bCBWCBLength;
+    uint8_t  CBWCB[16];
+} __attribute__((packed)) tCBW;
+
+typedef struct {
+    uint32_t dCSWSignature;
+    uint32_t dCSWTag;
+    uint32_t dCSWDataResidue;
+    uint8_t  bCSWStatus;
+} __attribute__((packed)) tCSW;
+
+/*====================================================================
+ * Descriptores y variables globales para EP0
+ *==================================================================*/
 static const uint8_t deviceDescriptor[] = {
     18, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 64,
     0x1C, 0x1C, 0x20, 0x00, 0x00, 0x02, 1, 2, 3, 1
@@ -33,32 +56,27 @@ static const uint8_t deviceDescriptor[] = {
 static const uint8_t configDescriptor[] = {
     9, 2, 32, 0, 1, 1, 0, 0xC0, 50,
     9, 4, 0, 0, 2, 0x08, 0x06, 0x50, 0,
-    7, 5, 0x81, 0x02, 64, 0, 0,
-    7, 5, 0x02, 0x02, 64, 0, 0
+    7, 5, 0x81, 0x02, 64, 0, 0, // EP1 IN (Bulk)
+    7, 5, 0x02, 0x02, 64, 0, 0  // EP2 OUT (Bulk)
 };
 
 static const uint8_t devQualDescriptor[] = {
     10, 0x06, 0x00, 0x02, 0x00, 0x00, 0x00, 64, 1, 0
 };
 
-/* Strings */
 static const uint8_t string0[] = { 4, 3, 0x09, 0x04 };
 static const uint8_t string1[] = { 20, 3, 'F',0,'r',0,'e',0,'e',0,'t',0,'r',0,'i',0,'b',0,'e',0 };
-static const uint8_t string2[] = { 22, 3, 'F',0,'l',0,'a',0,'s',0,'h',0,' ',0,'D',0,'r',0,'i',0,'v',0,'e',0 };
+static const uint8_t string2[] = { 24, 3, 'F',0,'l',0,'a',0,'s',0,'h',0,' ',0,'D',0,'r',0,'i',0,'v',0,'e',0 };
 static const uint8_t string3[] = { 10, 3, '1',0,'2',0,'3',0,'4',0 };
+
 static const uint8_t *const strings[] = { string0, string1, string2, string3 };
 static const uint8_t stringLens[] = { sizeof(string0), sizeof(string1), sizeof(string2), sizeof(string3) };
 
-/* Variables de Estado */
 static const uint8_t *g_pEP0Data = 0;
 static uint32_t g_uEP0Len = 0;
 static uint16_t pendingAddress = 0;
-static uint8_t pendingSetAddress = 0;
-static uint8_t isConfigured = 0;
-
-/*====================================================================
- * EP0 Helpers (Usando lógica de usbmidi.c)
- *==================================================================*/
+static uint8_t  pendingSetAddress = 0;
+static uint8_t  isConfigured = 0;
 
 static void EP0SendData(void) {
     uint32_t sendLen = (g_uEP0Len > 64) ? 64 : g_uEP0Len;
@@ -67,8 +85,6 @@ static void EP0SendData(void) {
         g_pEP0Data += sendLen;
         g_uEP0Len -= sendLen;
     }
-    
-    // Si no quedan datos, cerrar con LAST para activar DATAEND
     if (g_uEP0Len == 0) {
         USBEndpointDataSend(USB0_BASE, USB_EP_0, USB_TRANS_IN_LAST);
     } else {
@@ -77,9 +93,8 @@ static void EP0SendData(void) {
 }
 
 /*====================================================================
- * Handler de Interrupción (Polling)
+ * Handler de Interrupción (Polling) EXACTAMENTE ORIGINAL
  *==================================================================*/
-
 void USB0DeviceIntHandler(void) {
     uint16_t csrl0 = HWREGH(USB0_BASE + USB_0_CSRL0);
     static uint16_t last_csrl0 = 0;
@@ -181,17 +196,47 @@ void USB0DeviceIntHandler(void) {
 }
 
 /*====================================================================
- * Inicialización y Ejecución
+ * BOT Task (Polling de Bulk sin tocar registros de interrupción)
  *==================================================================*/
+void BOT_Task(void) {
+    // Leemos directo el RXCSRL2 igual que lo hacía el código MIDI para RXRDY (Bit 0)
+    if (HWREGH(USB0_BASE + USB_0_RXCSRL2) & 0x01) { 
+        tCBW cbw;
+        unsigned int bytesRead;
+        
+        USBEndpointDataGet(USB0_BASE, USB_EP_2, (uint8_t *)&cbw, &bytesRead);
+        
+        // Limpiar RXRDY manualmente
+        HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~0x01;
 
+        // Comprobar firma CBW ('USBC')
+        if (cbw.dCBWSignature == 0x43425355) { 
+            tCSW csw;
+            csw.dCSWSignature = 0x53425355; // 'USBS'
+            csw.dCSWTag = cbw.dCBWTag;
+            csw.dCSWDataResidue = cbw.dCBWDataTransferLength;
+            csw.bCSWStatus = 0x01; // Reportar Phase Error/Fail para evitar timeout
+
+            // Enviar CSW por EP1 igual que el código MIDI envía datos seriales
+            USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t *)&csw, 13);
+            
+            // Set TXPKTRDY manualmente
+            HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+        }
+    }
+}
+
+/*====================================================================
+ * Inicialización y Bucle Principal
+ *==================================================================*/
 t_status app_init(void) {
     PSCModuleControl(SOC_PSC_1_REGS, HW_PSC_USB0, 0, PSC_MDCTL_NEXT_ENABLE);
     UsbPhyOn();
 
-    uint32_t cfgchip2 = HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2);
-    cfgchip2 &= ~(0x0000000F | (3 << 13) | (1 << 12));
-    cfgchip2 |= (2 << 0) | (2 << 13) | (1 << 6); // 24MHz, Device mode, PHY On
-    HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) = cfgchip2;
+    uint32_t cfg2 = HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2);
+    cfg2 &= ~(0x0000000F | (3 << 13) | (1 << 12));
+    cfg2 |= (2 << 0) | (2 << 13) | (1 << 6); // 24MHz, PHY On, Device mode
+    HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) = cfg2;
 
     int timeout = 1000000;
     while (!(HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) & (1 << 17)) && timeout--);
@@ -200,34 +245,35 @@ t_status app_init(void) {
 
     IntRegister(SYS_INT_USB0, USB0DeviceIntHandler);
     IntChannelSet(SYS_INT_USB0, 2);
-    // Usamos IntSystemDisable para asegurar polling puro como en tu usbstorage.c original
-    IntSystemDisable(SYS_INT_USB0); 
+    IntSystemDisable(SYS_INT_USB0); // Polling puro
 
     USBIntEnableControl(USB0_BASE, USB_INTCTRL_RESET | USB_INTCTRL_DISCONNECT);
     USBIntEnableEndpoint(USB0_BASE, USB_INTEP_ALL);
+    
     USBDevConnect(USB0_BASE);
 
-    HWREG(USB_0_OTGBASE + USB_0_INTR_MASK_SET) = 0x1FF;
+    // Enmascaramos interrupciones del wrapper OTG
+    HWREG(USB_0_OTGBASE + USB_0_INTR_MASK_SET) = 0x1FF; 
 
     return SUCCESS;
 }
 
 void app_run(void) {
-    static int heartbeat = 0;
-    if (++heartbeat >= 100000) {
-        heartbeat = 0;
-        static int ledState = 0;
-        ledState = !ledState;
-        ft_set_led(LED_PLAY, ledState ? 255 : 0);
-    }
-
-    // Polling del handler
+    // 1. Polling del EP0 (exactamente como funcionaba antes)
     USB0DeviceIntHandler();
 
-    // Aquí iría la lógica de BOT_Task() si el dispositivo está configurado
-    // if (isConfigured) BOT_Task();
-
-    if (per_gpio_get_indexed(128) == 0) {
-        ft_shutdown();
+    // 2. Polling del Bulk (Solo si Linux ya terminó de configurar el dispositivo)
+    if (isConfigured) {
+        BOT_Task();
     }
+
+    static uint32_t heartbeat = 0;
+    if (++heartbeat >= 100000) {
+        heartbeat = 0;
+        static int led = 0;
+        led = !led;
+        ft_set_led(LED_PLAY, led ? 255 : 0);
+    }
+
+    if (per_gpio_get_indexed(128) == 0) ft_shutdown();
 }
