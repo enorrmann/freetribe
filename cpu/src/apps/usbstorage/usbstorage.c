@@ -183,7 +183,6 @@ void USB0DeviceIntHandler(void) {
         USBEndpointDataGet(USB0_BASE, USB_EP_0, (uint8_t *)&setup, &sz);
 
         if (sz == 8) {
-            //ft_printf("EP0: Req=0x%02X, Val=0x%04X\n", setup.bReq, setup.wVal);
             USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
 
             if ((setup.bmReq & 0x60) == 0) { // Standard Request
@@ -217,7 +216,6 @@ void USB0DeviceIntHandler(void) {
                     
                     
 case 0x09: // SET_CONFIGURATION
-    ft_printf("EP0: Configured!\n");
     
     // Primero el ACK del EP0
     USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
@@ -244,7 +242,6 @@ case 0x09: // SET_CONFIGURATION
                 }
             } else if ((setup.bmReq & 0x60) == 0x20) { // Class Request (MSC)
                 if (setup.bReq == 0xFE) { // Get Max LUN
-                    //ft_printf("EP0: Get Max LUN\n");
                     static const uint8_t maxLun = 0;
                     g_pEP0Data = &maxLun;
                     g_uEP0Len = 1;
@@ -353,13 +350,11 @@ void BOT_Task(void) {
             else if (opcode == 0x00 || opcode == 0x1E || opcode == 0x1B) {
                 // TEST UNIT READY, PREVENT ALLOW, START STOP UNIT
                 // No requieren fase de datos, solo CSW.
-                //ft_printf("BOT: Status-only Cmd (0x%02X)\n", opcode);
             }
  else if (opcode == 0x28) { // READ (10)
                 uint32_t lba = (cbw.CBWCB[2] << 24) | (cbw.CBWCB[3] << 16) | (cbw.CBWCB[4] << 8) | cbw.CBWCB[5];
                 uint16_t blocks = (cbw.CBWCB[7] << 8) | cbw.CBWCB[8];
                 
-                ft_printf("BOT: Read LBA=%d, Blocks=%d\n", lba, blocks);
 
                 for (uint16_t b = 0; b < blocks; b++) {
                     uint8_t sector[512];
@@ -383,7 +378,6 @@ void BOT_Task(void) {
 
             else {
                 // Comandos no soportados (ej. READ/WRITE todavía no implementados)
-                //ft_printf("BOT: Unsupported Op 0x%02X\n", opcode);
                 csw.bCSWStatus = 0x01; // Command Failed
             }
 
@@ -394,7 +388,6 @@ void BOT_Task(void) {
             USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t *)&csw, 13);
             HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01; 
             
-            //ft_printf("BOT: CSW Sent for 0x%02X\n", opcode);
 
         } else {
             // Si no es un CBW válido, hacemos un Stall o simplemente limpiamos
