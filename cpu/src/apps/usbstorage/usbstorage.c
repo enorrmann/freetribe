@@ -183,7 +183,7 @@ void USB0DeviceIntHandler(void) {
         USBEndpointDataGet(USB0_BASE, USB_EP_0, (uint8_t *)&setup, &sz);
 
         if (sz == 8) {
-            ft_printf("EP0: Req=0x%02X, Val=0x%04X\n", setup.bReq, setup.wVal);
+            //ft_printf("EP0: Req=0x%02X, Val=0x%04X\n", setup.bReq, setup.wVal);
             USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
 
             if ((setup.bmReq & 0x60) == 0) { // Standard Request
@@ -217,39 +217,34 @@ void USB0DeviceIntHandler(void) {
                     
                     
 case 0x09: // SET_CONFIGURATION
-                        ft_printf("EP0: Configured!\n");
-                        
-                        // A. Configuración Lógica
-                        USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, 64, USB_EP_MODE_BULK | USB_EP_DEV_IN);
-                        USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, 64, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
+    ft_printf("EP0: Configured!\n");
+    
+    // Primero el ACK del EP0
+    USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
 
-                        // B. CONFIGURACIÓN FÍSICA DE FIFOS (Vital para AM1808)
-                        // Seleccionamos EP1 para configurar su FIFO de TX
-                        HWREGB(USB0_BASE + USB_0_EPIDX) = 1; 
-                        HWREGB(USB0_BASE + USB_0_TXFIFOADD) = 8;  // Offset 64 (8*8)
-                        HWREGB(USB0_BASE + USB_0_TXFIFOSZ) = 3;   // 64 bytes (2^3 * 8)
+    // Configuración física de FIFOs
+    HWREGB(USB0_BASE + USB_0_EPIDX) = 1; 
+    HWREGH(USB0_BASE + USB_0_TXCSRL1) = 0x08; // Flush FIFO
+    HWREGB(USB0_BASE + USB_0_TXFIFOADD) = 8;  // Offset 64
+    HWREGB(USB0_BASE + USB_0_TXFIFOSZ) = 3;   // 64 bytes
 
-                        // Seleccionamos EP2 para configurar su FIFO de RX
-                        HWREGB(USB0_BASE + USB_0_EPIDX) = 2;
-                        HWREGB(USB0_BASE + USB_0_RXFIFOADD) = 16; // Offset 128 (16*8)
-                        HWREGB(USB0_BASE + USB_0_RXFIFOSZ) = 3;   // 64 bytes
+    HWREGB(USB0_BASE + USB_0_EPIDX) = 2;
+    HWREGH(USB0_BASE + USB_0_RXCSRL2) = 0x10; // Flush FIFO
+    HWREGB(USB0_BASE + USB_0_RXFIFOADD) = 16; // Offset 128
+    HWREGB(USB0_BASE + USB_0_RXFIFOSZ) = 3;   // 64 bytes
 
-                        // C. Habilitar interrupciones de los Endpoints Bulk
-                        USBIntEnableEndpoint(USB0_BASE, (1 << 18) | (1 << 1)); 
-                        
-                        isConfigured = 1;
-                        USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
-                        break;
+    USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, 64, USB_EP_MODE_BULK | USB_EP_DEV_IN);
+    USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, 64, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
 
-
-
+    isConfigured = 1;
+    break;
                     default:
                         USBDevEndpointStall(USB0_BASE, USB_EP_0, USB_EP_DEV_IN);
                         break;
                 }
             } else if ((setup.bmReq & 0x60) == 0x20) { // Class Request (MSC)
                 if (setup.bReq == 0xFE) { // Get Max LUN
-                    ft_printf("EP0: Get Max LUN\n");
+                    //ft_printf("EP0: Get Max LUN\n");
                     static const uint8_t maxLun = 0;
                     g_pEP0Data = &maxLun;
                     g_uEP0Len = 1;
@@ -277,54 +272,133 @@ case 0x09: // SET_CONFIGURATION
 }
 
 void BOT_Task(void) {
-    // Verificar si el bit del EP2 (1 << 18) se activó en el handler
-    // O si el hardware reporta el bit RXRDY directamente (por si acaso)
+    // 1. Verificar si hay datos pendientes en el EP2 (OUT)
     if ((g_ulUSBInterruptStatus & (1 << 18)) || (HWREGH(USB0_BASE + USB_0_RXCSRL2) & 0x01)) {
         
-        g_ulUSBInterruptStatus &= ~(1 << 18); // Limpiar bandera
+        g_ulUSBInterruptStatus &= ~(1 << 18); // Limpiar bandera de software
 
         tCBW cbw;
         unsigned int bytesRead;
         
-        // Leer el comando del host (CBW)
+        // Leer el CBW (Command Block Wrapper)
         USBEndpointDataGet(USB0_BASE, USB_EP_2, (uint8_t *)&cbw, &bytesRead);
 
+        // Validar Firma "USBC"
         if (bytesRead >= 31 && cbw.dCBWSignature == 0x43425355) {
-            ft_printf("BOT: CBW Detectado! Op=0x%02X\n", cbw.CBWCB[0]);
-
-            // Ack manual: Indicar al MUSB que el FIFO está libre
+            
+            // Ack manual: El FIFO de RX ahora está vacío
             HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~0x01;
 
             tCSW csw;
-            csw.dCSWSignature = 0x53425355;
+            csw.dCSWSignature = 0x53425355; // "USBS"
             csw.dCSWTag = cbw.dCBWTag;
             csw.dCSWDataResidue = cbw.dCBWDataTransferLength;
-            csw.bCSWStatus = 0x00;
+            csw.bCSWStatus = 0x00; // Por defecto: Éxito
 
-            if (cbw.CBWCB[0] == 0x12) { // INQUIRY
-                ft_printf("BOT: Inquiry\n");
+            uint8_t opcode = cbw.CBWCB[0];
+
+            // --- MÁQUINA DE ESTADOS DE COMANDOS SCSI ---
+            
+            if (opcode == 0x12) { // INQUIRY
                 static const uint8_t inq[36] = {
                     0x00, 0x80, 0x02, 0x02, 0x1F, 0x00, 0x00, 0x00,
-                    'F','R','E','E','T','R','I','B','E',
-                    ' ',' ',' ',' ',' ',' ',' ',' ',
-                    '1','.','0'
+                    'F','R','E','E','T','R','I','B','E', // Vendor (8 bytes)
+                    ' ','D','I','S','K',' ',' ',' ',     // Product (16 bytes)
+                    '1','.','0'                          // Rev (4 bytes)
                 };
                 
-                while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
+                while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01); // Wait TX Ready
                 USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t *)inq, 36);
                 HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
                 csw.dCSWDataResidue -= 36;
+            }
+            
+            else if (opcode == 0x25) { // READ CAPACITY (10)
+                uint8_t cap[8];
+                uint32_t last_lba = 0x0000003F; // 64 sectores (0 a 63)
+                uint32_t block_len = 512;
+
+                // Big Endian obligado por SCSI
+                cap[0] = (last_lba >> 24); cap[1] = (last_lba >> 16);
+                cap[2] = (last_lba >> 8);  cap[3] = last_lba;
+                cap[4] = (block_len >> 24); cap[5] = (block_len >> 16);
+                cap[6] = (block_len >> 8);  cap[7] = block_len;
+
                 while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
+                USBEndpointDataPut(USB0_BASE, USB_EP_1, cap, 8);
+                HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+                csw.dCSWDataResidue -= 8;
             }
 
-            // Enviar el CSW para finalizar la transacción
-            while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
+            else if (opcode == 0x23) { // READ FORMAT CAPACITIES
+                uint8_t fcap[12] = {
+                    0, 0, 0, 8,             // Capacity List Length
+                    0, 0, 0, 0x40,          // Number of blocks (64)
+                    2, 0, 0, 0x02           // Formatted Media + Block len (512)
+                };
+                while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
+                USBEndpointDataPut(USB0_BASE, USB_EP_1, fcap, 12);
+                HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+                csw.dCSWDataResidue -= 12;
+            }
+
+            else if (opcode == 0x03) { // REQUEST SENSE
+                uint8_t sense[18] = { 0x70, 0, 0x00, 0, 0, 0, 0, 0x0A, 0, 0, 0, 0, 0x00, 0x00, 0, 0, 0, 0 };
+                while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
+                USBEndpointDataPut(USB0_BASE, USB_EP_1, sense, 18);
+                HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+                csw.dCSWDataResidue -= 18;
+            }
+
+            else if (opcode == 0x00 || opcode == 0x1E || opcode == 0x1B) {
+                // TEST UNIT READY, PREVENT ALLOW, START STOP UNIT
+                // No requieren fase de datos, solo CSW.
+                //ft_printf("BOT: Status-only Cmd (0x%02X)\n", opcode);
+            }
+ else if (opcode == 0x28) { // READ (10)
+                uint32_t lba = (cbw.CBWCB[2] << 24) | (cbw.CBWCB[3] << 16) | (cbw.CBWCB[4] << 8) | cbw.CBWCB[5];
+                uint16_t blocks = (cbw.CBWCB[7] << 8) | cbw.CBWCB[8];
+                
+                ft_printf("BOT: Read LBA=%d, Blocks=%d\n", lba, blocks);
+
+                for (uint16_t b = 0; b < blocks; b++) {
+                    uint8_t sector[512];
+                    memset(sector, 0, 512);
+                    if (lba + b == 0) { sector[510] = 0x55; sector[511] = 0xAA; }
+
+                    // ENVIAR SECTOR EN 8 PAQUETES DE 64 BYTES
+                    for (int p = 0; p < 8; p++) {
+                        // 1. Esperar a que el FIFO esté vacío (TXRDY limpio)
+                        while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
+                        
+                        // 2. Cargar SOLO 64 bytes
+                        USBEndpointDataPut(USB0_BASE, USB_EP_1, &sector[p * 64], 64);
+                        
+                        // 3. Marcar para enviar
+                        HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+                    }
+                }
+                csw.dCSWDataResidue -= (blocks * 512);
+            }
+
+            else {
+                // Comandos no soportados (ej. READ/WRITE todavía no implementados)
+                //ft_printf("BOT: Unsupported Op 0x%02X\n", opcode);
+                csw.bCSWStatus = 0x01; // Command Failed
+            }
+
+            // --- FASE FINAL: ENVIAR CSW ---
+            // Esperamos a que cualquier fase de datos anterior haya salido del FIFO
+            while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01); 
+            
             USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t *)&csw, 13);
-            HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
-            ft_printf("BOT: CSW Enviado\n");
+            HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01; 
+            
+            //ft_printf("BOT: CSW Sent for 0x%02X\n", opcode);
+
         } else {
-            // Si no es un CBW válido, limpiar el endpoint igualmente
-            HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~0x01;
+            // Si no es un CBW válido, hacemos un Stall o simplemente limpiamos
+            USBDevEndpointDataAck(USB0_BASE, USB_EP_2, true);
         }
     }
 }
