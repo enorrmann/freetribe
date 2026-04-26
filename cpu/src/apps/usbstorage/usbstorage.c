@@ -25,6 +25,10 @@
 /* --- Declaración de GPIO --- */
 extern int per_gpio_get_indexed(unsigned int id);
 
+void BOT_Task(void) ;
+void USB0DeviceIntHandler(void) ;
+volatile uint32_t g_ulUSBInterruptStatus = 0;
+
 /*====================================================================
  * Estructuras BOT (Bulk-Only Transport)
  *==================================================================*/
@@ -92,139 +96,8 @@ static void EP0SendData(void) {
     }
 }
 
-/*====================================================================
- * Handler de Interrupción (Polling) EXACTAMENTE ORIGINAL
- *==================================================================*/
-void USB0DeviceIntHandler(void) {
-    uint16_t csrl0 = HWREGH(USB0_BASE + USB_0_CSRL0);
-    static uint16_t last_csrl0 = 0;
 
-    // 1. Limpiar SETUPEND si el host abortó una transferencia previa
-    if (csrl0 & 0x10) { 
-        HWREGH(USB0_BASE + USB_0_CSRL0) = 0x80; // SVCSETUPEND
-    }
 
-    // 2. Manejo de Reset
-    uint32_t statusCtrl = USBIntStatusControl(USB0_BASE);
-    if (statusCtrl & USB_INTCTRL_RESET) {
-        pendingAddress = 0;
-        pendingSetAddress = 0;
-        isConfigured = 0;
-        USBDevAddrSet(USB0_BASE, 0);
-    }
-
-    USBIntStatusEndpoint(USB0_BASE);
-
-    // 3. Recepción de SETUP o Datos en EP0
-    if (csrl0 & 0x01) { // RXRDY
-        typedef struct { uint8_t bmReq; uint8_t bReq; uint16_t wVal; uint16_t wIdx; uint16_t wLen; } SetupPkt;
-        SetupPkt setup;
-        unsigned int sz;
-        
-        USBEndpointDataGet(USB0_BASE, USB_EP_0, (uint8_t *)&setup, &sz);
-
-        if (sz == 8) {
-            // ACK de recepción (SVCRXPKTRDY)
-            USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
-
-            if ((setup.bmReq & 0x60) == 0) { // Standard Request
-                switch (setup.bReq) {
-                    case 0x06: { // GET_DESCRIPTOR
-                        uint8_t type = setup.wVal >> 8;
-                        uint8_t idx = setup.wVal & 0xFF;
-                        const uint8_t *desc = 0;
-                        uint16_t len = 0;
-
-                        if (type == 1)      { desc = deviceDescriptor; len = sizeof(deviceDescriptor); }
-                        else if (type == 2) { desc = configDescriptor; len = sizeof(configDescriptor); }
-                        else if (type == 6) { desc = devQualDescriptor; len = sizeof(devQualDescriptor); }
-                        else if (type == 3 && idx < 4) { desc = strings[idx]; len = stringLens[idx]; }
-
-                        if (desc) {
-                            if (len > setup.wLen) len = setup.wLen;
-                            g_pEP0Data = desc;
-                            g_uEP0Len = len;
-                            EP0SendData();
-                        } else {
-                            USBDevEndpointStall(USB0_BASE, USB_EP_0, USB_EP_DEV_IN);
-                        }
-                        break;
-                    }
-                    case 0x05: // SET_ADDRESS
-                        pendingAddress = setup.wVal;
-                        pendingSetAddress = 1;
-                        USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true); // Status ZLP
-                        break;
-                    case 0x09: // SET_CONFIGURATION
-                        USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, 64, USB_EP_MODE_BULK | USB_EP_DEV_IN);
-                        USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, 64, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
-                        USBIntEnableEndpoint(USB0_BASE, (1 << 18)); // EP2 RX
-                        isConfigured = 1;
-                        USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
-                        break;
-                    default:
-                        USBDevEndpointStall(USB0_BASE, USB_EP_0, USB_EP_DEV_IN);
-                        break;
-                }
-            } else if ((setup.bmReq & 0x60) == 0x20) { // Class Request (MSC)
-                if (setup.bReq == 0xFE) { // Get Max LUN
-                    static const uint8_t maxLun = 0;
-                    g_pEP0Data = &maxLun;
-                    g_uEP0Len = 1;
-                    EP0SendData();
-                } else if (setup.bReq == 0xFF) { // Bulk Only Reset
-                    USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
-                }
-            }
-        } else {
-            USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
-        }
-    } 
-    // 4. Fase de continuación de Datos o finalización de Dirección
-    else if (((last_csrl0 & 0x02) && !(csrl0 & 0x02)) || ((last_csrl0 & 0x08) && !(csrl0 & 0x08))) {
-        if (g_uEP0Len > 0) {
-            EP0SendData();
-        } else if (pendingSetAddress) {
-            USBDevAddrSet(USB0_BASE, pendingAddress);
-            pendingSetAddress = 0;
-        }
-    }
-
-    last_csrl0 = csrl0;
-    IntSystemStatusClear(SYS_INT_USB0);
-    HWREG(USB_0_OTGBASE + USB_0_END_OF_INTR) = 0;
-}
-
-/*====================================================================
- * BOT Task (Polling de Bulk sin tocar registros de interrupción)
- *==================================================================*/
-void BOT_Task(void) {
-    // Leemos directo el RXCSRL2 igual que lo hacía el código MIDI para RXRDY (Bit 0)
-    if (HWREGH(USB0_BASE + USB_0_RXCSRL2) & 0x01) { 
-        tCBW cbw;
-        unsigned int bytesRead;
-        
-        USBEndpointDataGet(USB0_BASE, USB_EP_2, (uint8_t *)&cbw, &bytesRead);
-        
-        // Limpiar RXRDY manualmente
-        HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~0x01;
-
-        // Comprobar firma CBW ('USBC')
-        if (cbw.dCBWSignature == 0x43425355) { 
-            tCSW csw;
-            csw.dCSWSignature = 0x53425355; // 'USBS'
-            csw.dCSWTag = cbw.dCBWTag;
-            csw.dCSWDataResidue = cbw.dCBWDataTransferLength;
-            csw.bCSWStatus = 0x01; // Reportar Phase Error/Fail para evitar timeout
-
-            // Enviar CSW por EP1 igual que el código MIDI envía datos seriales
-            USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t *)&csw, 13);
-            
-            // Set TXPKTRDY manualmente
-            HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
-        }
-    }
-}
 
 /*====================================================================
  * Inicialización y Bucle Principal
@@ -276,4 +149,182 @@ void app_run(void) {
     }
 
     if (per_gpio_get_indexed(128) == 0) ft_shutdown();
+}
+
+
+
+
+void USB0DeviceIntHandler(void) {
+    uint16_t csrl0 = HWREGH(USB0_BASE + USB_0_CSRL0);
+    static uint16_t last_csrl0 = 0;
+
+    if (csrl0 & 0x10) { 
+        HWREGH(USB0_BASE + USB_0_CSRL0) = 0x80; // SVCSETUPEND
+    }
+
+    uint32_t statusCtrl = USBIntStatusControl(USB0_BASE);
+    if (statusCtrl & USB_INTCTRL_RESET) {
+        pendingAddress = 0;
+        pendingSetAddress = 0;
+        isConfigured = 0;
+        g_ulUSBInterruptStatus = 0; // Limpiar status en reset
+        USBDevAddrSet(USB0_BASE, 0);
+    }
+
+    // RESCATE DE STATUS: Guardamos los bits de los endpoints (EP1, EP2, etc.)
+    // Si no hacemos esto, el BOT_Task nunca verá que llegó un paquete.
+    g_ulUSBInterruptStatus |= USBIntStatusEndpoint(USB0_BASE);
+
+    if (csrl0 & 0x01) { // RXRDY en EP0
+        typedef struct { uint8_t bmReq; uint8_t bReq; uint16_t wVal; uint16_t wIdx; uint16_t wLen; } SetupPkt;
+        SetupPkt setup;
+        unsigned int sz;
+        
+        USBEndpointDataGet(USB0_BASE, USB_EP_0, (uint8_t *)&setup, &sz);
+
+        if (sz == 8) {
+            ft_printf("EP0: Req=0x%02X, Val=0x%04X\n", setup.bReq, setup.wVal);
+            USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
+
+            if ((setup.bmReq & 0x60) == 0) { // Standard Request
+                switch (setup.bReq) {
+                    case 0x06: { // GET_DESCRIPTOR
+                        uint8_t type = setup.wVal >> 8;
+                        uint8_t idx = setup.wVal & 0xFF;
+                        const uint8_t *desc = 0;
+                        uint16_t len = 0;
+
+                        if (type == 1)      { desc = deviceDescriptor; len = sizeof(deviceDescriptor); }
+                        else if (type == 2) { desc = configDescriptor; len = sizeof(configDescriptor); }
+                        else if (type == 6) { desc = devQualDescriptor; len = sizeof(devQualDescriptor); }
+                        else if (type == 3 && idx < 4) { desc = strings[idx]; len = stringLens[idx]; }
+
+                        if (desc) {
+                            if (len > setup.wLen) len = setup.wLen;
+                            g_pEP0Data = desc;
+                            g_uEP0Len = len;
+                            EP0SendData();
+                        } else {
+                            USBDevEndpointStall(USB0_BASE, USB_EP_0, USB_EP_DEV_IN);
+                        }
+                        break;
+                    }
+                    case 0x05: // SET_ADDRESS
+                        pendingAddress = setup.wVal;
+                        pendingSetAddress = 1;
+                        USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
+                        break;
+                    
+                    
+case 0x09: // SET_CONFIGURATION
+                        ft_printf("EP0: Configured!\n");
+                        
+                        // A. Configuración Lógica
+                        USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, 64, USB_EP_MODE_BULK | USB_EP_DEV_IN);
+                        USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, 64, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
+
+                        // B. CONFIGURACIÓN FÍSICA DE FIFOS (Vital para AM1808)
+                        // Seleccionamos EP1 para configurar su FIFO de TX
+                        HWREGB(USB0_BASE + USB_0_EPIDX) = 1; 
+                        HWREGB(USB0_BASE + USB_0_TXFIFOADD) = 8;  // Offset 64 (8*8)
+                        HWREGB(USB0_BASE + USB_0_TXFIFOSZ) = 3;   // 64 bytes (2^3 * 8)
+
+                        // Seleccionamos EP2 para configurar su FIFO de RX
+                        HWREGB(USB0_BASE + USB_0_EPIDX) = 2;
+                        HWREGB(USB0_BASE + USB_0_RXFIFOADD) = 16; // Offset 128 (16*8)
+                        HWREGB(USB0_BASE + USB_0_RXFIFOSZ) = 3;   // 64 bytes
+
+                        // C. Habilitar interrupciones de los Endpoints Bulk
+                        USBIntEnableEndpoint(USB0_BASE, (1 << 18) | (1 << 1)); 
+                        
+                        isConfigured = 1;
+                        USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
+                        break;
+
+
+
+                    default:
+                        USBDevEndpointStall(USB0_BASE, USB_EP_0, USB_EP_DEV_IN);
+                        break;
+                }
+            } else if ((setup.bmReq & 0x60) == 0x20) { // Class Request (MSC)
+                if (setup.bReq == 0xFE) { // Get Max LUN
+                    ft_printf("EP0: Get Max LUN\n");
+                    static const uint8_t maxLun = 0;
+                    g_pEP0Data = &maxLun;
+                    g_uEP0Len = 1;
+                    EP0SendData();
+                } else if (setup.bReq == 0xFF) { // Bulk Only Reset
+                    USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
+                }
+            }
+        } else {
+            USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
+        }
+    } 
+    else if (((last_csrl0 & 0x02) && !(csrl0 & 0x02)) || ((last_csrl0 & 0x08) && !(csrl0 & 0x08))) {
+        if (g_uEP0Len > 0) {
+            EP0SendData();
+        } else if (pendingSetAddress) {
+            USBDevAddrSet(USB0_BASE, pendingAddress);
+            pendingSetAddress = 0;
+        }
+    }
+
+    last_csrl0 = csrl0;
+    IntSystemStatusClear(SYS_INT_USB0);
+    HWREG(USB_0_OTGBASE + USB_0_END_OF_INTR) = 0;
+}
+
+void BOT_Task(void) {
+    // Verificar si el bit del EP2 (1 << 18) se activó en el handler
+    // O si el hardware reporta el bit RXRDY directamente (por si acaso)
+    if ((g_ulUSBInterruptStatus & (1 << 18)) || (HWREGH(USB0_BASE + USB_0_RXCSRL2) & 0x01)) {
+        
+        g_ulUSBInterruptStatus &= ~(1 << 18); // Limpiar bandera
+
+        tCBW cbw;
+        unsigned int bytesRead;
+        
+        // Leer el comando del host (CBW)
+        USBEndpointDataGet(USB0_BASE, USB_EP_2, (uint8_t *)&cbw, &bytesRead);
+
+        if (bytesRead >= 31 && cbw.dCBWSignature == 0x43425355) {
+            ft_printf("BOT: CBW Detectado! Op=0x%02X\n", cbw.CBWCB[0]);
+
+            // Ack manual: Indicar al MUSB que el FIFO está libre
+            HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~0x01;
+
+            tCSW csw;
+            csw.dCSWSignature = 0x53425355;
+            csw.dCSWTag = cbw.dCBWTag;
+            csw.dCSWDataResidue = cbw.dCBWDataTransferLength;
+            csw.bCSWStatus = 0x00;
+
+            if (cbw.CBWCB[0] == 0x12) { // INQUIRY
+                ft_printf("BOT: Inquiry\n");
+                static const uint8_t inq[36] = {
+                    0x00, 0x80, 0x02, 0x02, 0x1F, 0x00, 0x00, 0x00,
+                    'F','R','E','E','T','R','I','B','E',
+                    ' ',' ',' ',' ',' ',' ',' ',' ',
+                    '1','.','0'
+                };
+                
+                while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
+                USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t *)inq, 36);
+                HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+                csw.dCSWDataResidue -= 36;
+                while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
+            }
+
+            // Enviar el CSW para finalizar la transacción
+            while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
+            USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t *)&csw, 13);
+            HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+            ft_printf("BOT: CSW Enviado\n");
+        } else {
+            // Si no es un CBW válido, limpiar el endpoint igualmente
+            HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~0x01;
+        }
+    }
 }
