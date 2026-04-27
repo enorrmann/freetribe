@@ -147,31 +147,37 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void *buff) {
     switch (cmd) {
 case GET_SECTOR_COUNT:
     if (buff) {
-        uint8_t *raw = (uint8_t*)&sd_sm[0].csd;
+        // Asumiendo que sd_sm[0].csd es una estructura donde los campos 
+        // ya están extraídos y alineados (como sugiere tu DEBUG RAW)
         uint32_t n_sectors = 0;
+        
+        // Usamos la estructura que ya conocemos del dump
+        if (sd_sm[0].csd.CSD_STRUCTURE == 0x01) { // SDHC
+            // En tu dump, el "device size" (C_SIZE) se mostró como 0xE8F5
+            // Si la estructura mapea C_SIZE directamente como un uint32_t:
+            uint32_t c_size = sd_sm[0].csd.C_SIZE; 
 
-        // Forzamos la detección de SDHC si el tamaño reportado es incoherente
-        // O si sabemos que la tarjeta es de 32GB
-        if ((raw[0] >> 6) == 1 || sd_sm[0].is_hc || raw[0] == 0x01) {
-            // Intentamos extraer C_SIZE asumiendo que los bytes 7, 8 y 9 
-            // contienen la capacidad (mapeo estándar SDHC)
-            uint32_t c_size = ((uint32_t)(raw[7] & 0x3F) << 16) | 
-                              ((uint32_t)raw[8] << 8) | 
-                               (uint32_t)raw[9];
-
+            // Aplicamos la fórmula mágica para SDHC
             n_sectors = (c_size + 1) * 1024;
+            
+            ft_printf("SDHC Detectada. C_SIZE: 0x%X, Sectores: %u\n", c_size, n_sectors);
         } else {
-            // Cálculo V1.0 normal...
-            uint32_t c_size = ((uint32_t)(raw[6] & 0x03) << 10) | ((uint32_t)raw[7] << 2) | ((uint32_t)raw[8] >> 6);
-            uint32_t c_size_mult = ((uint32_t)(raw[9] & 0x03) << 1) | ((uint32_t)raw[10] >> 7);
-            n_sectors = (c_size + 1) << (c_size_mult + 2 + (raw[5] & 0x0F) - 9);
+            // Lógica para V1 (Standard Capacity)
+            // Aquí tendrías que usar los campos c_size, c_size_mult y read_bl_len
+            // que tu driver ya haya extraído previamente.
+            uint32_t c_size = sd_sm[0].csd.C_SIZE;
+            uint32_t c_size_mult = sd_sm[0].csd.C_SIZE_MULT;
+            uint32_t read_bl_len = sd_sm[0].csd.READ_BL_LEN;
+            
+            n_sectors = (c_size + 1) << (c_size_mult + 2 + read_bl_len - 9);
+            ft_printf("SD Standard Detectada. C_SIZE: 0x%X, C_SIZE_MULT: %u, READ_BL_LEN: %u, Sectores: %u\n", 
+                c_size, c_size_mult, read_bl_len, n_sectors);
         }
 
-        *(DWORD*)buff = n_sectors;
+        *(uint32_t*)buff = n_sectors;
         return RES_OK;
     }
     break;
-        
         case GET_SECTOR_SIZE:
             if (buff) {
                 *(WORD*)buff = 512;

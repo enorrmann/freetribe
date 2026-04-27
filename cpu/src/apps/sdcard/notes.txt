@@ -2,3 +2,88 @@ ver inicializacion de
 sdprot_get_csd no anda bien
 
 ver si se puede simplificar case GET_SECTOR_COUNT: si dev_sdcard no usa sdprot_get_csd
+
+
+cdc dump
+************ CSD register ************
+
+CSD structure                   0x1
+
+data read access-time-1         0xE
+
+data read access-time-2         0x0
+
+max. data transfer rate         0x32
+
+card command classes            0x5B5
+
+max. read data block length     0x9
+
+partial blocks for read allowed 0x0
+
+write block misalignment        0x0
+
+read block misalignment         0x0
+
+DSR implemented                 0x0
+
+device size                     0x3
+
+max. read current @VDD min      0x5
+
+max. read current @VDD max      0x0
+
+max. write current @VDD min     0x7
+
+max. write current @VDD max     0x5
+
+device size multiplier          0x2
+
+erase single block enable       0x1
+
+erase sector size               0x7F
+
+write protect group size        0x0
+
+write protect group enable      0x0
+
+write speed factor              0x2
+
+max. write data block length    0x9
+
+partial blocks f write allowed  0x0
+
+File format group               0x0
+
+copy flag (OTP)                 0x0
+
+permanent write protection      0x0
+
+temporary write protection      0x0
+
+File format                     0x0
+
+CRC                             0x68
+
+
+Disco /dev/sda: 512 KiB, 524288 bytes, 1024 sectores
+Modelo de disco: E DISK   1.0    
+Unidades: sectores de 1 * 512 = 512 bytes
+Tamaño de sector (lógico/físico): 512 bytes / 512 bytes
+Tamaño de E/S (mínimo/óptimo): 512 bytes / 512 bytes
+Tipo de etiqueta de disco: dos
+Identificador del disco: 0x00000000
+
+Disposit.  Inicio Comienzo    Final Sectores Tamaño Id Tipo
+/dev/sda1             8192 61069311 61061120  29,1G  c W95 FAT32 (LBA)
+
+
+    
+si lo calculo de esta forma funciona, cual es la diferencia _?
+    uint8_t *ptr = (uint8_t*)&sd_sm->csd;
+    for (int j = 0; j < 4; j++) {
+        ptr[j*4 + 0] = (lngrsp.v[3-j] >> 24) & 0xFF;
+        ptr[j*4 + 1] = (lngrsp.v[3-j] >> 16) & 0xFF;
+        ptr[j*4 + 2] = (lngrsp.v[3-j] >> 8) & 0xFF;
+        ptr[j*4 + 3] = (lngrsp.v[3-j] >> 0) & 0xFF;
+    }

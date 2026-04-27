@@ -38,6 +38,7 @@ Original work by turmary@126.com, modified by novictim 2025 for freetribe.
 #include <string.h>
 #include "macros.h"
 
+#define DEBUG_SDDRIVER
 
 /*----- Macros -------------------------------------------------------*/
 
@@ -269,8 +270,66 @@ int sdprot_print_cid(const CID_t* cid) {
 
     return 0;
 }
-
 int sdprot_get_csd(CSD_t* csd, const uint32_t* resp) {
+    // La estructura CSD siempre está en los bits [127:126] del registro
+    // que corresponden a los bits superiores de resp[3]
+    csd->CSD_STRUCTURE = (resp[3] >> 30) & 0x3;
+
+    // Campos comunes a ambas versiones
+    csd->TAAC         = (resp[3] >> 16) & 0xFF;
+    csd->NSAC         = (resp[3] >> 8) & 0xFF;
+    csd->TRANS_SPEED   = (resp[3] >> 0) & 0xFF;
+    csd->CCC           = (resp[2] >> 20) & 0xFFF;
+    csd->READ_BL_LEN   = (resp[2] >> 16) & 0xF;
+    csd->READ_BL_PARTIAL = (resp[2] >> 15) & 0x1;
+    csd->WRITE_BLK_MISALIGN = (resp[2] >> 14) & 0x1;
+    csd->READ_BLK_MISALIGN = (resp[2] >> 13) & 0x1;
+    csd->DSR_IMP       = (resp[2] >> 12) & 0x1;
+
+    if (csd->CSD_STRUCTURE == 0x0) {
+        // --- VERSION 1.0 (Tarjetas Standard Capacity < 2GB) ---
+        // C_SIZE es de 12 bits [73:62]
+        uint32_t c_size = ((resp[2] & 0x3FF) << 2) | ((resp[1] >> 30) & 0x3);
+        csd->C_SIZE = c_size;
+        
+        csd->VDD_R_CURR_MIN = (resp[1] >> 27) & 0x7;
+        csd->VDD_R_CURR_MAX = (resp[1] >> 24) & 0x7;
+        csd->VDD_W_CURR_MIN = (resp[1] >> 21) & 0x7;
+        csd->VDD_W_CURR_MAX = (resp[1] >> 18) & 0x7;
+        csd->C_SIZE_MULT    = (resp[1] >> 15) & 0x7;
+    } 
+    else if (csd->CSD_STRUCTURE == 0x1) {
+        // --- VERSION 2.0 (Tarjetas SDHC/SDXC - TU CASO) ---
+        // C_SIZE es de 22 bits [69:48]
+        // Bits [69:64] de resp[2] (6 bits) y [63:48] de resp[1] (16 bits)
+        uint32_t c_size = ((resp[2] & 0x3F) << 16) | ((resp[1] >> 16) & 0xFFFF);
+        csd->C_SIZE = c_size;
+
+        // Estos campos están reservados (nulos) en V2.0
+        csd->C_SIZE_MULT = 0;
+        csd->VDD_R_CURR_MIN = 0;
+        csd->VDD_R_CURR_MAX = 0;
+    }
+
+    // Campos finales (comunes o con offsets similares)
+    csd->ERASE_BLK_LEN = (resp[1] >> 14) & 0x1;
+    csd->SECTOR_SIZE   = (resp[1] >> 7) & 0x7F;
+    csd->WP_GRP_SIZE   = (resp[1] >> 0) & 0x7F;
+
+    csd->WP_GRP_ENABLE = (resp[0] >> 31) & 0x1;
+    csd->R2W_FACTOR    = (resp[0] >> 26) & 0x7;
+    csd->WRITE_BL_LEN  = (resp[0] >> 22) & 0xF;
+    csd->WRITE_BL_PARTIAL = (resp[0] >> 21) & 0x1;
+    csd->FILE_FORMAT_GRP = (resp[0] >> 15) & 0x1;
+    csd->COPY          = (resp[0] >> 14) & 0x1;
+    csd->PERM_WRITE_PROTECT = (resp[0] >> 12) & 0x1;
+    csd->TMP_WRITE_PROTECT = (resp[0] >> 11) & 0x1;
+    csd->FILE_FORMAT   = (resp[0] >> 9) & 0x3;
+    csd->CRC           = (resp[0] >> 1) & 0x7F;
+
+    return 0;
+}
+int old_sdprot_get_csd(CSD_t* csd, const uint32_t* resp) {
     uint32_t v;
 
     csd->CSD_STRUCTURE = __field_xget(resp[3], 0x3 << 30);
