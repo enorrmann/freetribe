@@ -102,6 +102,7 @@ static uint16_t pendingAddress = 0;
 static uint8_t  pendingSetAddress = 0;
 static uint8_t  isConfigured = 0;
 static uint32_t g_sdInitWaitCounter = 0;  // Esperar después de reinicialización
+static uint8_t  g_sdNeedsInit = 0;        // Flag para indicar que la SD necesita reinicialización
 
 static void EP0SendData(void) {
     uint32_t sendLen = (g_uEP0Len > 64) ? 64 : g_uEP0Len;
@@ -204,6 +205,11 @@ void USB0DeviceIntHandler(void) {
         isConfigured = 0;
         g_ulUSBInterruptStatus = 0; // Limpiar status en reset
         USBDevAddrSet(USB0_BASE, 0);
+        
+        // Cuando el bus USB se resetea, marcar que la SD necesita reinicialización
+        // Esto maneja el caso de reconexión física del cable USB
+        g_sdNeedsInit = 1;
+        g_sdInitWaitCounter = 1000;
     }
 
     // RESCATE DE STATUS: Guardamos los bits de los endpoints (EP1, EP2, etc.)
@@ -471,46 +477,112 @@ else if (opcode == 0x1A) { // MODE SENSE (6)
             }
 
             else if (opcode == 0x00) { // TEST UNIT READY
-
-                    if (disk_status(0) & STA_NOINIT) {
-                        csw.bCSWStatus = 0x01; // Sigue sin estar lista
-
+                // Si la SD fue marcada para reinicializar (por STOP/START o error)
+                if (g_sdNeedsInit) {
+                    if (g_sdInitWaitCounter > 1) {
+                        // Todavía esperando estabilización...
+                        g_sdInitWaitCounter--;
+                        csw.bCSWStatus = 0x01; // NOT READY
+                        g_SenseKey = 0x02;     // NOT READY
+                        g_ASC = 0x04;          // LOGICAL UNIT NOT READY, BECOMING READY
+                    } else {
+                        // Ya esperamos, intentar reinicializar ahora
+                        g_sdInitWaitCounter = 0;
+                        
+                        if (disk_initialize(0) == 0) {
+                            // Reinicialización exitosa
+                            g_sdNeedsInit = 0;
+                            csw.bCSWStatus = 0x00; // GOOD
+                        } else {
+                            // Falló, dar más tiempo
+                            csw.bCSWStatus = 0x01; // CHECK CONDITION
+                            g_SenseKey = 0x02;     // NOT READY
+                            g_ASC = 0x3A;          // MEDIUM NOT PRESENT
+                            g_sdInitWaitCounter = 1000; // Reintentar después
+                        }
+                    }
+                } else {
+                    // No hay reinicialización pendiente, reportar listo
+                    csw.bCSWStatus = 0x00; // GOOD
                 }
             }
             
             else if (opcode == 0x1E || opcode == 0x1B) {
-                // PREVENT ALLOW, START STOP UNIT
-                // No requieren fase de datos, solo CSW.
+                // PREVENT ALLOW MEDIUM REMOVAL (0x1E), START STOP UNIT (0x1B)
+                
+                if (opcode == 0x1B) {
+                    // START STOP UNIT
+                    uint8_t start = cbw.CBWCB[4] & 0x01;  // Bit 0: Start bit
+                    uint8_t loej  = cbw.CBWCB[4] & 0x02;  // Bit 1: LoEj (Load/Eject)
+                    
+                    if (!start) {
+                        // STOP: El host va a desmontarnos (umount)
+                        // Marcar que necesitamos reinicializar antes del próximo acceso
+                        g_sdNeedsInit = 1;
+                        g_sdInitWaitCounter = 500; // Dar tiempo para que la SD se estabilice
+                    } else {
+                        // START: El host quiere que la unidad esté lista
+                        // Si ya habíamos marcado para reinit, reducir el contador para acelerar
+                        if (g_sdNeedsInit && g_sdInitWaitCounter > 100) {
+                            g_sdInitWaitCounter = 100; // Acelerar la reinicialización
+                        }
+                    }
+                }
+                // Ambos comandos retornan éxito sin fase de datos
+                csw.bCSWStatus = 0x00;
             }
 
 else if (opcode == 0x28) { // READ (10)
-    uint32_t lba = (cbw.CBWCB[2] << 24) | (cbw.CBWCB[3] << 16) | (cbw.CBWCB[4] << 8) | cbw.CBWCB[5];
+    // 1. Extraer parámetros del CDB
+    uint32_t lba = (cbw.CBWCB[2] << 24) | (cbw.CBWCB[3] << 16) | 
+                   (cbw.CBWCB[4] << 8)  |  cbw.CBWCB[5];
     uint16_t blocks = (cbw.CBWCB[7] << 8) | cbw.CBWCB[8];
 
+    // 2. Buffer estático alineado (CRÍTICO para DMA de la SD)
+    static uint8_t sector[512] __attribute__((aligned(4)));
+
     for (uint16_t b = 0; b < blocks; b++) {
-        uint8_t sector[512];
-        memset(sector, 0, 512); // Llenar de ceros por defecto
+        // Intentar lectura física
+        DRESULT res = disk_read(0, sector, lba + b, 1);
         
-        // LECTURA REAL DE LA SD
-        if (csw.bCSWStatus == 0x00) { 
-            if (disk_read(0, sector, lba + b, 1) != RES_OK) {
-                csw.bCSWStatus = 0x01;
-                g_SenseKey = 0x03;  // MEDIUM ERROR
-                g_ASC      = 0x11;  // UNRECOVERED READ ERROR
-            }        
+        if (res != RES_OK) {
+            // --- ESTRATEGIA DE EMERGENCIA ---
+            // Si la SD falla, no podemos simplemente parar. 
+            // El PC espera 'blocks * 512' bytes. Si no los enviamos, el bus se cuelga.
+            memset(sector, 0, 512); 
+            
+            csw.bCSWStatus = 0x01; // Error en el estado final
+            g_SenseKey = 0x03;     // MEDIUM ERROR
+            g_ASC      = 0x11;     // UNRECOVERED READ ERROR
+            
+            // Marcar que la SD necesita reinicialización
+            g_sdNeedsInit = 1;
+            g_sdInitWaitCounter = 1000;
         }
 
-        if (!usb_wait_with_timeout((volatile uint16_t *)(USB0_BASE + USB_0_TXCSRL1), 0x01, 0, USB_TIMEOUT_CYCLES)) {
-            csw.bCSWStatus = 0x02; // Phase Error
-            break; // Timeout del USB (aquí sí rompemos porque el bus murió)
+        // 3. Esperar a que el hardware USB esté listo (TX FIFO vacío)
+        if (!usb_wait_with_timeout(USB0_BASE + USB_0_TXCSRL1, 0x01, 0, USB_TIMEOUT_CYCLES)) {
+            csw.bCSWStatus = 0x02; // Error de fase si el PC deja de escuchar
+            break; 
         }
+
+        // 4. Cargar datos al EP1 (Bulk IN)
         USBEndpointDataPut(USB0_BASE, USB_EP_1, sector, 512);
-        
-        // Es más seguro usar la API en lugar de manipular los registros directamente
-        USBEndpointDataSend(USB0_BASE, USB_EP_1, USB_TRANS_IN); 
+
+        // 5. Enviar y manejar flags de fin de transferencia
+        if (b == (blocks - 1)) {
+            USBEndpointDataSend(USB0_BASE, USB_EP_1, USB_TRANS_IN_LAST);
+        } else {
+            USBEndpointDataSend(USB0_BASE, USB_EP_1, USB_TRANS_IN);
+        }
+
+        // 6. Actualizar residuo (lo que falta por enviar)
+        if (csw.dCSWDataResidue >= 512) {
+            csw.dCSWDataResidue -= 512;
+        }
     }
-    csw.dCSWDataResidue -= (blocks * 512);
 }
+
 
 
 else if (opcode == 0x2A) { // WRITE (10)
@@ -538,7 +610,14 @@ else if (opcode == 0x2A) { // WRITE (10)
         if (csw.bCSWStatus == 0x00) {
             if (disk_write(0, sector, lba + b, 1) != RES_OK) {
                 // Si falla la SD, marcamos el error en el CSW
-                csw.bCSWStatus = 0x01; 
+                csw.bCSWStatus = 0x01;
+                g_SenseKey = 0x03;     // MEDIUM ERROR
+                g_ASC = 0x0C;          // WRITE ERROR
+                
+                // Marcar que la SD necesita reinicialización
+                g_sdNeedsInit = 1;
+                g_sdInitWaitCounter = 1000;
+                
                 // IMPORTANTE: NO HACEMOS BREAK. 
                 // Seguimos el bucle para "limpiar" el resto de los bloques del USB.
             }

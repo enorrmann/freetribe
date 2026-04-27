@@ -1,89 +1,23 @@
-ver inicializacion de 
-sdprot_get_csd no anda bien
+despues de umount se recupera pero sigue dmesg mostrando 
 
-ver si se puede simplificar case GET_SECTOR_COUNT: si dev_sdcard no usa sdprot_get_csd
-
-
-cdc dump
-************ CSD register ************
-
-CSD structure                   0x1
-
-data read access-time-1         0xE
-
-data read access-time-2         0x0
-
-max. data transfer rate         0x32
-
-card command classes            0x5B5
-
-max. read data block length     0x9
-
-partial blocks for read allowed 0x0
-
-write block misalignment        0x0
-
-read block misalignment         0x0
-
-DSR implemented                 0x0
-
-device size                     0x3
-
-max. read current @VDD min      0x5
-
-max. read current @VDD max      0x0
-
-max. write current @VDD min     0x7
-
-max. write current @VDD max     0x5
-
-device size multiplier          0x2
-
-erase single block enable       0x1
-
-erase sector size               0x7F
-
-write protect group size        0x0
-
-write protect group enable      0x0
-
-write speed factor              0x2
-
-max. write data block length    0x9
-
-partial blocks f write allowed  0x0
-
-File format group               0x0
-
-copy flag (OTP)                 0x0
-
-permanent write protection      0x0
-
-temporary write protection      0x0
-
-File format                     0x0
-
-CRC                             0x68
+[ 7416.304792] critical medium error, dev sda, sector 8192 op 0x0:(READ) flags 0x0 phys_seg 1 prio class 2
+[ 7416.304856] FAT-fs (sda1): unable to read boot sector
+[ 7419.497828] sd 2:0:0:0: [sda] Spinning up disk...
+[ 7420.528294] .........................ready
+[ 7445.159179]  sda: sda1
+[ 7445.191151]  sda: sda1
+[ 7450.633337] FAT-fs (sda1): Volume was not properly unmounted. Some data may be corrupt. Please run fsck.
 
 
-Disco /dev/sda: 512 KiB, 524288 bytes, 1024 sectores
-Modelo de disco: E DISK   1.0    
-Unidades: sectores de 1 * 512 = 512 bytes
-Tamaño de sector (lógico/físico): 512 bytes / 512 bytes
-Tamaño de E/S (mínimo/óptimo): 512 bytes / 512 bytes
-Tipo de etiqueta de disco: dos
-Identificador del disco: 0x00000000
-
-Disposit.  Inicio Comienzo    Final Sectores Tamaño Id Tipo
-/dev/sda1             8192 61069311 61061120  29,1G  c W95 FAT32 (LBA)
-
-
-    
-si lo calculo de esta forma funciona, cual es la diferencia _?
-    uint8_t *ptr = (uint8_t*)&sd_sm->csd;
-    for (int j = 0; j < 4; j++) {
-        ptr[j*4 + 0] = (lngrsp.v[3-j] >> 24) & 0xFF;
-        ptr[j*4 + 1] = (lngrsp.v[3-j] >> 16) & 0xFF;
-        ptr[j*4 + 2] = (lngrsp.v[3-j] >> 8) & 0xFF;
-        ptr[j*4 + 3] = (lngrsp.v[3-j] >> 0) & 0xFF;
-    }
+[ 7613.003647] sd 2:0:0:0: [sda] tag#0 FAILED Result: hostbyte=DID_OK driverbyte=DRIVER_OK cmd_age=0s
+[ 7613.003654] sd 2:0:0:0: [sda] tag#0 Sense Key : Medium Error [current] 
+[ 7613.003657] sd 2:0:0:0: [sda] tag#0 Add. Sense: Unrecovered read error
+[ 7613.003660] sd 2:0:0:0: [sda] tag#0 CDB: Read(10) 28 00 00 00 20 00 00 00 08 00
+[ 7613.003662] critical medium error, dev sda, sector 8192 op 0x0:(READ) flags 0x80700 phys_seg 1 prio class 2
+[ 7613.251941] sd 2:0:0:0: [sda] tag#0 FAILED Result: hostbyte=DID_OK driverbyte=DRIVER_OK cmd_age=0s
+[ 7613.251947] sd 2:0:0:0: [sda] tag#0 Sense Key : Medium Error [current] 
+[ 7613.251950] sd 2:0:0:0: [sda] tag#0 Add. Sense: Unrecovered read error
+[ 7613.251953] sd 2:0:0:0: [sda] tag#0 CDB: Read(10) 28 00 00 00 20 00 00 00 08 00
+[ 7613.251955] critical medium error, dev sda, sector 8192 op 0x0:(READ) flags 0x0 phys_seg 1 prio class 2
+[ 7613.251960] Buffer I/O error on dev sda1, logical block 0, async page read
+[ 7613.276498] sd 2:0:0:0: [sda] Spinning up disk...
