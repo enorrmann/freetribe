@@ -94,6 +94,7 @@ static uint32_t g_uEP0Len = 0;
 static uint16_t pendingAddress = 0;
 static uint8_t  pendingSetAddress = 0;
 static uint8_t  isConfigured = 0;
+static uint32_t g_sdInitWaitCounter = 0;  // Esperar después de reinicialización
 
 static void EP0SendData(void) {
     uint32_t sendLen = (g_uEP0Len > 64) ? 64 : g_uEP0Len;
@@ -196,6 +197,9 @@ void USB0DeviceIntHandler(void) {
         isConfigured = 0;
         g_ulUSBInterruptStatus = 0; // Limpiar status en reset
         USBDevAddrSet(USB0_BASE, 0);
+        
+        // IMPORTANTE: Reinicializar la tarjeta SD cuando hay reset USB
+        disk_initialize(0);
     }
 
     // RESCATE DE STATUS: Guardamos los bits de los endpoints (EP1, EP2, etc.)
@@ -404,6 +408,35 @@ else if (opcode == 0x25) { // READ CAPACITY (10)
                     USBEndpointDataPut(USB0_BASE, USB_EP_1, sense, 18);
                     HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
                     csw.dCSWDataResidue -= 18;
+                }
+            }
+
+            else if (opcode == 0x5A) { // MODE SENSE (10)
+                // Estructura MODE SENSE(10) completa según SCSI-2
+                uint8_t mode[28] = {
+                    // Header (8 bytes)
+                    0x00, 0x1A,  // Mode data length (26 bytes siguientes)
+                    0x00,        // Medium type (0 = Direct-access block device)
+                    0x00,        // Device-specific parameter (no WP, no cache)
+                    0x00, 0x00,  // Reserved
+                    0x00, 0x08,  // Block descriptor length (8 bytes)
+                    
+                    // Block Descriptor (8 bytes)
+                    0x00, 0x00, 0x00, 0x00,  // Number of blocks (density code + reserved)
+                    0x00, 0x00, 0x02, 0x00   // Block length = 512 bytes
+                };
+                
+                uint8_t len = sizeof(mode);
+                if (!usb_wait_with_timeout((volatile uint16_t *)(USB0_BASE + USB_0_TXCSRL1), 0x01, 0, 10000)) {
+                    csw.bCSWStatus = 0x02;
+                } else {
+                    // Respetar el allocation length del comando (en CBWCB[7:8])
+                    uint16_t alloc_len = (cbw.CBWCB[7] << 8) | cbw.CBWCB[8];
+                    if (alloc_len < len) len = alloc_len;
+                    
+                    USBEndpointDataPut(USB0_BASE, USB_EP_1, mode, len);
+                    HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+                    csw.dCSWDataResidue -= len;
                 }
             }
 
