@@ -160,7 +160,6 @@ case GET_SECTOR_COUNT:
             // Aplicamos la fórmula mágica para SDHC
             n_sectors = (c_size + 1) * 1024;
             
-            ft_printf("SDHC Detectada. C_SIZE: 0x%X, Sectores: %u\n", c_size, n_sectors);
         } else {
             // Lógica para V1 (Standard Capacity)
             // Aquí tendrías que usar los campos c_size, c_size_mult y read_bl_len
@@ -170,8 +169,6 @@ case GET_SECTOR_COUNT:
             uint32_t read_bl_len = sd_sm[0].csd.READ_BL_LEN;
             
             n_sectors = (c_size + 1) << (c_size_mult + 2 + read_bl_len - 9);
-            ft_printf("SD Standard Detectada. C_SIZE: 0x%X, C_SIZE_MULT: %u, READ_BL_LEN: %u, Sectores: %u\n", 
-                c_size, c_size_mult, read_bl_len, n_sectors);
         }
 
         *(uint32_t*)buff = n_sectors;
