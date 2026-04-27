@@ -38,7 +38,7 @@ under the terms of the GNU Affero General Public License as published by
 
 
 #include "dev_sdcard.h"
-
+#define USB_TIMEOUT_CYCLES 5000000
 /*----- Macros -------------------------------------------------------*/
 // for some reason if I dont define this, app will crash
 //#define DEBUG_SDDRIVER
@@ -185,7 +185,7 @@ t_sdcard_status dev_sdcard_write(uint32_t blk_nr, uint32_t blk_cnt, const uint32
     mmcsd_cntl_misc(MMCSDCON, &misc);
 
     int cmd_nr = (blk_cnt > 1) ? CMD25R1_WRITE_MULTIPLE_BLOCK : CMD24R1_WRITE_BLOCK;
-    uint32_t arg = (sd_sm->is_hc) ? blk_nr : (blk_nr << MASK_OFFSET(MMCSD_BLOCK_SIZE));
+    uint32_t arg = (sd_sm->is_hc) ? blk_nr : (blk_nr << 9); // 9 es el shift para 512 bytes
 
     t_sdcard_status r = _sdmmc_cmd(cmd_nr, arg);
     if (r != SDCARD_OK) return r;
@@ -194,7 +194,6 @@ t_sdcard_status dev_sdcard_write(uint32_t blk_nr, uint32_t blk_cnt, const uint32
 
     while (i < total_words) {
         ds = mmcsd_wr_state(MMCSDCON);
-
         if (ds == MMCSD_SD_TOUT) return SDCARD_NO_RESPONSE;
 
         if (ds == MMCSD_SD_SENT) {
@@ -206,20 +205,30 @@ t_sdcard_status dev_sdcard_write(uint32_t blk_nr, uint32_t blk_cnt, const uint32
         }
     }
 
-    // Esperar fin real de transferencia
+    // Esperar a que el controlador termine la fase de datos
     do {
         ds = mmcsd_wr_state(MMCSDCON);
-
         if (ds == MMCSD_SD_TOUT) return SDCARD_NO_RESPONSE;
-
     } while (ds != MMCSD_SD_OK);
 
+    // Si es múltiple, frenar la transmisión
     if (blk_cnt > 1) {
         r = _sdmmc_cmd_noarg(CMD12R1b_STOP_TRANSMISSION);
         if (r != SDCARD_OK) return r;
-
-        while (mmcsd_busy_state(MMCSDCON) == MMCSD_SD_BUSY);
     }
+
+    // --- CRÍTICO: ESPERA DE BUSY REAL ---
+    // Usamos tu constante para evitar bloqueos infinitos
+    uint32_t timeout = USB_TIMEOUT_CYCLES;
+    while (timeout > 0) {
+        // bit 1 de MMCST1: 1 = Busy, 0 = Ready
+        if (!(MMCSDCON->MMCST1 & (1 << 1))) {
+            break; 
+        }
+        timeout--;
+    }
+
+    if (timeout == 0) return SDCARD_ERROR; 
 
     sd_sm->ci_stat = SDP_TRAN;
     return SDCARD_OK;

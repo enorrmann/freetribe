@@ -278,9 +278,16 @@ t_mmcsd_cmd_state mmcsd_cmd_state(const MMCSD_con_t* mcon, am18x_bool need_crc) 
 }
 
 t_mmcsd_dat_state mmcsd_busy_state(const MMCSD_con_t* mcon) {
-	return MMCSD_SD_OK;
+    // El bit 1 de MMCST1 es el indicador de BUSY
+    // 0 = La tarjeta no está ocupada
+    // 1 = La tarjeta está ocupada (ocupada grabando datos o inicializando)
+    
+    if (mcon->MMCST1 & (1 << 1)) { 
+        return MMCSD_SD_BUSY;
+    }
+    
+    return MMCSD_SD_OK;
 }
-
 t_mmcsd_dat_state mmcsd_rd_state(const MMCSD_con_t* mcon) {
 #if 1
 	uint32_t reg;
