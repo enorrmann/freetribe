@@ -32,6 +32,14 @@ void BOT_Task(void) ;
 void USB0DeviceIntHandler(void) ;
 volatile uint32_t g_ulUSBInterruptStatus = 0;
 
+/* Helper para timeouts en HS */
+static inline int usb_wait_with_timeout(uint32_t regAddr, uint16_t mask, int expected, int timeout) {
+    while (timeout-- > 0) {
+        if (((HWREGH(regAddr) & mask) != 0) == expected) return 1;
+    }
+    return 0; /* timeout */
+}
+
 /*====================================================================
  * Estructuras BOT (Bulk-Only Transport)
  *==================================================================*/
@@ -63,8 +71,10 @@ static const uint8_t deviceDescriptor[] = {
 static const uint8_t configDescriptor[] = {
     9, 2, 32, 0, 1, 1, 0, 0xC0, 50,
     9, 4, 0, 0, 2, 0x08, 0x06, 0x50, 0,
-    7, 5, 0x81, 0x02, 64, 0, 0, // EP1 IN (Bulk)
-    7, 5, 0x02, 0x02, 64, 0, 0  // EP2 OUT (Bulk)
+    // EP1 IN (Bulk): 512 bytes para High Speed
+    7, 5, 0x81, 0x02, 0x00, 0x02, 0, 
+    // EP2 OUT (Bulk): 512 bytes para High Speed
+    7, 5, 0x02, 0x02, 0x00, 0x02, 0  
 };
 
 static const uint8_t devQualDescriptor[] = {
@@ -108,16 +118,33 @@ t_status app_init(void) {
 
     PSCModuleControl(SOC_PSC_1_REGS, HW_PSC_USB0, 0, PSC_MDCTL_NEXT_ENABLE);
     UsbPhyOn();
+uint32_t cfg2 = HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2);
 
-    uint32_t cfg2 = HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2);
-    cfg2 &= ~(0x0000000F | (3 << 13) | (1 << 12));
-    cfg2 |= (2 << 0) | (2 << 13) | (1 << 6); // 24MHz, PHY On, Device mode
-    HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) = cfg2;
+// Limpiar bits de configuración USB anteriores
+cfg2 &= ~(0x0000000F | (3 << 13) | (1 << 12) | (1 << 14)); 
+
+// Configuración para High Speed:
+// - Bits [1:0]: 24MHz Clock (mantener 2)
+// - Bit 12: USB PHY On (mantener 1)
+// - Bit 13: USB Mode (0 = Device, 1 = Host, pero verificar datasheet para HS Device)
+// - Bit 14: High Speed Enable (a veces necesario, o depende del controlador interno)
+// Nota crítica: El AM1808 soporta HS, pero requiere un PHY externo compatible o configuración interna específica.
+// Si usas la PHY interna (GS60), asegúrate de que los bits de control de la PHY permitan HS.
+
+cfg2 |= (2 << 0)  |  // 24MHz Clock
+        (1 << 12) |  // PHY On
+        (0 << 13);   // Device Mode
+
+// Asegúrate de NO forzar Full Speed en el registrador de poder (ver paso 2)
+HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) = cfg2;
 
     int timeout = 1000000;
     while (!(HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) & (1 << 17)) && timeout--);
 
-    HWREGB(USB0_BASE + USB_0_POWER) &= ~0x20; // Force Full Speed
+    // HWREGB(USB0_BASE + USB_0_POWER) &= ~0x20; // Force Full Speed
+
+    // Habilitar High Speed
+    HWREGB(USB0_BASE + USB_0_POWER) |= 0x20; // HS_ENABLE
 
     IntRegister(SYS_INT_USB0, USB0DeviceIntHandler);
     IntChannelSet(SYS_INT_USB0, 2);
@@ -221,15 +248,15 @@ void USB0DeviceIntHandler(void) {
                         HWREGB(USB0_BASE + USB_0_EPIDX) = 1; 
                         HWREGH(USB0_BASE + USB_0_TXCSRL1) = 0x08; // Flush FIFO
                         HWREGB(USB0_BASE + USB_0_TXFIFOADD) = 8;  // Offset 64
-                        HWREGB(USB0_BASE + USB_0_TXFIFOSZ) = 3;   // 64 bytes
+HWREGB(USB0_BASE + USB_0_TXFIFOSZ) = 6;   // 512 bytes (High Speed)
 
                         HWREGB(USB0_BASE + USB_0_EPIDX) = 2;
                         HWREGH(USB0_BASE + USB_0_RXCSRL2) = 0x10; // Flush FIFO
                         HWREGB(USB0_BASE + USB_0_RXFIFOADD) = 16; // Offset 128
-                        HWREGB(USB0_BASE + USB_0_RXFIFOSZ) = 3;   // 64 bytes
+HWREGB(USB0_BASE + USB_0_RXFIFOSZ) = 6;   // 512 bytes (High Speed)
 
-                        USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, 64, USB_EP_MODE_BULK | USB_EP_DEV_IN);
-                        USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, 64, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
+                        USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, 512, USB_EP_MODE_BULK | USB_EP_DEV_IN);
+                        USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, 512, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
 
                         isConfigured = 1;
                         break;
@@ -302,10 +329,13 @@ void BOT_Task(void) {
                     '1','.','0'                          // Rev (4 bytes)
                 };
                 
-                while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01); // Wait TX Ready
-                USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t *)inq, 36);
-                HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
-                csw.dCSWDataResidue -= 36;
+                if (!usb_wait_with_timeout((volatile uint16_t *)(USB0_BASE + USB_0_TXCSRL1), 0x01, 0, 10000)) {
+                    csw.bCSWStatus = 0x02; // Phase Error
+                } else {
+                    USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t *)inq, 36);
+                    HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+                    csw.dCSWDataResidue -= 36;
+                }
             }
             
 else if (opcode == 0x25) { // READ CAPACITY (10)
@@ -336,10 +366,13 @@ else if (opcode == 0x25) { // READ CAPACITY (10)
                 cap[6] = (uint8_t)(block_len >> 8);  
                 cap[7] = (uint8_t)(block_len);
 
-                while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
-                USBEndpointDataPut(USB0_BASE, USB_EP_1, cap, 8);
-                HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
-                csw.dCSWDataResidue -= 8;
+                if (!usb_wait_with_timeout((volatile uint16_t *)(USB0_BASE + USB_0_TXCSRL1), 0x01, 0, 10000)) {
+                    csw.bCSWStatus = 0x02;
+                } else {
+                    USBEndpointDataPut(USB0_BASE, USB_EP_1, cap, 8);
+                    HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+                    csw.dCSWDataResidue -= 8;
+                }
             }
 
             else if (opcode == 0x23) { // READ FORMAT CAPACITIES
@@ -354,18 +387,24 @@ else if (opcode == 0x25) { // READ CAPACITY (10)
                     (uint8_t)sector_count,  // Number of blocks
                     2, 0, 0, 0x02           // Formatted Media + Block len (512)
                 };
-                while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
-                USBEndpointDataPut(USB0_BASE, USB_EP_1, fcap, 12);
-                HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
-                csw.dCSWDataResidue -= 12;
+                if (!usb_wait_with_timeout((volatile uint16_t *)(USB0_BASE + USB_0_TXCSRL1), 0x01, 0, 10000)) {
+                    csw.bCSWStatus = 0x02;
+                } else {
+                    USBEndpointDataPut(USB0_BASE, USB_EP_1, fcap, 12);
+                    HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+                    csw.dCSWDataResidue -= 12;
+                }
             }
 
             else if (opcode == 0x03) { // REQUEST SENSE
                 uint8_t sense[18] = { 0x70, 0, 0x00, 0, 0, 0, 0, 0x0A, 0, 0, 0, 0, 0x00, 0x00, 0, 0, 0, 0 };
-                while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
-                USBEndpointDataPut(USB0_BASE, USB_EP_1, sense, 18);
-                HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
-                csw.dCSWDataResidue -= 18;
+                if (!usb_wait_with_timeout((volatile uint16_t *)(USB0_BASE + USB_0_TXCSRL1), 0x01, 0, 10000)) {
+                    csw.bCSWStatus = 0x02;
+                } else {
+                    USBEndpointDataPut(USB0_BASE, USB_EP_1, sense, 18);
+                    HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+                    csw.dCSWDataResidue -= 18;
+                }
             }
 
             else if (opcode == 0x00) { // TEST UNIT READY
@@ -392,14 +431,16 @@ else if (opcode == 0x25) { // READ CAPACITY (10)
                     // LECTURA REAL DE LA SD
                     if (disk_read(0, sector, lba + b, 1) != RES_OK) {
                         csw.bCSWStatus = 0x01; // Falla de lectura
+                        break;
                     }
 
-                    // ENVIAR SECTOR EN 8 PAQUETES DE 64 BYTES
-                    for (int p = 0; p < 8; p++) {
-                        while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
-                        USBEndpointDataPut(USB0_BASE, USB_EP_1, &sector[p * 64], 64);
-                        HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+                    // ENVIAR SECTOR COMPLETO DE 512 BYTES
+                    if (!usb_wait_with_timeout((volatile uint16_t *)(USB0_BASE + USB_0_TXCSRL1), 0x01, 0, 10000)) {
+                        csw.bCSWStatus = 0x02; // Phase Error
+                        break;
                     }
+                    USBEndpointDataPut(USB0_BASE, USB_EP_1, sector, 512);
+                    HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
                 }
                 csw.dCSWDataResidue -= (blocks * 512);
             }
@@ -410,23 +451,23 @@ else if (opcode == 0x25) { // READ CAPACITY (10)
 
                 for (uint16_t b = 0; b < blocks; b++) {
                     uint8_t sector[512];
+                    unsigned int bytesRead = 0;
 
-                    // RECIBIR SECTOR EN 8 PAQUETES DE 64 BYTES DESDE EL HOST
-                    for (int p = 0; p < 8; p++) {
-                        unsigned int bytesRead = 0;
-                        
-                        // Esperar a que el FIFO tenga datos del host (RXRDY)
-                        while(!(HWREGH(USB0_BASE + USB_0_RXCSRL2) & 0x01));
-                        
-                        USBEndpointDataGet(USB0_BASE, USB_EP_2, &sector[p * 64], &bytesRead);
-                        
-                        // Limpiar la bandera para permitir el siguiente paquete
-                        HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~0x01; 
+                    // RECIBIR SECTOR COMPLETO DE 512 BYTES DESDE EL HOST
+                    if (!usb_wait_with_timeout((volatile uint16_t *)(USB0_BASE + USB_0_RXCSRL2), 0x01, 1, 50000)) {
+                        csw.bCSWStatus = 0x02; // Phase Error - timeout esperando datos
+                        break;
                     }
+                    
+                    USBEndpointDataGet(USB0_BASE, USB_EP_2, sector, &bytesRead);
+                    
+                    // Limpiar la bandera para permitir el siguiente paquete
+                    HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~0x01; 
 
                     // ESCRITURA REAL EN LA SD
                     if (disk_write(0, sector, lba + b, 1) != RES_OK) {
                         csw.bCSWStatus = 0x01; // Falla de escritura
+                        break;
                     }
                 }
                 csw.dCSWDataResidue -= (blocks * 512);
@@ -439,10 +480,10 @@ else if (opcode == 0x25) { // READ CAPACITY (10)
 
             // --- FASE FINAL: ENVIAR CSW ---
             // Esperamos a que cualquier fase de datos anterior haya salido del FIFO
-            while(HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01); 
-            
-            USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t *)&csw, 13);
-            HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01; 
+            if (usb_wait_with_timeout((volatile uint16_t *)(USB0_BASE + USB_0_TXCSRL1), 0x01, 0, 10000)) {
+                USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t *)&csw, 13);
+                HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+            } 
             
 
         } else {
