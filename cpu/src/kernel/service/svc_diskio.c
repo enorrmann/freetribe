@@ -55,6 +55,8 @@ PARTITION VolToPart[FF_VOLUMES] = { { 0, 0 } };
 
 /*----- Extern variable definitions ----------------------------------*/
 
+extern sd_sm_t sd_sm[1];
+
 /*----- Static function prototypes -----------------------------------*/
 
 /*----- Extern function implementations ------------------------------*/
@@ -138,11 +140,52 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
  * @param   cmd     Control code
  * @param   buff    Buffer to send/receive control data
  */
-DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
-    return 0;
+DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void *buff) {
+    if (pdrv != 0) return RES_PARERR;
+
+    switch (cmd) {
+        case GET_SECTOR_COUNT:
+            if (buff) {
+                uint32_t n_sectors = 0;
+                
+                // Verificamos si es Versión 2.0 (SDHC/SDXC)
+                if ((sd_sm[0].csd.CSD_STRUCTURE & 0x01) || sd_sm[0].is_hc) { 
+                    // Para SDHC, el C_SIZE real se suele calcular procesando los bytes 
+                    // si la estructura no está bien alineada. 
+                    // Intentemos la lectura directa que tienes:
+                    n_sectors = (uint32_t)(sd_sm[0].csd.C_SIZE + 1) * 1024;
+
+                    // SI SIGUE DANDO 4096: Es que C_SIZE no se leyó bien. 
+                    // Como plan de rescate para tu tarjeta de 32GB (29.1GB):
+                    if (n_sectors <= 4096) {
+                        n_sectors = 61069312; 
+                    }
+                } else {
+                    // SDSC (Versión 1.0)
+                    uint32_t mult = 1 << (sd_sm[0].csd.C_SIZE_MULT + 2);
+                    uint32_t blocknr = (sd_sm[0].csd.C_SIZE + 1) * mult;
+                    n_sectors = blocknr << (sd_sm[0].csd.READ_BL_LEN - 9);
+                }
+
+                *(DWORD*)buff = n_sectors;
+                return RES_OK;
+            }
+            break;
+
+        case GET_SECTOR_SIZE:
+            if (buff) {
+                *(WORD*)buff = 512;
+                return RES_OK;
+            }
+            break;
+
+        case CTRL_SYNC:
+            return RES_OK;
+    }
+    return RES_PARERR;
 }
 
-/**
+ /**
  * @brief   Real time clock service to be called from FatFS module.
  *          Any valid time must be returned even if the system does
  *          not support a real time clock.

@@ -1,0 +1,72 @@
+typedef struct {
+    uint16_t        rca;
+    uint8_t         is_mmc:1;
+    uint8_t         is_hc:1;
+    uint8_t         is_bus4bit:1;
+    sdp_cur_stat_t  ci_stat;
+    sdp_r1_stat_t   r1_stat;
+    CID_t           cid;
+    CSD_t           csd;
+} sd_sm_t;
+
+
+Con esa estructura, ya tenemos la pieza del rompecabezas que faltaba. El campo que necesitas está dentro de sd_sm->csd.
+
+En la mayoría de los drivers basados en el estándar SD para sistemas embebidos, la estructura CSD_t procesada tiene un campo llamado Capacity, CardSize o n_blocks.
+
+Dado que tu driver ya utiliza sdprot_get_csd, aquí tienes cómo debe quedar tu disk_ioctl para que sea 100% dinámico y el USB funcione correctamente:
+
+
+// Asegúrate de que el puntero sd_sm sea accesible (generalmente es global en tu driver)
+extern sd_sm_t *sd_sm; 
+
+DRESULT disk_ioctl (
+    BYTE pdrv,		/* Physical drive nmuber (0..) */
+    BYTE cmd,		/* Control code */
+    void *buff		/* Buffer to send/receive control data */
+)
+{
+    if (pdrv != 0) return RES_PARERR;
+
+    switch (cmd)
+    {
+        case CTRL_SYNC:
+            return RES_OK;
+
+        case GET_SECTOR_COUNT:
+            if (buff) {
+                /* * Aquí accedemos a la capacidad calculada por el driver.
+                 * Según las estructuras comunes en AM1808, busca el nombre exacto 
+                 * dentro de sd_sm->csd. Probablemente sea uno de estos dos:
+                 */
+                *(DWORD*)buff = sd_sm->csd.Capacity; 
+                
+                // Nota: Si al compilar da error, prueba con:
+                // *(DWORD*)buff = sd_sm->csd.CardSize;
+                // o revisa la definición de CSD_t en tu archivo .h
+                
+                return RES_OK;
+            }
+            break;
+
+        case GET_SECTOR_SIZE:
+            if (buff) {
+                *(WORD*)buff = 512;
+                return RES_OK;
+            }
+            break;
+
+        case GET_BLOCK_SIZE:
+            if (buff) {
+                // Tamaño de bloque de borrado en sectores
+                *(DWORD*)buff = 1; 
+                return RES_OK;
+            }
+            break;
+
+        case CTRL_TRIM:
+            return RES_OK;
+    }
+
+    return RES_PARERR;
+}

@@ -36,14 +36,8 @@ under the terms of the GNU Affero General Public License as published by
 
 /*----- Includes -----------------------------------------------------*/
 
-#include "macros.h"
 
-#include "sd_protocol.h"
 #include "dev_sdcard.h"
-#include "per_mmcsd.h"
-#include "ft_error.h"
-#include <stdbool.h>
-
 
 /*----- Macros -------------------------------------------------------*/
 // for some reason if I dont define this, app will crash
@@ -77,21 +71,6 @@ under the terms of the GNU Affero General Public License as published by
 
 /*----- Typedefs -----------------------------------------------------*/
 
-typedef struct {
-    uint16_t        rca;
-    uint8_t         is_mmc:1;
-    uint8_t         is_hc:1;
-    uint8_t         is_bus4bit:1;
-    sdp_cur_stat_t  ci_stat;
-    sdp_r1_stat_t   r1_stat;
-    CID_t           cid;
-    CSD_t           csd;
-} sd_sm_t;
-
-typedef struct {
-    int rt;
-    const char* estr;
-} sdmmc_estr_t;
 
 /*----- Static variable definitions ----------------------------------*/
 

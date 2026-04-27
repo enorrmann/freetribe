@@ -28,6 +28,8 @@ under the terms of the GNU Affero General Public License as published by
 
 ----------------------------------------------------------------------*/
 
+
+
 /**
  * @file    dev_sdcard.h
  *
@@ -45,9 +47,34 @@ extern "C" {
 
 #include <stdint.h>
 
+#include "macros.h"
+
+#include "sd_protocol.h"
+#include "per_mmcsd.h"
+#include "ft_error.h"
+#include <stdbool.h>
+
+
 /*----- Macros -------------------------------------------------------*/
 
 /*----- Typedefs -----------------------------------------------------*/
+
+typedef struct {
+    uint16_t        rca;
+    uint8_t         is_mmc:1;
+    uint8_t         is_hc:1;
+    uint8_t         is_bus4bit:1;
+    sdp_cur_stat_t  ci_stat;
+    sdp_r1_stat_t   r1_stat;
+    CID_t           cid;
+    CSD_t           csd;
+} sd_sm_t;
+
+typedef struct {
+    int rt;
+    const char* estr;
+} sdmmc_estr_t;
+
 
 typedef enum {
 	SDCARD_OK = 0,
@@ -58,6 +85,8 @@ typedef enum {
 } t_sdcard_status;
 
 /*----- Extern function prototypes -----------------------------------*/
+
+extern sd_sm_t sd_sm[1];
 
 t_sdcard_status dev_sdcard_init(void);
 t_sdcard_status dev_sdcard_read(uint32_t blk_nr, uint32_t blk_cnt, uint32_t* buf);
