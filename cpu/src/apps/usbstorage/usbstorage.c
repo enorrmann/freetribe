@@ -204,9 +204,6 @@ void USB0DeviceIntHandler(void) {
         isConfigured = 0;
         g_ulUSBInterruptStatus = 0; // Limpiar status en reset
         USBDevAddrSet(USB0_BASE, 0);
-        
-        // IMPORTANTE: Reinicializar la tarjeta SD cuando hay reset USB
-        disk_initialize(0);
     }
 
     // RESCATE DE STATUS: Guardamos los bits de los endpoints (EP1, EP2, etc.)
@@ -349,42 +346,40 @@ void BOT_Task(void) {
                 }
             }
             
+
+
 else if (opcode == 0x25) { // READ CAPACITY (10)
-                uint8_t cap[8];
-                DWORD sector_count = 0;
-                
-                // Forzamos el éxito de la lectura del tamaño
-                if (disk_ioctl(0, GET_SECTOR_COUNT, &sector_count) != RES_OK || sector_count == 0) {
-                    // Si falla el ioctl, ponemos un valor genérico de 4GB para no morir, 
-                    // pero lo ideal es que disk_ioctl funcione.
-                    sector_count = 0; 
-                }
+    uint8_t cap[8];
+    DWORD sector_count = 0;
 
-                // El comando pide el ÚLTIMO LBA direccionable (Total - 1)
-                uint32_t last_lba = sector_count - 1;
-                uint32_t block_len = 512;
+    if (disk_ioctl(0, GET_SECTOR_COUNT, &sector_count) != RES_OK || sector_count == 0) {
+        // No intentamos enviar datos, solo marcamos fallo y sense
+        csw.bCSWStatus = 0x01;
+        g_SenseKey = 0x02;  // NOT READY
+        g_ASC      = 0x3A;  // MEDIUM NOT PRESENT
+    } else {
+        uint32_t last_lba  = sector_count - 1;
+        uint32_t block_len = 512;
 
-                // Debug: Si tienes consola, verifica que sector_count sea ~61069312
-                
-                // SCSI usa Big Endian (MSB primero)
-                cap[0] = (uint8_t)(last_lba >> 24); 
-                cap[1] = (uint8_t)(last_lba >> 16);
-                cap[2] = (uint8_t)(last_lba >> 8);  
-                cap[3] = (uint8_t)(last_lba);
-                
-                cap[4] = (uint8_t)(block_len >> 24); 
-                cap[5] = (uint8_t)(block_len >> 16);
-                cap[6] = (uint8_t)(block_len >> 8);  
-                cap[7] = (uint8_t)(block_len);
+        cap[0] = (uint8_t)(last_lba >> 24);
+        cap[1] = (uint8_t)(last_lba >> 16);
+        cap[2] = (uint8_t)(last_lba >> 8);
+        cap[3] = (uint8_t)(last_lba);
+        cap[4] = (uint8_t)(block_len >> 24);
+        cap[5] = (uint8_t)(block_len >> 16);
+        cap[6] = (uint8_t)(block_len >> 8);
+        cap[7] = (uint8_t)(block_len);
 
-                if (!usb_wait_with_timeout((volatile uint16_t *)(USB0_BASE + USB_0_TXCSRL1), 0x01, 0, USB_TIMEOUT_CYCLES)) {
-                    csw.bCSWStatus = 0x02;
-                } else {
-                    USBEndpointDataPut(USB0_BASE, USB_EP_1, cap, 8);
-                    HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
-                    csw.dCSWDataResidue -= 8;
-                }
-            }
+        if (!usb_wait_with_timeout(USB0_BASE + USB_0_TXCSRL1, 0x01, 0, USB_TIMEOUT_CYCLES)) {
+            csw.bCSWStatus = 0x02;
+        } else {
+            USBEndpointDataPut(USB0_BASE, USB_EP_1, cap, 8);
+            HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+            csw.dCSWDataResidue -= 8;
+        }
+    }
+}
+
 
             else if (opcode == 0x23) { // READ FORMAT CAPACITIES
                 DWORD sector_count = 0;
@@ -476,11 +471,10 @@ else if (opcode == 0x1A) { // MODE SENSE (6)
             }
 
             else if (opcode == 0x00) { // TEST UNIT READY
-                if (disk_status(0) & STA_NOINIT) {
-                    disk_initialize(0); // Intentar inicializar si se extrajo o hubo error
+
                     if (disk_status(0) & STA_NOINIT) {
                         csw.bCSWStatus = 0x01; // Sigue sin estar lista
-                    }
+
                 }
             }
             
@@ -500,8 +494,10 @@ else if (opcode == 0x28) { // READ (10)
         // LECTURA REAL DE LA SD
         if (csw.bCSWStatus == 0x00) { 
             if (disk_read(0, sector, lba + b, 1) != RES_OK) {
-                csw.bCSWStatus = 0x01; // Falló, pero NO HACEMOS BREAK
-            }
+                csw.bCSWStatus = 0x01;
+                g_SenseKey = 0x03;  // MEDIUM ERROR
+                g_ASC      = 0x11;  // UNRECOVERED READ ERROR
+            }        
         }
 
         if (!usb_wait_with_timeout((volatile uint16_t *)(USB0_BASE + USB_0_TXCSRL1), 0x01, 0, USB_TIMEOUT_CYCLES)) {

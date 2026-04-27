@@ -40,6 +40,7 @@ under the terms of the GNU Affero General Public License as published by
 #include <diskio.h>
 
 #include "macros.h"
+#include "freetribe.h"
 
 #include "dev_sdcard.h"
 #include "svc_diskio.h"
@@ -144,34 +145,33 @@ DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void *buff) {
     if (pdrv != 0) return RES_PARERR;
 
     switch (cmd) {
-        case GET_SECTOR_COUNT:
-            if (buff) {
-                uint32_t n_sectors = 0;
-                
-                // Verificamos si es Versión 2.0 (SDHC/SDXC)
-                if ((sd_sm[0].csd.CSD_STRUCTURE & 0x01) || sd_sm[0].is_hc) { 
-                    // Para SDHC, el C_SIZE real se suele calcular procesando los bytes 
-                    // si la estructura no está bien alineada. 
-                    // Intentemos la lectura directa que tienes:
-                    n_sectors = (uint32_t)(sd_sm[0].csd.C_SIZE + 1) * 1024;
+case GET_SECTOR_COUNT:
+    if (buff) {
+        uint8_t *raw = (uint8_t*)&sd_sm[0].csd;
+        uint32_t n_sectors = 0;
 
-                    // SI SIGUE DANDO 4096: Es que C_SIZE no se leyó bien. 
-                    // Como plan de rescate para tu tarjeta de 32GB (29.1GB):
-                    if (n_sectors <= 4096) {
-                        n_sectors = 61069312; 
-                    }
-                } else {
-                    // SDSC (Versión 1.0)
-                    uint32_t mult = 1 << (sd_sm[0].csd.C_SIZE_MULT + 2);
-                    uint32_t blocknr = (sd_sm[0].csd.C_SIZE + 1) * mult;
-                    n_sectors = blocknr << (sd_sm[0].csd.READ_BL_LEN - 9);
-                }
+        // Forzamos la detección de SDHC si el tamaño reportado es incoherente
+        // O si sabemos que la tarjeta es de 32GB
+        if ((raw[0] >> 6) == 1 || sd_sm[0].is_hc || raw[0] == 0x01) {
+            // Intentamos extraer C_SIZE asumiendo que los bytes 7, 8 y 9 
+            // contienen la capacidad (mapeo estándar SDHC)
+            uint32_t c_size = ((uint32_t)(raw[7] & 0x3F) << 16) | 
+                              ((uint32_t)raw[8] << 8) | 
+                               (uint32_t)raw[9];
 
-                *(DWORD*)buff = n_sectors;
-                return RES_OK;
-            }
-            break;
+            n_sectors = (c_size + 1) * 1024;
+        } else {
+            // Cálculo V1.0 normal...
+            uint32_t c_size = ((uint32_t)(raw[6] & 0x03) << 10) | ((uint32_t)raw[7] << 2) | ((uint32_t)raw[8] >> 6);
+            uint32_t c_size_mult = ((uint32_t)(raw[9] & 0x03) << 1) | ((uint32_t)raw[10] >> 7);
+            n_sectors = (c_size + 1) << (c_size_mult + 2 + (raw[5] & 0x0F) - 9);
+        }
 
+        *(DWORD*)buff = n_sectors;
+        return RES_OK;
+    }
+    break;
+        
         case GET_SECTOR_SIZE:
             if (buff) {
                 *(WORD*)buff = 512;

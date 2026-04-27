@@ -598,17 +598,28 @@ static t_sdcard_status _sdmmc_get_csd(void) {
         r = _sdmmc_cmd(CMD9R2_SEND_CSD, sd_sm->rca << 16);
         if (r == SDCARD_OK) break;
     }
-    if (r != SDCARD_OK) {
-        return r;
-    }
+    if (r != SDCARD_OK) return r;
 
     mmcsd_get_resp(MMCSDCON, MMCSD_RESP_LONG, &lngrsp);
-    sdprot_get_csd(&sd_sm->csd, lngrsp.v);
-    // sdprot_print_csd(&sd_sm->csd);
 
-    return r;
+    /* --- CAMBIO CRÍTICO AQUÍ --- */
+    // En lugar de usar sdprot_get_csd, mapeamos los 4 uint32_t (lngrsp.v)
+    // directamente a un array de bytes para que disk_ioctl los lea bien.
+    
+    uint8_t *ptr = (uint8_t*)&sd_sm->csd;
+    
+    // Los registros de respuesta larga suelen venir en Big Endian
+    // Dependiendo de tu hardware, el orden puede variar, pero lo estándar es:
+    for (int j = 0; j < 4; j++) {
+        ptr[j*4 + 0] = (lngrsp.v[3-j] >> 24) & 0xFF;
+        ptr[j*4 + 1] = (lngrsp.v[3-j] >> 16) & 0xFF;
+        ptr[j*4 + 2] = (lngrsp.v[3-j] >> 8) & 0xFF;
+        ptr[j*4 + 3] = (lngrsp.v[3-j] >> 0) & 0xFF;
+    }
+    /* --------------------------- */
+
+    return SDCARD_OK;
 }
-
 static t_sdcard_status _sdmmc_speed_up(void) {
     uint32_t speed;
 
