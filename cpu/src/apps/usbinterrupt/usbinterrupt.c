@@ -475,11 +475,6 @@ t_status app_init(void) {
     USBIntEnableControl(USB0_BASE, USB_INTCTRL_RESET | USB_INTCTRL_DISCONNECT | USB_INTCTRL_SUSPEND | USB_INTCTRL_RESUME);
     USBIntEnableEndpoint(USB0_BASE, USB_INTEP_ALL);
 
-    // 6. ABRIR EL PUENTE DEL WRAPPER (Bit 0 = USB0)
-    // IMPORTANTE: Solo habilitamos el bit 0. Si usas 0x1F y no manejas
-    // DMA o eventos de VBUS, podrías disparar IRQs que no sabes limpiar.
-    // HWREG(USB_0_OTGBASE + USB_0_INTR_MASK_SET) = 0x01; // esta version no entra con datos de otro ep diferente al ep0
-
     // Habilitamos:
     // Bit 0 (EP0), Bit 1 (EP1 TX), Bit 18 (EP2 RX)
     // Y los bits de control del bus (Reset, Suspend, etc., que suelen estar en los bits altos)
