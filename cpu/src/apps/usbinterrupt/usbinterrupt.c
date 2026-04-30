@@ -453,7 +453,8 @@ t_status app_init(void) {
     HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) = cfgchip2;
 
     int timeout = 1000000;
-    while (!(HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) & (1 << 17)) && timeout--)
+    // Esperamos a que el PHY reporte que el reloj está listo (Clock Good)
+    while (!(HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) & SYSCFG_CFGCHIP2_USB0PHYCLKGD) && timeout--)
         ;
 
     // 2. Forzar Full Speed para simplificar la enumeración inicial
