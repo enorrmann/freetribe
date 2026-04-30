@@ -140,13 +140,13 @@ void USBSerial_Send(const uint8_t *data, uint32_t len) {
         uint32_t sendLen = (len > 64) ? 64 : len;
 
         // Esperar que el endpoint esté libre
-        while (HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01)
+        while (HWREGH(USB0_BASE + USB_0_TXCSRL1) & USB_TXCSRL1_TXRDY)
             ;
 
         USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t *)data, sendLen);
 
         // Set TXRDY manualmente (más robusto)
-        HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
+        HWREGH(USB0_BASE + USB_0_TXCSRL1) |= USB_TXCSRL1_TXRDY;
 
         data += sendLen;
         len -= sendLen;
@@ -435,52 +435,6 @@ void USB0DeviceIntHandler(void) {
         HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~USB_RXCSRL2_RXRDY;
     }
 
-    tripleAck();
-}
-
-void original_USB0DeviceIntHandler(void) { // no usado
-    req_count++;
-
-    uint16_t csrl0 = HWREGH(USB0_BASE + USB_0_CSRL0);
-    // LEER Y LIMPIAR EL CORE (Mentor Graphics)
-    // Es vital leer estos registros para que el core baje sus flags internos
-    uint32_t statusCtrl = USBIntStatusControl(USB0_BASE);
-    uint32_t statusEp = USBIntStatusEndpoint(USB0_BASE);
-
-    static uint16_t last_csrl0 = 0;
-
-    // Only log if something changed or important
-    if ((csrl0 & 0x11) || ((last_csrl0 & 0x02) && !(csrl0 & 0x02))) {
-        ft_printf("USB: CSR0=%04x\n", csrl0);
-    }
-
-    // 2. Si CSR0 tiene RXRDY (0x01), la PC ya mandó algo
-    if (statusEp & USB_INTEP_0) {
-        if (csrl0 & 0x01) {
-            USB_SetupPacket setup;
-            unsigned int sz;
-            USBEndpointDataGet(USB0_BASE, USB_EP_0, (uint8_t *)&setup, &sz);
-
-            ft_printf("EP0 SETUP: R=0x%02x V=0x%04x\n", setup.bRequest, setup.wValue);
-
-            // Ack preventivo para seguir debugueando (limpia RXRDY)
-            HWREGH(USB0_BASE + USB_0_CSRL0) = 0x0040; // DATA_END
-        }
-    }
-
-    // --- PROCESAMIENTO MÍNIMO ---
-    if (statusCtrl & USB_INTCTRL_RESET) {
-        pendingAddress = 0;
-        pendingSetAddress = 0;
-        isConfigured = 0;
-        USBDevAddrSet(USB0_BASE, 0);
-        ft_printf("calle USB_INTCTRL_RESET");
-    }
-
-    // Aquí puedes llamar a tus funciones de procesamiento de EP0, etc.
-    // ----------------------------
-
-    // finally
     tripleAck();
 }
 
