@@ -28,11 +28,8 @@
 #include "hw_psc_AM1808.h"
 #include "hw_usbphyGS60.h"
 #include "hw_syscfg0_AM1808.h"
+#include "hw_usbOtg_AM1808.h"
 
-#define USB_0_OTGBASE SOC_USB_0_OTG_BASE
-#define USB_0_INTR_MASK_SET 0x30
-#define USB_0_INTR_SRC_CLEAR 0x28
-#define USB_0_END_OF_INTR 0x3c
 
 static const uint8_t* g_pEP0Data = 0;
 static uint32_t g_uEP0Len = 0;
@@ -44,67 +41,6 @@ static  uint8_t req_count = 0;
 static uint8_t g_usbRxBuf[USB_SERIAL_BUF_SIZE];
 static uint32_t g_usbRxHead = 0;
 static uint32_t g_usbRxTail = 0;
-
-static void usb_rx_push(uint8_t c) {
-    uint32_t next = (g_usbRxHead + 1) % USB_SERIAL_BUF_SIZE;
-    if (next != g_usbRxTail) {
-        g_usbRxBuf[g_usbRxHead] = c;
-        g_usbRxHead = next;
-    }
-}
-
-static int usb_rx_pop(uint8_t *c) {
-    if (g_usbRxHead == g_usbRxTail) return 0;
-    *c = g_usbRxBuf[g_usbRxTail];
-    g_usbRxTail = (g_usbRxTail + 1) % USB_SERIAL_BUF_SIZE;
-    return 1;
-}
-
- static uint8_t isConfigured = 0;
-
-void USBSerial_Send(const uint8_t* data, uint32_t len) {
-    if (!isConfigured) return;
-
-    while (len > 0) {
-        uint32_t sendLen = (len > 64) ? 64 : len;
-
-        // Esperar que el endpoint esté libre
-        while (HWREGH(USB0_BASE + USB_0_TXCSRL1) & 0x01);
-
-        USBEndpointDataPut(USB0_BASE, USB_EP_1, (uint8_t*)data, sendLen);
-
-        // Set TXRDY manualmente (más robusto)
-        HWREGH(USB0_BASE + USB_0_TXCSRL1) |= 0x01;
-
-        data += sendLen;
-        len -= sendLen;
-    }
-}
-
-void USBSerial_Printf(const char* format, ...) {
-    va_list ap;
-    static char str[256];
-
-    va_start(ap, format);
-    vsnprintf(str, sizeof(str), format, ap);
-    va_end(ap);
-
-    USBSerial_Send((uint8_t*)str, strlen(str));
-}
-
-static void EP0SendData(void) {
-    uint32_t sendLen = (g_uEP0Len > 64) ? 64 : g_uEP0Len;
-    if (sendLen > 0) {
-        USBEndpointDataPut(USB0_BASE, USB_EP_0, (uint8_t*)g_pEP0Data, sendLen);
-        g_pEP0Data += sendLen;
-        g_uEP0Len -= sendLen;
-    }
-    if (g_uEP0Len == 0) {
-        USBEndpointDataSend(USB0_BASE, USB_EP_0, USB_TRANS_IN_LAST);
-    } else {
-        USBEndpointDataSend(USB0_BASE, USB_EP_0, USB_TRANS_IN);
-    }
-}
 
 
 #ifndef USB0_BASE
