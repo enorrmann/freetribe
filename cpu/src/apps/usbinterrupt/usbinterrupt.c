@@ -448,8 +448,8 @@ t_status app_init(void) {
     UsbPhyOn();
 
     uint32_t cfgchip2 = HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2);
-    cfgchip2 &= ~(0x0000000F | (3 << 13) | (1 << 12));
-    cfgchip2 |= (2 << 0) | (2 << 13) | (1 << 6);
+    cfgchip2 &= ~(0x0000000F | CFGCHIP2_OTGMODE | CFGCHIP2_USB1PHYCLKMUX);
+    cfgchip2 |= CFGCHIP2_REFFREQ_24MHZ | CFGCHIP2_FORCE_DEVICE | CFGCHIP2_PHY_PLLON;
     HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) = cfgchip2;
 
     int timeout = 1000000;
