@@ -282,8 +282,7 @@ void USB0DeviceIntHandler(void) {
     uint16_t csrl0 = HWREGH(USB0_BASE + USB_0_CSRL0);
     static uint16_t last_csrl0 = 0;
 
-
-    if (csrl0 & USB_CSRL0_SETEND) {                          // SETUPEND
+    if (csrl0 & USB_CSRL0_SETEND) {              // SETUPEND
         HWREGB(USB0_BASE + USB_0_CSRL0) |= 0x80; // Clear SETUPEND
     }
 
@@ -396,17 +395,43 @@ void USB0DeviceIntHandler(void) {
 
     last_csrl0 = csrl0;
 
-    if (HWREGH(USB0_BASE + USB_0_RXCSRL2) & USB_RXCSRL2_RXRDY) { // RXRDY
+    /*
+     * Bloque de manejo de recepción para el Endpoint 2 (Bulk OUT)
+     * Este bloque se ejecuta cuando el host (PC) envía datos al dispositivo.
+     */
+    if (HWREGH(USB0_BASE + USB_0_RXCSRL2) & USB_RXCSRL2_RXRDY) {
+        /*
+         * HWREGH(USB0_BASE + USB_0_RXCSRL2): Accede al "Receive Control and Status Register Low" del EP2.
+         * USB_RXCSRL2_RXRDY: Macro que representa el bit 0 (Receive Packet Ready).
+         * Indica que hay un paquete de datos nuevo esperando en el FIFO.
+         */
 
+        // USB_0_RXCOUNT2: Registro que contiene el número de bytes recibidos en el último paquete.
         uint32_t count = HWREGH(USB0_BASE + USB_0_RXCOUNT2);
 
         for (uint32_t i = 0; i < count; i++) {
+            /*
+             * HWREGB(USB0_BASE + USB_0_FIFO2): Accede al registro del FIFO del Endpoint 2.
+             * Cada lectura de este registro extrae un byte del buffer de hardware del USB.
+             */
             uint8_t c = HWREGB(USB0_BASE + USB_0_FIFO2);
+
+            // Empujamos el byte al buffer circular de software para su procesamiento posterior.
             usb_rx_push(c);
         }
-        ProcessUSBSerial(); // Procesar datos recibidos inmediatamente
 
-        // Clear RXRDY AFTER reading FIFO
+        /*
+         * Llamamos al motor de comandos para procesar los bytes (ej. buscar '\n')
+         * inmediatamente después de vaciar el hardware.
+         */
+        ProcessUSBSerial();
+
+        /*
+         * HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~USB_RXCSRL2_RXRDY:
+         * Limpiamos el bit RXRDY escribiendo un 0.
+         * Esto le indica al controlador USB que el FIFO ya fue leído y que
+         * puede aceptar el siguiente paquete desde la PC.
+         */
         HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~USB_RXCSRL2_RXRDY;
     }
 
