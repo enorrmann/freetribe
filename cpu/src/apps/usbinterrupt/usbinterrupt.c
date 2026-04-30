@@ -272,15 +272,18 @@ static void tripleAck() {
 }
 
 void USB0DeviceIntHandler(void) {
+
+    /* csrl0  es el registro de estado/control del endpoint 0, que es el endpoint de control usado para la enumeración y manejo de
+    solicitudes estándar de USB. Este registro tiene varios bits que indican el estado actual del endpoint,
+    como si hay datos listos para ser leídos (RXRDY), si el endpoint está listo para enviar datos (TXRDY),
+    si se ha recibido un paquete SETUP, entre otros. En este handler, se lee este registro para determinar qué
+    tipo de evento ocurrió en el endpoint 0 y cómo responder a él.*/
+
     uint16_t csrl0 = HWREGH(USB0_BASE + USB_0_CSRL0);
     static uint16_t last_csrl0 = 0;
 
-    // Only log if something changed or important
-    if ((csrl0 & 0x11) || ((last_csrl0 & 0x02) && !(csrl0 & 0x02))) {
-        // ////ft_printff("USB: CSR0=%04x\n", csrl0);
-    }
 
-    if (csrl0 & 0x10) {                          // SETUPEND
+    if (csrl0 & USB_CSRL0_SETEND) {                          // SETUPEND
         HWREGB(USB0_BASE + USB_0_CSRL0) |= 0x80; // Clear SETUPEND
     }
 
@@ -299,7 +302,7 @@ void USB0DeviceIntHandler(void) {
     }
 
     // EP0 handling
-    if (csrl0 & 0x01) { // RXRDY
+    if (csrl0 & USB_CSRL0_RXRDY) { // RXRDY
         USB_SetupPacket setup;
         unsigned int sz;
         USBEndpointDataGet(USB0_BASE, USB_EP_0, (uint8_t *)&setup, &sz);
@@ -393,20 +396,18 @@ void USB0DeviceIntHandler(void) {
 
     last_csrl0 = csrl0;
 
-    if (HWREGH(USB0_BASE + USB_0_RXCSRL2) & 0x01) { // RXRDY
-
-        // USBSerial_Printf("data reveiced");
+    if (HWREGH(USB0_BASE + USB_0_RXCSRL2) & USB_RXCSRL2_RXRDY) { // RXRDY
 
         uint32_t count = HWREGH(USB0_BASE + USB_0_RXCOUNT2);
 
         for (uint32_t i = 0; i < count; i++) {
-            uint8_t c = HWREGB(USB0_BASE + 0x20 + (2 * 4));
+            uint8_t c = HWREGB(USB0_BASE + USB_0_FIFO2);
             usb_rx_push(c);
         }
         ProcessUSBSerial(); // Procesar datos recibidos inmediatamente
 
         // Clear RXRDY AFTER reading FIFO
-        HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~0x01;
+        HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~USB_RXCSRL2_RXRDY;
     }
 
     tripleAck();
