@@ -30,16 +30,16 @@
 #include "hw_usbOtg_AM1808.h"
 #include "hw_usbphyGS60.h"
 
+#include "buffer.h"
+
+
+
 static const uint8_t *g_pEP0Data = 0;
 static uint32_t g_uEP0Len = 0;
 static uint8_t req_count = 0;
 
-/*----- USB Serial Buffer --------------------------------------------*/
 
-#define USB_SERIAL_BUF_SIZE 512
-static uint8_t g_usbRxBuf[USB_SERIAL_BUF_SIZE];
-static uint32_t g_usbRxHead = 0;
-static uint32_t g_usbRxTail = 0;
+
 
 #define USB_REQ_GET_STATUS 0x00
 #define USB_REQ_CLEAR_FEATURE 0x01
@@ -105,21 +105,6 @@ static uint8_t isConfigured = 0;
 static uint8_t cdcLineCoding[7] = {0x00, 0xC2, 0x01, 0x00, 0, 0, 8}; // 115200 8N1
 static uint16_t cdcConnected = 0;
 
-static void usb_rx_push(uint8_t c) {
-    uint32_t next = (g_usbRxHead + 1) % USB_SERIAL_BUF_SIZE;
-    if (next != g_usbRxTail) {
-        g_usbRxBuf[g_usbRxHead] = c;
-        g_usbRxHead = next;
-    }
-}
-
-static int usb_rx_pop(uint8_t *c) {
-    if (g_usbRxHead == g_usbRxTail)
-        return 0;
-    *c = g_usbRxBuf[g_usbRxTail];
-    g_usbRxTail = (g_usbRxTail + 1) % USB_SERIAL_BUF_SIZE;
-    return 1;
-}
 
 void USBSerial_Send(const uint8_t *data, uint32_t len) {
     if (!isConfigured)
@@ -276,6 +261,8 @@ void USB0DeviceIntHandler(void) {
     }
 
     uint32_t statusCtrl = USBIntStatusControl(USB0_BASE);
+    uint32_t statusEp = USBIntStatusEndpoint(USB0_BASE);
+    
     if (statusCtrl & USB_INTCTRL_RESET) {
         pendingAddress = 0;
         pendingSetAddress = 0;
@@ -283,7 +270,6 @@ void USB0DeviceIntHandler(void) {
         USBDevAddrSet(USB0_BASE, 0);
     }
 
-    uint32_t statusEp = USBIntStatusEndpoint(USB0_BASE);
 
     if (statusEp != 0) {
         ft_printf("EP Interrupt: 0x%08x\n", statusEp);
