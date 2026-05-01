@@ -15,20 +15,12 @@
 /*----- Includes -----------------------------------------------------*/
 
 #include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include "csl_interrupt.h"
-#include "csl_psc.h"
 #include "csl_usb.h"
 #include "freetribe.h"
-#include "hw_psc_AM1808.h"
 #include "hw_syscfg0_AM1808.h"
-#include "hw_types.h"
 #include "hw_usb.h"
-#include "hw_usbOtg_AM1808.h"
-#include "hw_usbphyGS60.h"
 
 #include "buffer.h"
 
