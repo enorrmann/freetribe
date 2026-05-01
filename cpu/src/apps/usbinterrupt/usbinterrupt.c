@@ -375,10 +375,16 @@ void USB0DeviceIntHandler(void) {
             // Unexpected data size
             USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
         }
-    } else if (((last_csrl0 & 0x02) && !(csrl0 & 0x02)) || ((last_csrl0 & 0x08) && !(csrl0 & 0x08))) {
-        // TX Complete (TXRDY cleared) OR Status phase complete (DATAEND cleared)
+
+        // Detecta si el hardware terminó una transmisión (TXRDY pasó de 1 a 0) 
+        // o si finalizó la fase de estatus (DATAEND pasó de 1 a 0).
+    } else if (((last_csrl0 & USB_CSRL0_TXRDY) && !(csrl0 & USB_CSRL0_TXRDY)) || ((last_csrl0 & USB_CSRL0_DATAEND) && !(csrl0 & USB_CSRL0_DATAEND))) {
+        
+        // Caso A: Todavía quedan datos en el buffer para enviar
         if (g_uEP0Len > 0) {
             EP0SendData();
+        // Caso B: No hay más datos y había un cambio de dirección pendiente (SET_ADDRESS)
+        // Nota: En USB, la nueva dirección se aplica solo DESPUÉS de completar la fase de estatus
         } else if (pendingSetAddress) {
             USBDevAddrSet(USB0_BASE, pendingAddress);
             pendingSetAddress = 0;
