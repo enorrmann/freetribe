@@ -28,9 +28,6 @@
 
 static const uint8_t *g_pEP0Data = 0;
 static uint32_t g_uEP0Len = 0;
-static uint8_t req_count = 0;
-
-
 
 
 #define USB_REQ_GET_STATUS 0x00
@@ -163,20 +160,11 @@ static void ProcessCommand(char *cmd) {
 }
 
 static void ProcessUSBSerial(void) {
-    // ft_printf("USB Serial: Processing command\n");
     static char lineBuf[128];
     static uint32_t lineIdx = 0;
     static uint8_t welcomeShown = 0;
     uint8_t c;
 
-    if (isConfigured) {
-        // Solo imprime esto una vez para saber que el USB está listo para datos
-        static int logOnce = 0;
-        if (!logOnce) {
-            ft_printf("USB Ready for Data!\n");
-            logOnce = 1;
-        }
-    }
     if (!isConfigured) {
         welcomeShown = 0;
         return;
