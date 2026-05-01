@@ -23,7 +23,8 @@
 #include "hw_usb.h"
 
 #include "buffer.h"
-#include "usbdescriptors.h"
+//#include "usbdescriptors.h"
+#include "hs_usbdescriptors.h"
 
 static const uint8_t *g_pEP0Data = 0;
 static uint32_t g_uEP0Len = 0;
@@ -46,6 +47,9 @@ static uint32_t g_uEP0Len = 0;
 #define USB_CDC_GET_LINE_CODING 0x21
 #define USB_CDC_SET_CONTROL_LINE_STATE 0x22
 
+// Endpoint 0 siempre es 64 en este hardware
+#define USB_EP0_MAX_PACKET_SIZE   64
+
 typedef struct __attribute__((packed)) {
     uint8_t bmRequestType;
     uint8_t bRequest;
@@ -53,7 +57,6 @@ typedef struct __attribute__((packed)) {
     uint16_t wIndex;
     uint16_t wLength;
 } USB_SetupPacket;
-
 
 static uint16_t pendingAddress = 0;
 static uint8_t pendingSetAddress = 0;
@@ -66,7 +69,7 @@ void USBSerial_Send(const uint8_t *data, uint32_t len) {
         return;
 
     while (len > 0) {
-        uint32_t sendLen = (len > 64) ? 64 : len;
+        uint32_t sendLen = (len > USB_MAX_PACKET_SIZE) ? USB_MAX_PACKET_SIZE : len;
 
         // Esperar que el endpoint esté libre
         while (HWREGH(USB0_BASE + USB_0_TXCSRL1) & USB_TXCSRL1_TXRDY)
@@ -163,7 +166,7 @@ static void ProcessUSBSerial(void) {
 
 /*----- Handlers de Interrupción -----*/
 static void EP0SendData(void) {
-    uint32_t sendLen = (g_uEP0Len > 64) ? 64 : g_uEP0Len;
+    uint32_t sendLen = (g_uEP0Len > USB_EP0_MAX_PACKET_SIZE) ? USB_EP0_MAX_PACKET_SIZE : g_uEP0Len;
     if (sendLen > 0) {
         USBEndpointDataPut(USB0_BASE, USB_EP_0, (uint8_t *)g_pEP0Data, sendLen);
         g_pEP0Data += sendLen;
@@ -233,8 +236,7 @@ static void EP2Handler() {
     }
 }
 
-void USB0DeviceIntHandler(void) {
-
+void EP0Handler(void) {
     /* csrl0  es el registro de estado/control del endpoint 0, que es el endpoint de control usado para la enumeración y manejo de
     solicitudes estándar de USB. Este registro tiene varios bits que indican el estado actual del endpoint,
     como si hay datos listos para ser leídos (RXRDY), si el endpoint está listo para enviar datos (TXRDY),
@@ -309,10 +311,10 @@ void USB0DeviceIntHandler(void) {
                     USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
                     break;
                 case USB_REQ_SET_CONFIGURATION:
-                    USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, 64, USB_EP_MODE_BULK | USB_EP_DEV_IN);
-                    USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, 64, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
+                    USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, USB_MAX_PACKET_SIZE, USB_EP_MODE_BULK | USB_EP_DEV_IN);
+                    USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, USB_MAX_PACKET_SIZE, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
 
-                    USBIntEnableEndpoint(USB0_BASE, (1 << 18)); // EP2 RX IRQ (OUT)
+                    USBIntEnableEndpoint(USB0_BASE, USB_INTEP_DEV_OUT_2);
 
                     isConfigured = 1;
                     USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
@@ -346,15 +348,15 @@ void USB0DeviceIntHandler(void) {
             USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
         }
 
-        // Detecta si el hardware terminó una transmisión (TXRDY pasó de 1 a 0) 
+        // Detecta si el hardware terminó una transmisión (TXRDY pasó de 1 a 0)
         // o si finalizó la fase de estatus (DATAEND pasó de 1 a 0).
     } else if (((last_csrl0 & USB_CSRL0_TXRDY) && !(csrl0 & USB_CSRL0_TXRDY)) || ((last_csrl0 & USB_CSRL0_DATAEND) && !(csrl0 & USB_CSRL0_DATAEND))) {
-        
+
         // Caso A: Todavía quedan datos en el buffer para enviar
         if (g_uEP0Len > 0) {
             EP0SendData();
-        // Caso B: No hay más datos y había un cambio de dirección pendiente (SET_ADDRESS)
-        // Nota: En USB, la nueva dirección se aplica solo DESPUÉS de completar la fase de estatus
+            // Caso B: No hay más datos y había un cambio de dirección pendiente (SET_ADDRESS)
+            // Nota: En USB, la nueva dirección se aplica solo DESPUÉS de completar la fase de estatus
         } else if (pendingSetAddress) {
             USBDevAddrSet(USB0_BASE, pendingAddress);
             pendingSetAddress = 0;
@@ -362,7 +364,10 @@ void USB0DeviceIntHandler(void) {
     }
 
     last_csrl0 = csrl0;
+}
 
+void USB0DeviceIntHandler(void) {
+EP0Handler();
     EP2Handler();
 
     tripleAck();
@@ -388,7 +393,7 @@ t_status app_init(void) {
         ;
 
     // 2. Forzar Full Speed para simplificar la enumeración inicial
-    HWREGB(USB0_BASE + USB_0_POWER) &= ~0x20;
+    //HWREGB(USB0_BASE + USB_0_POWER) &= ~0x20;
 
     // 3. LIMPIEZA TOTAL PRE-HABILITACIÓN
     USBIntStatusControl(USB0_BASE);
@@ -404,12 +409,12 @@ t_status app_init(void) {
     // 5. CONFIGURAR MÁSCARAS
     // Habilitamos Reset, Disconnect, Suspend y Resume en el Core
     USBIntEnableControl(USB0_BASE, USB_INTCTRL_RESET | USB_INTCTRL_DISCONNECT | USB_INTCTRL_SUSPEND | USB_INTCTRL_RESUME);
-    USBIntEnableEndpoint(USB0_BASE, USB_INTEP_ALL);
+    USBIntEnableEndpoint(USB0_BASE, USB_INTEP_ALL); // redundante con la linea siguiente
 
     // Habilitamos:
     // Bit 0 (EP0), Bit 1 (EP1 TX), Bit 18 (EP2 RX)
     // Y los bits de control del bus (Reset, Suspend, etc., que suelen estar en los bits altos)
-    HWREG(USB_0_OTGBASE + USB_0_INTR_MASK_SET) = 0x01FF001F;
+    HWREG(USB_0_OTGBASE + USB_0_INTR_MASK_SET) = 0x01FF001F; // esto hace lo mismo que USBIntEnableEndpoint y USBIntEnableControl juntos, pero con una sola escritura al wrapper
 
     // 7. CONECTAR
     USBDevConnect(USB0_BASE);

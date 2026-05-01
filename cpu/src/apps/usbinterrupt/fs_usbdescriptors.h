@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define USB_MAX_PACKET_SIZE    64
+
 const uint8_t deviceDescriptor[] = {18, 1, 0x10, 0x01, 0x02, 0x00, 0x00, 64, 0x1C, 0x1C, 0x10, 0x00, 0x00, 0x02, 1, 2, 3, 1};
 const uint8_t devQualDescriptor[] = {10, 6, 0x00, 0x02, 0x02, 0x00, 0x00, 64, 1, 0};
 const uint8_t configDescriptor[] = {
