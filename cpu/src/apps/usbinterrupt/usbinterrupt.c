@@ -41,10 +41,6 @@ static uint8_t g_usbRxBuf[USB_SERIAL_BUF_SIZE];
 static uint32_t g_usbRxHead = 0;
 static uint32_t g_usbRxTail = 0;
 
-#ifndef USB0_BASE
-#define USB0_BASE SOC_USB_0_BASE
-#endif
-
 #define USB_REQ_GET_STATUS 0x00
 #define USB_REQ_CLEAR_FEATURE 0x01
 #define USB_REQ_SET_FEATURE 0x03
@@ -71,15 +67,8 @@ typedef struct __attribute__((packed)) {
     uint16_t wLength;
 } USB_SetupPacket;
 
-// EP definitions
-#define CDC_EP_IN USB_EP_1
-#define CDC_EP_OUT USB_EP_2
-#define CDC_EP_INT USB_EP_3
-
 static const uint8_t deviceDescriptor[] = {18, 1, 0x10, 0x01, 0x02, 0x00, 0x00, 64, 0x1C, 0x1C, 0x10, 0x00, 0x00, 0x02, 1, 2, 3, 1};
-
 static const uint8_t devQualDescriptor[] = {10, 6, 0x00, 0x02, 0x02, 0x00, 0x00, 64, 1, 0};
-
 static const uint8_t configDescriptor[] = {
     // Config
     9, 2, 67, 0, 2, 1, 0, 0xC0, 50,
@@ -500,12 +489,7 @@ void app_run(void) {
         static int ledState = 0;
         ledState = !ledState;
         ft_set_led(LED_PLAY, ledState ? 255 : 0);
-        //            USBSerial_Printf("TEST"); // este funciona
     }
-
-    // Manual poll (safer than current interrupt config which causes hangs)
-    //   USB0DeviceIntHandler();
-    // ProcessUSBSerial(); // no llamar aca, integrar en interrupt
 
     if (per_gpio_get_indexed(GPIO_POWER_BUTTON) == 0) {
         ft_shutdown();
