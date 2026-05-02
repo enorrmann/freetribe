@@ -209,7 +209,7 @@ static void tripleAck() {
  */
 static void EP2Handler() {
 
-    uint16_t csrl2 = HWREGH(USB0_BASE + USB_0_RXCSRL2);
+    uint16_t csrl2 = HWREGH(USB0_BASE + USB_0_RXCSRL2); // read USB Receive Control and Status Endpoint 2 Low
 
     if (csrl2 & USB_RXCSRL2_RXRDY) { // vino algo por el ep 2
         /*
