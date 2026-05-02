@@ -314,7 +314,7 @@ void EP0Handler(void) {
                     USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, USB_MAX_PACKET_SIZE, USB_EP_MODE_BULK | USB_EP_DEV_IN);
                     USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, USB_MAX_PACKET_SIZE, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
 
-                    USBIntEnableEndpoint(USB0_BASE, USB_INTEP_DEV_OUT_2);
+                    //USBIntEnableEndpoint(USB0_BASE, USB_INTEP_DEV_OUT_2); // el trabajo real lo hace HWREG(USB_0_OTGBASE + USB_0_INTR_MASK_SET)
 
                     isConfigured = 1;
                     USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
@@ -387,9 +387,8 @@ t_status app_init(void) {
     cfgchip2 |= CFGCHIP2_REFFREQ_24MHZ | CFGCHIP2_FORCE_DEVICE | CFGCHIP2_PHY_PLLON;
     HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) = cfgchip2;
 
-    int timeout = 1000000;
     // Esperamos a que el PHY reporte que el reloj está listo (Clock Good)
-    while (!(HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) & SYSCFG_CFGCHIP2_USB0PHYCLKGD) && timeout--)
+    while (!(HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2) & SYSCFG_CFGCHIP2_USB0PHYCLKGD))
         ;
 
     // 2. Forzar Full Speed para simplificar la enumeración inicial
@@ -408,8 +407,8 @@ t_status app_init(void) {
 
     // 5. CONFIGURAR MÁSCARAS
     // Habilitamos Reset, Disconnect, Suspend y Resume en el Core
-    USBIntEnableControl(USB0_BASE, USB_INTCTRL_RESET | USB_INTCTRL_DISCONNECT | USB_INTCTRL_SUSPEND | USB_INTCTRL_RESUME);
-    USBIntEnableEndpoint(USB0_BASE, USB_INTEP_ALL); // redundante con la linea siguiente
+    //USBIntEnableControl(USB0_BASE, USB_INTCTRL_RESET | USB_INTCTRL_DISCONNECT | USB_INTCTRL_SUSPEND | USB_INTCTRL_RESUME);
+    //USBIntEnableEndpoint(USB0_BASE, USB_INTEP_ALL); // redundante con la linea siguiente
 
     // Habilitamos:
     // Bit 0 (EP0), Bit 1 (EP1 TX), Bit 18 (EP2 RX)
