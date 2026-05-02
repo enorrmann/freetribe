@@ -273,7 +273,7 @@ void EP0Handler() {
     }
 
     // EP0 handling
-    if (csrl0 & USB_CSRL0_RXRDY) { // RXRDY
+    if (csrl0 & USB_CSRL0_RXRDY) { // RXRDY, el Host ha terminado de enviar un paquete de datos hacia el dispositivo y ese paquete ya está almacenado físicamente en el FIFO del Endpoint 0
         USB_SetupPacket setup;
         unsigned int sz;
         USBEndpointDataGet(USB0_BASE, USB_EP_0, (uint8_t *)&setup, &sz);
@@ -358,10 +358,13 @@ void EP0Handler() {
 
         // Detecta si el hardware terminó una transmisión (TXRDY pasó de 1 a 0)
         // o si finalizó la fase de estatus (DATAEND pasó de 1 a 0).
+        // Detectamos que el hardware terminó de enviar el paquete anterior, el host me mandó un ack avisando que recibio lo que envie
     } else if (((last_csrl0 & USB_CSRL0_TXRDY) && !(csrl0 & USB_CSRL0_TXRDY)) || ((last_csrl0 & USB_CSRL0_DATAEND) && !(csrl0 & USB_CSRL0_DATAEND))) {
 
         // Caso A: Todavía quedan datos en el buffer para enviar
         if (g_uEP0Len > 0) {
+            // ft_printf("EP0:  %u bytes left", g_uEP0Len); // aca entra a veces asi que no se como refactorear EP0SendData(); con parametros
+            // por que no se cual es el data que mandaria aca
             EP0SendData();
             // Caso B: No hay más datos y había un cambio de dirección pendiente (SET_ADDRESS)
             // Nota: En USB, la nueva dirección se aplica solo DESPUÉS de completar la fase de estatus
