@@ -43,10 +43,10 @@ static uint32_t g_uEP0Len = 0;
 #define USB_DESC_STRING 0x03
 #define USB_DESC_DEVICE_QUAL 0x06
 
-#define USB_REQ_TYPE_MASK       0x60
-#define USB_REQ_TYPE_STANDARD   0x00
-#define USB_REQ_TYPE_CLASS      0x20
-#define USB_REQ_TYPE_VENDOR     0x40
+#define USB_REQ_TYPE_MASK 0x60
+#define USB_REQ_TYPE_STANDARD 0x00
+#define USB_REQ_TYPE_CLASS 0x20
+#define USB_REQ_TYPE_VENDOR 0x40
 
 #define USB_CDC_SET_LINE_CODING 0x20
 #define USB_CDC_GET_LINE_CODING 0x21
@@ -126,7 +126,7 @@ static void ProcessCommand(char *cmd) {
         uint8_t val = atoi(cmd + 4);
         ft_set_led(LED_PLAY, (uint8_t)val);
         ft_set_led(LED_PAD_0_BLUE, (uint8_t)val);
-        
+
         USBSerial_Printf("LED play set to %d\r\n", val);
     } else if (strcmp(cmd, "reboot") == 0) {
         USBSerial_Printf("Rebooting...\r\n");
@@ -211,7 +211,7 @@ static void EP2Handler() {
 
     uint16_t csrl2 = HWREGH(USB0_BASE + USB_0_RXCSRL2);
 
-    if (csrl2 & USB_RXCSRL2_RXRDY) { // vino algo por el ep 2 
+    if (csrl2 & USB_RXCSRL2_RXRDY) { // vino algo por el ep 2
         /*
          * HWREGH(USB0_BASE + USB_0_RXCSRL2): Accede al "Receive Control and Status Register Low" del EP2.
          * USB_RXCSRL2_RXRDY: Macro que representa el bit 0 (Receive Packet Ready).
@@ -263,7 +263,7 @@ void EP0Handler() {
     }
 
     uint32_t statusCtrl = USBIntStatusControl(USB0_BASE);
-    //uint32_t statusEp = USBIntStatusEndpoint(USB0_BASE);
+    // uint32_t statusEp = USBIntStatusEndpoint(USB0_BASE);
 
     if (statusCtrl & USB_INTCTRL_RESET) {
         pendingAddress = 0;
@@ -271,7 +271,6 @@ void EP0Handler() {
         isConfigured = 0;
         USBDevAddrSet(USB0_BASE, 0);
     }
-
 
     // EP0 handling
     if (csrl0 & USB_CSRL0_RXRDY) { // RXRDY
@@ -375,13 +374,11 @@ void EP0Handler() {
     last_csrl0 = csrl0;
 }
 
-
 void USB0DeviceIntHandler(void) {
 
     EP0Handler();
     EP2Handler();
-    
-  
+
     tripleAck(); // sin esto se cuelga el main
 }
 
@@ -419,8 +416,8 @@ t_status app_init(void) {
 
     // 5. CONFIGURAR MÁSCARAS
     // Habilitamos Reset, Disconnect, Suspend y Resume en el Core
-    //USBIntEnableControl(USB0_BASE, USB_INTCTRL_RESET | USB_INTCTRL_DISCONNECT | USB_INTCTRL_SUSPEND | USB_INTCTRL_RESUME);
-    //USBIntEnableEndpoint(USB0_BASE, USB_INTEP_ALL); // redundante con la linea siguiente
+    // USBIntEnableControl(USB0_BASE, USB_INTCTRL_RESET | USB_INTCTRL_DISCONNECT | USB_INTCTRL_SUSPEND | USB_INTCTRL_RESUME);
+    // USBIntEnableEndpoint(USB0_BASE, USB_INTEP_ALL); // redundante con la linea siguiente
 
     // Habilitamos:
     // Bit 0 (EP0), Bit 1 (EP1 TX), Bit 18 (EP2 RX)
