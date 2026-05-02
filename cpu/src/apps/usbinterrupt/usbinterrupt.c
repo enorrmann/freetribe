@@ -423,9 +423,13 @@ t_status app_init(void) {
     // USBIntEnableEndpoint(USB0_BASE, USB_INTEP_ALL); // redundante con la linea siguiente
 
     // Habilitamos:
-    // Bit 0 (EP0), Bit 1 (EP1 TX), Bit 18 (EP2 RX)
-    // Y los bits de control del bus (Reset, Suspend, etc., que suelen estar en los bits altos)
-    HWREG(USB_0_OTGBASE + USB_0_INTR_MASK_SET) = 0x01FF001F; // esto hace lo mismo que USBIntEnableEndpoint y USBIntEnableControl juntos, pero con una sola escritura al wrapper
+    // 0x01FF0000: Bits de control (Reset, Resume, Suspend, etc.)
+    // 0x00040000: EP2 RX
+    // 0x00000001: EP0
+    #define USB_WRAPPER_CTRL_MASK 0x01FF0000 //Bits de control (Reset, Resume, Suspend, etc.)
+    // Ahora combinamos con los bits de Endpoints que SÍ coinciden (0 y 18)
+    uint32_t uiIntMask = USB_WRAPPER_CTRL_MASK | USB_INTEP_0 | USB_INTEP_DEV_OUT_2;
+    HWREG(USB_0_OTGBASE + USB_0_INTR_MASK_SET) = uiIntMask;
 
     // 7. CONECTAR
     USBDevConnect(USB0_BASE);
