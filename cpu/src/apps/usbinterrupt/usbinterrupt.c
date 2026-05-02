@@ -23,7 +23,7 @@
 #include "hw_usb.h"
 
 #include "buffer.h"
-//#include "usbdescriptors.h"
+// #include "usbdescriptors.h"
 #include "hs_usbdescriptors.h"
 
 static const uint8_t *g_pEP0Data = 0;
@@ -43,12 +43,19 @@ static uint32_t g_uEP0Len = 0;
 #define USB_DESC_STRING 0x03
 #define USB_DESC_DEVICE_QUAL 0x06
 
+#define USB_REQ_TYPE_MASK       0x60
+#define USB_REQ_TYPE_STANDARD   0x00
+#define USB_REQ_TYPE_CLASS      0x20
+#define USB_REQ_TYPE_VENDOR     0x40
+
 #define USB_CDC_SET_LINE_CODING 0x20
 #define USB_CDC_GET_LINE_CODING 0x21
 #define USB_CDC_SET_CONTROL_LINE_STATE 0x22
 
 // Endpoint 0 siempre es 64 en este hardware
-#define USB_EP0_MAX_PACKET_SIZE   64
+#define USB_EP0_MAX_PACKET_SIZE 64
+
+#define USB_SETUP_PACKET_SIZE 8 // El tamaño fijo de los paquetes SETUP en USB es de 8 bytes
 
 typedef struct __attribute__((packed)) {
     uint8_t bmRequestType;
@@ -116,9 +123,11 @@ static void ProcessCommand(char *cmd) {
     } else if (strncmp(cmd, "echo ", 5) == 0) {
         USBSerial_Printf("%s\r\n", cmd + 5);
     } else if (strncmp(cmd, "led ", 4) == 0) {
-        int val = atoi(cmd + 4);
+        uint8_t val = atoi(cmd + 4);
         ft_set_led(LED_PLAY, (uint8_t)val);
-        USBSerial_Printf("LED Play set to %d\r\n", val);
+        ft_set_led(LED_PAD_0_BLUE, (uint8_t)val);
+        
+        USBSerial_Printf("LED play set to %d\r\n", val);
     } else if (strcmp(cmd, "reboot") == 0) {
         USBSerial_Printf("Rebooting...\r\n");
         ft_shutdown();
@@ -199,7 +208,10 @@ static void tripleAck() {
  * Este bloque se ejecuta cuando el host (PC) envía datos al dispositivo.
  */
 static void EP2Handler() {
-    if (HWREGH(USB0_BASE + USB_0_RXCSRL2) & USB_RXCSRL2_RXRDY) {
+
+    uint16_t csrl2 = HWREGH(USB0_BASE + USB_0_RXCSRL2);
+
+    if (csrl2 & USB_RXCSRL2_RXRDY) { // vino algo por el ep 2 
         /*
          * HWREGH(USB0_BASE + USB_0_RXCSRL2): Accede al "Receive Control and Status Register Low" del EP2.
          * USB_RXCSRL2_RXRDY: Macro que representa el bit 0 (Receive Packet Ready).
@@ -236,7 +248,7 @@ static void EP2Handler() {
     }
 }
 
-void EP0Handler(void) {
+void EP0Handler() {
     /* csrl0  es el registro de estado/control del endpoint 0, que es el endpoint de control usado para la enumeración y manejo de
     solicitudes estándar de USB. Este registro tiene varios bits que indican el estado actual del endpoint,
     como si hay datos listos para ser leídos (RXRDY), si el endpoint está listo para enviar datos (TXRDY),
@@ -251,7 +263,7 @@ void EP0Handler(void) {
     }
 
     uint32_t statusCtrl = USBIntStatusControl(USB0_BASE);
-    uint32_t statusEp = USBIntStatusEndpoint(USB0_BASE);
+    //uint32_t statusEp = USBIntStatusEndpoint(USB0_BASE);
 
     if (statusCtrl & USB_INTCTRL_RESET) {
         pendingAddress = 0;
@@ -260,9 +272,6 @@ void EP0Handler(void) {
         USBDevAddrSet(USB0_BASE, 0);
     }
 
-    if (statusEp != 0) {
-        ft_printf("EP Interrupt: 0x%08x\n", statusEp);
-    }
 
     // EP0 handling
     if (csrl0 & USB_CSRL0_RXRDY) { // RXRDY
@@ -270,11 +279,11 @@ void EP0Handler(void) {
         unsigned int sz;
         USBEndpointDataGet(USB0_BASE, USB_EP_0, (uint8_t *)&setup, &sz);
 
-        if (sz == 8) {
+        if (sz == USB_SETUP_PACKET_SIZE) { // tamaño estblecido para paquetes SETUP por el protocolo USB (8 bytes)
             // Clear RXRDY
             USBDevEndpointDataAck(USB0_BASE, USB_EP_0, false);
 
-            if ((setup.bmRequestType & 0x60) == 0) { // Standard Request
+            if ((setup.bmRequestType & USB_REQ_TYPE_MASK) == USB_REQ_TYPE_STANDARD) { // Standard Request
                 switch (setup.bRequest) {
                 case USB_REQ_GET_DESCRIPTOR: {
                     uint8_t type = setup.wValue >> 8;
@@ -314,7 +323,7 @@ void EP0Handler(void) {
                     USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, USB_MAX_PACKET_SIZE, USB_EP_MODE_BULK | USB_EP_DEV_IN);
                     USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, USB_MAX_PACKET_SIZE, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
 
-                    //USBIntEnableEndpoint(USB0_BASE, USB_INTEP_DEV_OUT_2); // el trabajo real lo hace HWREG(USB_0_OTGBASE + USB_0_INTR_MASK_SET)
+                    USBIntEnableEndpoint(USB0_BASE, USB_INTEP_DEV_OUT_2); // el trabajo real lo hace HWREG(USB_0_OTGBASE + USB_0_INTR_MASK_SET)
 
                     isConfigured = 1;
                     USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
@@ -323,7 +332,7 @@ void EP0Handler(void) {
                     USBDevEndpointStall(USB0_BASE, USB_EP_0, USB_EP_DEV_IN);
                     break;
                 }
-            } else if ((setup.bmRequestType & 0x60) == 0x20) { // Class request
+            } else if ((setup.bmRequestType & USB_REQ_TYPE_MASK) == USB_REQ_TYPE_CLASS) { // Class request
                 switch (setup.bRequest) {
                 case USB_CDC_GET_LINE_CODING:
                     g_pEP0Data = cdcLineCoding;
@@ -366,11 +375,14 @@ void EP0Handler(void) {
     last_csrl0 = csrl0;
 }
 
-void USB0DeviceIntHandler(void) {
-EP0Handler();
-    EP2Handler();
 
-    tripleAck();
+void USB0DeviceIntHandler(void) {
+
+    EP0Handler();
+    EP2Handler();
+    
+  
+    tripleAck(); // sin esto se cuelga el main
 }
 
 /*----- Inicialización -----*/
@@ -392,7 +404,7 @@ t_status app_init(void) {
         ;
 
     // 2. Forzar Full Speed para simplificar la enumeración inicial
-    //HWREGB(USB0_BASE + USB_0_POWER) &= ~0x20;
+    // HWREGB(USB0_BASE + USB_0_POWER) &= ~0x20;
 
     // 3. LIMPIEZA TOTAL PRE-HABILITACIÓN
     USBIntStatusControl(USB0_BASE);
@@ -433,7 +445,7 @@ void app_run(void) {
         heartbeat = 0;
         static int ledState = 0;
         ledState = !ledState;
-        ft_set_led(LED_PLAY, ledState ? 255 : 0);
+        ft_set_led(LED_TAP, ledState ? 255 : 0);
     }
 
     if (per_gpio_get_indexed(GPIO_POWER_BUTTON) == 0) {
