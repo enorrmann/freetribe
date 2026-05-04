@@ -37,6 +37,8 @@
 #include "hw_usb.h"
 #include "hw_usbphyGS60.h"
 
+#include "usbaudiodescriptors.h"
+
 /*----- Defines -------------------------------------------------------*/
 
 #define USB_0_OTGBASE        SOC_USB_0_OTG_BASE
@@ -72,7 +74,7 @@
 #define IFACE_AUDIO_CONTROL   0
 #define IFACE_PLAYBACK        1   /* Interface 1: host → device */
 #define IFACE_CAPTURE         2   /* Interface 2: device → host */
-
+int testCounter = 0;
 /*----- Types ---------------------------------------------------------*/
 
 typedef struct __attribute__((packed)) {
@@ -83,63 +85,7 @@ typedef struct __attribute__((packed)) {
     uint16_t wLength;
 } USB_SetupPacket;
 
-/*----- Static descriptors --------------------------------------------*/
 
-static const uint8_t deviceDescriptor[] = {
-    18, 1, 0x10, 0x01, 0x00, 0x00,
-    0x00, 64, 0x1C, 0x1C, 0x10, 0x00,
-    0x00, 0x02, 1, 2, 3, 1
-};
-
-static const uint8_t devQualDescriptor[] = {
-    10, 6, 0x00, 0x02, 0x02,
-    0x00, 0x00, 64, 1, 0
-};
-
-static const uint8_t configDescriptor[] = {
-    /* Config */
-    9, 2, 190, 0, 3, 1, 0, 0x80, 50,
-    /* Interface 0 (Audio Control) */
-    9, 4, 0, 0, 0, 0x01, 0x01, 0x00, 0,
-    /* Audio Control Header */
-    10, 0x24, 0x01, 0x00, 0x01, 0x48, 0x00, 0x02, 0x01, 0x02,
-    /* USB Streaming Input Terminal (playback) */
-    12, 0x24, 0x02, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    /* Feature Unit (playback) */
-    10, 0x24, 0x06, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
-    /* Output Terminal (speaker) */
-    9, 0x24, 0x03, 0x03, 0x01, 0x03, 0x00, 0x02, 0x00,
-    /* Microphone Input Terminal */
-    12, 0x24, 0x02, 0x04, 0x02, 0x01, 0x00, 0x02, 0x03, 0x00, 0x00, 0x00,
-    /* Feature Unit (capture) */
-    10, 0x24, 0x06, 0x05, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
-    /* USB Streaming Output Terminal (capture) */
-    9, 0x24, 0x03, 0x06, 0x01, 0x01, 0x00, 0x05, 0x00,
-    /* Interface 1 alt 0 (Audio Streaming playback – zero-bandwidth) */
-    9, 4, 1, 0, 0, 0x01, 0x02, 0x00, 0,
-    /* Interface 1 alt 1 (Audio Streaming playback – active) */
-    9, 4, 1, 1, 1, 0x01, 0x02, 0x00, 0,
-    /* Audio Streaming Header (playback) */
-    7, 0x24, 0x01, 0x01, 0x01, 0x01, 0x00,
-    /* Format Type I */
-    11, 0x24, 0x02, 0x01, 0x02, 0x02, 16, 1, 0x80, 0xBB, 0x00,
-    /* Standard Endpoint OUT */
-    7, 5, 0x02, 1, 192, 0, 1,
-    /* Class-specific Endpoint OUT */
-    7, 0x25, 0x01, 0x00, 0x00, 0x00, 0x00,
-    /* Interface 2 alt 0 (Audio Streaming capture – zero-bandwidth) */
-    9, 4, 2, 0, 0, 0x01, 0x02, 0x00, 0,
-    /* Interface 2 alt 1 (Audio Streaming capture – active) */
-    9, 4, 2, 1, 1, 0x01, 0x02, 0x00, 0,
-    /* Audio Streaming Header (capture) */
-    7, 0x24, 0x01, 0x06, 0x01, 0x01, 0x00,
-    /* Format Type I */
-    11, 0x24, 0x02, 0x01, 0x02, 0x02, 16, 1, 0x80, 0xBB, 0x00,
-    /* Standard Endpoint IN */
-    7, 5, 0x81, 1, 192, 0, 1,
-    /* Class-specific Endpoint IN */
-    7, 0x25, 0x01, 0x00, 0x00, 0x00, 0x00
-};
 
 static void tripleAck() {
 
@@ -344,6 +290,7 @@ static void USBAudio_ProcessOut(void) {
     uint32_t count = USBEndpointDataAvail(USB0_BASE, AUDIO_EP_OUT);
     if (count == 0)
         return;
+        testCounter++;
 
     uint32_t len = count;
     if (len > AUDIO_EP_MAX_PACKET_SIZE)
@@ -362,7 +309,16 @@ static void ProcessUSBAudio(void) {
 
 /*----- USB Device interrupt handler ----------------------------------*/
 
+void EP0IntHandler(void) ;
+
+
 void USB0DeviceIntHandler(void) {
+    EP0IntHandler();
+
+    USBAudio_ProcessOut(); // llamo aca porque debo hacer ack sino se traba
+}
+
+void EP0IntHandler(void) {
     uint16_t csrl0 = HWREGH(USB0_BASE + USB_0_CSRL0);
     static uint16_t last_csrl0 = 0;
 
@@ -592,6 +548,7 @@ void app_run(void) {
     static int heartbeat = 0;
     heartbeat++;
     if (heartbeat >= 100000) {
+        ft_printf("testCounter: %u", testCounter);
         heartbeat = 0;
         static int ledState = 0;
         ledState = !ledState;
@@ -609,7 +566,7 @@ void app_run(void) {
      *   - ProcessUSBAudio is the single place audio IN/OUT is serviced.
      */
     //USB0DeviceIntHandler();
-    ProcessUSBAudio();
+    //ProcessUSBAudio();
 
     if (per_gpio_get_indexed(GPIO_POWER_BUTTON) == 0) {
         ft_shutdown();
