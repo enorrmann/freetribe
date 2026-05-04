@@ -102,19 +102,6 @@ static void tripleAck() {
     HWREG(USB_0_OTGBASE + USB_0_INTR_SRC_CLEAR) = 0xFFFFFFFF;
 }
 
-static const uint8_t string0[] = {4, 3, 0x09, 0x04};
-static const uint8_t string1[] = {
-    20, 3, 'F',0,'r',0,'e',0,'e',0,'t',0,'r',0,'i',0,'b',0,'e',0
-};
-static const uint8_t string2[] = {
-    20, 3, 'F',0,'T',0,'B',0,' ',0,'A',0,'u',0,'d',0,'i',0,'o',0
-};
-static const uint8_t string3[] = {10, 3, '1',0,'2',0,'3',0,'4',0};
-
-static const uint8_t *const strings[]  = {string0, string1, string2, string3};
-static const uint8_t stringLens[]      = {
-    sizeof(string0), sizeof(string1), sizeof(string2), sizeof(string3)
-};
 
 /*----- State ---------------------------------------------------------*/
 
