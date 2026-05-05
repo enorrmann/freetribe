@@ -225,26 +225,32 @@ static void USBDeactivateCapture(void) {
     g_audioOutLen = 0;
 }
 
-/*----- Audio helpers -------------------------------------------------*/
-
+/*----- Audio helpers ------------------------------*/
+/**
+ * Generate 440 Hz square wave using integer-only arithmetic.
+ * Called from ISR at 1 KHz (each SOF), so no floating point.
+ *
+ * Phase accumulator wraps at sampleRate. When phase < sampleRate/2
+ * output is +amplitude, otherwise -amplitude.
+ */
 static void USBAudio_GenerateSquareWave(void) {
-    static float phase = 0.0f;
-    const float frequency = 440.0f;
-    const float sampleRate = 48000.0f;
-    const float phaseIncrement = frequency / sampleRate;
+    static uint32_t phase = 0;
+    const uint32_t frequency = 440;
+    const uint32_t sampleRate = 48000;
+    const int16_t amplitude = 0x4000;
 
-    for (uint32_t frame = 0; frame < 48; frame++) { // 48 muestras por ms
-        int16_t sample = (phase < 0.5f) ? 0x4000 : -0x4000;
+    for (uint32_t frame = 0; frame < 48; frame++) {
+        int16_t sample = (phase < sampleRate / 2) ? amplitude : -amplitude;
 
-        // Llenar buffer (L+R)
+        /* Stereo: L + R identical */
         g_audioInPacket[frame * 4 + 0] = (uint8_t)(sample & 0xFF);
         g_audioInPacket[frame * 4 + 1] = (uint8_t)((sample >> 8) & 0xFF);
         g_audioInPacket[frame * 4 + 2] = g_audioInPacket[frame * 4 + 0];
         g_audioInPacket[frame * 4 + 3] = g_audioInPacket[frame * 4 + 1];
 
-        phase += phaseIncrement;
-        if (phase >= 1.0f)
-            phase -= 1.0f;
+        phase += frequency;
+        if (phase >= sampleRate)
+            phase -= sampleRate;
     }
 }
 
