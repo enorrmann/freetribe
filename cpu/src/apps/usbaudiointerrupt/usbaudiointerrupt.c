@@ -98,7 +98,8 @@
 #define IFACE_AUDIO_CONTROL 0
 #define IFACE_PLAYBACK 1 /* Interface 1: host → device */
 #define IFACE_CAPTURE 2  /* Interface 2: device → host */
-int testCounter = 0;
+uint32_t g_totalFifoErrors = 0;
+
 void USB0DeviceIntHandler(void) ;
 void USBAudio_SetFrequency(uint32_t frequency);
 
@@ -286,6 +287,8 @@ static void USBAudio_SendCapture(void) {
         /* 3. ONLY IF SUCCESSFUL, advance the global phase */
         g_squarePhase = nextPhase;
         USBEndpointDataSend(USB0_BASE, AUDIO_EP_IN, USB_TRANS_IN);
+    } else {
+        g_totalFifoErrors++;
     }
 }
 
@@ -304,7 +307,6 @@ static void USBAudio_ProcessOut(void) {
     uint32_t count = USBEndpointDataAvail(USB0_BASE, AUDIO_EP_OUT);
     if (count == 0)
         return;
-    testCounter++;
 
     uint32_t len = count;
     if (len > AUDIO_EP_MAX_PACKET_SIZE)
@@ -578,6 +580,7 @@ t_status app_init(void) {
 #define GPIO_POWER_BUTTON 128
 
 void app_run(void) {
+    static uint32_t last_totalFifoErrors = 0;
     static int heartbeat = 0;
     heartbeat++;
     if (heartbeat >= 100000) {
@@ -588,6 +591,10 @@ void app_run(void) {
 
         /* DEBUG: SOF count + accumulated wrapper SRC */
         //ft_printf("ISR=%u SOF=%u accSRC=0x%08X",g_isrCount, g_sofCount, g_lastIntrSrc);
+        if (g_totalFifoErrors != last_totalFifoErrors) {
+            last_totalFifoErrors = g_totalFifoErrors;
+            ft_printf("FIFO ERRORS: %u", g_totalFifoErrors);
+        }
         g_lastIntrSrc = 0;
     }
 
