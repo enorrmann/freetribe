@@ -143,6 +143,11 @@ static uint32_t g_audioOutLen = 0;
 static uint8_t g_audioInPacket[AUDIO_EP_MAX_PACKET_SIZE];
 static uint32_t g_squarePhase = 0;
 
+/* Wavetable / NCO State */
+#define WAVETABLE_SIZE 1024
+static int16_t g_wavetable[WAVETABLE_SIZE];
+static uint32_t g_phaseIncrement = 0;
+
 static uint16_t pendingAddress = 0;
 static uint8_t pendingSetAddress = 0;
 
@@ -227,24 +232,21 @@ static void USBDeactivateCapture(void) {
 
 /*----- Audio helpers ------------------------------*/
 /**
- * Generates the square wave and returns the resulting phase.
- * Does not modify global state directly.
+ * Fills the audio buffer from the pre-calculated wavetable.
+ * Uses a 32-bit NCO for high precision and returns the next phase.
  */
-static uint32_t USBAudio_FillSquareWave(uint32_t phase) {
-    const uint32_t frequency = 480; 
-    const uint32_t sampleRate = 48000;
-    const int16_t amplitude = 0x4000;
+static uint32_t USBAudio_FillFromLUT(uint32_t phase) {
+    for (uint32_t i = 0; i < 48; i++) {
+        /* Index is the top 10 bits of our 32-bit phase (32 - log2(1024) = 22) */
+        uint16_t idx = (uint16_t)(phase >> 22);
+        int16_t sample = g_wavetable[idx];
 
-    for (uint32_t frame = 0; frame < 48; frame++) {
-        phase += frequency;
-        if (phase >= sampleRate) phase -= sampleRate;
+        g_audioInPacket[i * 4 + 0] = (uint8_t)(sample & 0xFF);
+        g_audioInPacket[i * 4 + 1] = (uint8_t)((sample >> 8) & 0xFF);
+        g_audioInPacket[i * 4 + 2] = g_audioInPacket[i * 4 + 0];
+        g_audioInPacket[i * 4 + 3] = g_audioInPacket[i * 4 + 1];
 
-        int16_t sample = (phase < sampleRate / 2) ? amplitude : -amplitude;
-
-        g_audioInPacket[frame * 4 + 0] = (uint8_t)(sample & 0xFF);
-        g_audioInPacket[frame * 4 + 1] = (uint8_t)((sample >> 8) & 0xFF);
-        g_audioInPacket[frame * 4 + 2] = g_audioInPacket[frame * 4 + 0];
-        g_audioInPacket[frame * 4 + 3] = g_audioInPacket[frame * 4 + 1];
+        phase += g_phaseIncrement;
     }
     return phase;
 }
@@ -268,8 +270,8 @@ static void USBAudio_SendCapture(void) {
     if (!isConfigured || g_interfaceAltSetting[IFACE_CAPTURE] != 1)
         return;
 
-    /* 1. Generate audio in the buffer using current phase */
-    uint32_t nextPhase = USBAudio_FillSquareWave(g_squarePhase);
+    /* 1. Generate audio in the buffer using current phase and LUT */
+    uint32_t nextPhase = USBAudio_FillFromLUT(g_squarePhase);
 
     /* 2. Try to put data into hardware FIFO */
     if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, g_audioInPacket, AUDIO_EP_MAX_PACKET_SIZE) == 0) {
@@ -535,6 +537,16 @@ t_status app_init(void) {
      */
     USBIntEnableControl(USB0_BASE, USB_INTCTRL_RESET | USB_INTCTRL_DISCONNECT | USB_INTCTRL_SOF);
     USBIntEnableEndpoint(USB0_BASE, USB_INTEP_ALL);
+
+    /* Initialize Wavetable with a square wave */
+    int i;
+    for (i = 0; i < WAVETABLE_SIZE; i++) {
+        g_wavetable[i] = (i < (WAVETABLE_SIZE / 2)) ? 0x4000 : -0x4000;
+    }
+
+    /* Pre-calculate phase increment for 480 Hz @ 48 kHz */
+    /* increment = (f / fs) * 2^32 */
+    g_phaseIncrement = (uint32_t)(((unsigned long long)480 << 32) / 48000);
 
     USBDevConnect(USB0_BASE);
 
