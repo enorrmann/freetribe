@@ -227,31 +227,26 @@ static void USBDeactivateCapture(void) {
 
 /*----- Audio helpers ------------------------------*/
 /**
- * Generate 440 Hz square wave using integer-only arithmetic.
- * Called from ISR at 1 KHz (each SOF), so no floating point.
- *
- * Phase accumulator wraps at sampleRate. When phase < sampleRate/2
- * output is +amplitude, otherwise -amplitude.
+ * Generates the square wave and returns the resulting phase.
+ * Does not modify global state directly.
  */
-static void USBAudio_GenerateSquareWave(void) {
-    static uint32_t phase = 0;
-    const uint32_t frequency = 440;
+static uint32_t USBAudio_FillSquareWave(uint32_t phase) {
+    const uint32_t frequency = 480; 
     const uint32_t sampleRate = 48000;
     const int16_t amplitude = 0x4000;
 
     for (uint32_t frame = 0; frame < 48; frame++) {
+        phase += frequency;
+        if (phase >= sampleRate) phase -= sampleRate;
+
         int16_t sample = (phase < sampleRate / 2) ? amplitude : -amplitude;
 
-        /* Stereo: L + R identical */
         g_audioInPacket[frame * 4 + 0] = (uint8_t)(sample & 0xFF);
         g_audioInPacket[frame * 4 + 1] = (uint8_t)((sample >> 8) & 0xFF);
         g_audioInPacket[frame * 4 + 2] = g_audioInPacket[frame * 4 + 0];
         g_audioInPacket[frame * 4 + 3] = g_audioInPacket[frame * 4 + 1];
-
-        phase += frequency;
-        if (phase >= sampleRate)
-            phase -= sampleRate;
     }
+    return phase;
 }
 
 static void USBAudio_HandleOutPacket(const uint8_t *data, uint32_t len) {
@@ -270,30 +265,18 @@ static void USBAudio_HandleOutPacket(const uint8_t *data, uint32_t len) {
  * host opened the capture stream, causing aplay to report the device as busy.
  */
 static void USBAudio_SendCapture(void) {
-    if (!isConfigured)
+    if (!isConfigured || g_interfaceAltSetting[IFACE_CAPTURE] != 1)
         return;
 
-    /* FIX 2: respect the USB Audio Class lifecycle */
-    if (g_interfaceAltSetting[IFACE_CAPTURE] != 1)
-        return;
+    /* 1. Generate audio in the buffer using current phase */
+    uint32_t nextPhase = USBAudio_FillSquareWave(g_squarePhase);
 
-    if (g_audioOutLen == 0) {
+    /* 2. Try to put data into hardware FIFO */
+    if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, g_audioInPacket, AUDIO_EP_MAX_PACKET_SIZE) == 0) {
+        /* 3. ONLY IF SUCCESSFUL, advance the global phase */
+        g_squarePhase = nextPhase;
+        USBEndpointDataSend(USB0_BASE, AUDIO_EP_IN, USB_TRANS_IN);
     }
-
-    USBAudio_GenerateSquareWave(); /// siempre generar
-
-    // uint32_t       packetLen = g_audioOutLen ? g_audioOutLen : AUDIO_EP_MAX_PACKET_SIZE;
-    // const uint8_t *src       = g_audioOutLen ? g_audioOutPacket : g_audioInPacket;
-    uint32_t packetLen = AUDIO_EP_MAX_PACKET_SIZE;
-    const uint8_t *src = g_audioInPacket; /// nuestro wav generado
-
-    if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, (uint8_t *)src, packetLen) != 0) {
-
-        return;
-    }
-
-    USBEndpointDataSend(USB0_BASE, AUDIO_EP_IN, USB_TRANS_IN);
-    g_audioOutLen = 0;
 }
 
 /*
