@@ -100,7 +100,7 @@
 #define IFACE_CAPTURE 2  /* Interface 2: device → host */
 int testCounter = 0;
 void USB0DeviceIntHandler(void) ;
-
+void USBAudio_SetFrequency(uint32_t frequency);
 
         extern volatile uint32_t g_isrCount;
         extern volatile uint32_t g_sofCount;
@@ -249,6 +249,14 @@ static uint32_t USBAudio_FillFromLUT(uint32_t phase) {
         phase += g_phaseIncrement;
     }
     return phase;
+}
+
+/**
+ * Updates the oscillator frequency in real-time.
+ */
+void USBAudio_SetFrequency(uint32_t frequency) {
+    /* increment = (f / fs) * 2^32 */
+    g_phaseIncrement = (uint32_t)(((unsigned long long)frequency << 32) / 48000);
 }
 
 static void USBAudio_HandleOutPacket(const uint8_t *data, uint32_t len) {
@@ -545,8 +553,7 @@ t_status app_init(void) {
     }
 
     /* Pre-calculate phase increment for 480 Hz @ 48 kHz */
-    /* increment = (f / fs) * 2^32 */
-    g_phaseIncrement = (uint32_t)(((unsigned long long)480 << 32) / 48000);
+    USBAudio_SetFrequency(480/2);
 
     USBDevConnect(USB0_BASE);
 
