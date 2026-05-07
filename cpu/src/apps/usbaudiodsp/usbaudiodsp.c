@@ -63,6 +63,8 @@
 
 #include "usbaudiodescriptors.h"
 
+#include "dev_dsp_ipc.h"
+
 /*----- Defines -------------------------------------------------------*/
 
 #define USB_0_OTGBASE SOC_USB_0_OTG_BASE
@@ -98,10 +100,13 @@
 #define IFACE_AUDIO_CONTROL 0
 #define IFACE_PLAYBACK 1 /* Interface 1: host → device */
 #define IFACE_CAPTURE 2  /* Interface 2: device → host */
-uint32_t g_totalFifoErrors = 0;
 
 void USB0DeviceIntHandler(void) ;
 void USBAudio_SetFrequency(uint32_t frequency);
+
+#define IPC_BUFFER_SIZE (192)
+uint32_t ipc_rx_buffer[IPC_BUFFER_SIZE];
+
 
         extern volatile uint32_t g_isrCount;
         extern volatile uint32_t g_sofCount;
@@ -116,6 +121,28 @@ typedef struct __attribute__((packed)) {
     uint16_t wIndex;
     uint16_t wLength;
 } USB_SetupPacket;
+
+
+void ipc_callback(void *ctx, t_ipc_status status);
+
+
+void get_dsp_data(){
+    const uint32_t dsp_ring_buffer_address = 0x00000060;
+
+    dev_dsp_ipc_read(
+        dsp_ring_buffer_address, // address in dsp memory
+        ipc_rx_buffer, // destination buffer in cpu memory
+        IPC_BUFFER_SIZE, // number of 32-bit words to read
+        ipc_callback, // callback function when read is complete
+        (void *)0x23AC1D23 // arbitrary user context value for testing
+    );
+
+}
+
+// llamado cuando termina la transferencia de datos del ipc
+void ipc_callback(void *ctx, t_ipc_status status) {
+    ft_printf("IPC transfer status : %i, data %u", (int)status, ipc_rx_buffer[0]);
+}
 
 static void tripleAck() {
 
@@ -287,8 +314,6 @@ static void USBAudio_SendCapture(void) {
         /* 3. ONLY IF SUCCESSFUL, advance the global phase */
         g_squarePhase = nextPhase;
         USBEndpointDataSend(USB0_BASE, AUDIO_EP_IN, USB_TRANS_IN);
-    } else {
-        g_totalFifoErrors++;
     }
 }
 
@@ -594,7 +619,6 @@ t_status app_init(void) {
 #define GPIO_POWER_BUTTON 128
 
 void app_run(void) {
-    static uint32_t last_totalFifoErrors = 0;
     static int heartbeat = 0;
     heartbeat++;
     if (heartbeat >= 100000) {
@@ -602,13 +626,7 @@ void app_run(void) {
         static int ledState = 0;
         ledState = !ledState;
         ft_set_led(LED_PLAY, ledState ? 255 : 0);
-
-        /* DEBUG: SOF count + accumulated wrapper SRC */
-        //ft_printf("ISR=%u SOF=%u accSRC=0x%08X",g_isrCount, g_sofCount, g_lastIntrSrc);
-        if (g_totalFifoErrors != last_totalFifoErrors) {
-            last_totalFifoErrors = g_totalFifoErrors;
-            ft_printf("FIFO ERRORS: %u", g_totalFifoErrors);
-        }
+        get_dsp_data();
         g_lastIntrSrc = 0;
     }
 

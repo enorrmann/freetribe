@@ -43,6 +43,13 @@ under the terms of the GNU Affero General Public License as published by
 
 /*----- Macros -------------------------------------------------------*/
 
+#define SDRAM_ADDRESS 0x00000060 // for ipc transfer headers
+#define BUFFER_SIZE SAMPLERATE 
+
+fract32 *sdram_ring_buffer = (fract32 *)SDRAM_ADDRESS;
+uint32_t record_index = 0;
+
+
 /*----- Typedefs -----------------------------------------------------*/
 
 /**
@@ -67,8 +74,15 @@ typedef enum {
  * @brief   Initialise module.
  */
 void module_init(void) {
+    record_index = 0;
+}
 
-    //
+void store_to_sdram(fract32 sample) {
+    if (record_index >= BUFFER_SIZE) {
+        record_index = 0;
+    }
+    sdram_ring_buffer[record_index] = sample;
+    record_index++;
 }
 
 /**
@@ -78,7 +92,7 @@ void module_init(void) {
  * @param[out]  out Pointer to input buffer.
  */
 void module_process(fract32 *in, fract32 *out) {
-    //
+    store_to_sdram(*in);
 }
 
 /**
