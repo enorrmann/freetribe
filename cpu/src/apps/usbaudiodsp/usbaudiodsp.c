@@ -519,6 +519,23 @@ void EP0IntHandler(uint32_t wrapperSrc) {
 
 /*----- Application entry points --------------------------------------*/
 
+void fillLutTableSquare(){
+    /* Initialize Wavetable with a square wave */
+    int i;
+    for (i = 0; i < WAVETABLE_SIZE; i++) {
+        g_wavetable[i] = (i < (WAVETABLE_SIZE / 2)) ? 0x4000 : -0x4000;
+    }
+
+}
+
+void fillLutTableSaw(){
+    /* Initialize Wavetable with a descending sawtooth wave */
+    int i;
+    for (i = 0; i < WAVETABLE_SIZE; i++) {
+        // La fórmula interpola de 0x4000 (i=0) a -0x4000 (i=WAVETABLE_SIZE-1)
+        g_wavetable[i] = 0x4000 - (0x8000 * i / WAVETABLE_SIZE);
+    }
+}
 t_status app_init(void) {
     PSCModuleControl(SOC_PSC_1_REGS, HW_PSC_USB0, 0, PSC_MDCTL_NEXT_ENABLE);
     UsbPhyOn();
@@ -548,14 +565,11 @@ t_status app_init(void) {
     USBIntEnableControl(USB0_BASE, USB_INTCTRL_RESET | USB_INTCTRL_DISCONNECT | USB_INTCTRL_SOF);
     USBIntEnableEndpoint(USB0_BASE, USB_INTEP_ALL);
 
-    /* Initialize Wavetable with a square wave */
-    int i;
-    for (i = 0; i < WAVETABLE_SIZE; i++) {
-        g_wavetable[i] = (i < (WAVETABLE_SIZE / 2)) ? 0x4000 : -0x4000;
-    }
-
+    //fillLutTable();
+    fillLutTableSaw();
+    
     /* Pre-calculate phase increment for 480 Hz @ 48 kHz */
-    USBAudio_SetFrequency(480/2);
+    USBAudio_SetFrequency(480/4);
 
     USBDevConnect(USB0_BASE);
 
