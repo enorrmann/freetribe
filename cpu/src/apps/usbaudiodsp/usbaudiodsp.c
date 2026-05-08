@@ -329,17 +329,21 @@ static void USBAudio_SendCapture(void) {
             dst[i*2 + 1] = (int16_t)(src[i*2 + 1] >> 16);
         }
 
-        local_packet_index++;
-        if (local_packet_index >= PACKETS_PER_TRANSFER) {
-            has_local_data = false;
+        /* 2. Put the 16-bit converted data into hardware FIFO */
+        if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, g_audioInPacket, AUDIO_EP_MAX_PACKET_SIZE) == 0) {
+            USBEndpointDataSend(USB0_BASE, AUDIO_EP_IN, USB_TRANS_IN);
+            
+            // Éxito: el host consumió el paquete anterior y hay lugar. Avanzamos el puntero!
+            local_packet_index++;
+            if (local_packet_index >= PACKETS_PER_TRANSFER) {
+                has_local_data = false;
+            }
+        } else {
+            // El FIFO está lleno (el host todavía no leyó). 
+            // En High-Speed USB el SOF ocurre 8 veces por ms, pero el host lee 1 vez por ms.
+            // No avanzamos el puntero, lo reintentaremos en la próxima interrupción SOF.
+            g_usb_err_count++;
         }
-    }
-
-    /* 2. Put the 16-bit converted data into hardware FIFO */
-    if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, g_audioInPacket, AUDIO_EP_MAX_PACKET_SIZE) == 0) {
-        USBEndpointDataSend(USB0_BASE, AUDIO_EP_IN, USB_TRANS_IN);
-    } else {
-        g_usb_err_count++;
     }
 
     get_dsp_data();
