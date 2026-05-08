@@ -104,8 +104,9 @@
 void USB0DeviceIntHandler(void) ;
 void USBAudio_SetFrequency(uint32_t frequency);
 
-#define IPC_BUFFER_SIZE_IN_BYTES (192 * 2)
-uint8_t ipc_rx_buffer[2][IPC_BUFFER_SIZE_IN_BYTES] __attribute__((aligned(4)));
+#define PACKETS_PER_TRANSFER 8
+#define IPC_BUFFER_SIZE_IN_BYTES (384 * PACKETS_PER_TRANSFER)
+uint8_t ipc_rx_buffer[2][IPC_BUFFER_SIZE_IN_BYTES] __attribute__((aligned(32)));
 volatile uint8_t ipc_read_idx = 0;
 volatile uint8_t ipc_write_idx = 0;
 volatile bool ipc_data_ready = false;
@@ -133,6 +134,10 @@ volatile int32_t g_last_dsp_sample = 0;
 volatile uint32_t g_sof_count = 0;
 volatile int g_usb_err_count = 0;
 volatile int g_ipc_err_count = 0;
+
+static uint8_t local_packet_index = 0;
+static uint8_t current_reading_buffer = 0;
+static bool has_local_data = false;
 
 static void tripleAck() {
 
@@ -307,16 +312,26 @@ static void USBAudio_SendCapture(void) {
         return;
 
     /* 1. If we have fresh data, convert it from 32-bit DSP format to 16-bit USB format */
-    if (ipc_data_ready) {
-        // Leemos el índice actual y limpiamos el flag ANTES de convertir para evitar race conditions
-        uint8_t local_idx = ipc_read_idx;
-        ipc_data_ready = false; 
+    if (!has_local_data) {
+        if (ipc_data_ready) {
+            current_reading_buffer = ipc_read_idx;
+            ipc_data_ready = false; 
+            has_local_data = true;
+            local_packet_index = 0;
+        }
+    }
 
-        int32_t *src = (int32_t *)ipc_rx_buffer[local_idx];
+    if (has_local_data) {
+        int32_t *src = (int32_t *)(&ipc_rx_buffer[current_reading_buffer][local_packet_index * 384]);
         int16_t *dst = (int16_t *)g_audioInPacket;
         for (int i = 0; i < 48; i++) {
             dst[i*2 + 0] = (int16_t)(src[i*2 + 0] >> 16); 
             dst[i*2 + 1] = (int16_t)(src[i*2 + 1] >> 16);
+        }
+
+        local_packet_index++;
+        if (local_packet_index >= PACKETS_PER_TRANSFER) {
+            has_local_data = false;
         }
     }
 
@@ -690,8 +705,8 @@ void get_dsp_data(){
 
     ipc_transfer_in_progress = true;
 
-    // Calculamos el offset en bytes
-    uint32_t dsp_address = dsp_ring_buffer_address + (g_dsp_buffer_index * IPC_BUFFER_SIZE_IN_BYTES);
+    // g_dsp_buffer_index está en bloques de 384 bytes
+    uint32_t dsp_address = dsp_ring_buffer_address + (g_dsp_buffer_index * 384);
 
     t_ipc_status status = dev_dsp_ipc_read(
         dsp_address, 
@@ -716,8 +731,8 @@ void ipc_callback(void *ctx, t_ipc_status status) {
         ipc_read_idx = ipc_write_idx;
         ipc_data_ready = true;
         
-        // Avanzamos el índice del DSP (circular de 1000 bloques de 96 muestras)
-        g_dsp_buffer_index ++;
+        // Avanzamos el índice del DSP (1000 bloques de 48 muestras = 48000 muestras)
+        g_dsp_buffer_index += PACKETS_PER_TRANSFER;
         if (g_dsp_buffer_index >= 1000) {
             g_dsp_buffer_index = 0;
         }
