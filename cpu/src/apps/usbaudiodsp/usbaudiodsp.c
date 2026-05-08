@@ -104,11 +104,25 @@
 void USB0DeviceIntHandler(void) ;
 void USBAudio_SetFrequency(uint32_t frequency);
 
+/* 
+ * ============================================================================
+ * ARQUITECTURA DE AUDIO IPC (Double-Buffering por Ráfagas)
+ * ============================================================================
+ * Para ocultar la latencia de la interfaz EMIFA y los tiempos de procesamiento 
+ * del bucle principal, no leemos los paquetes de a uno (48 samples = 1ms). 
+ * En su lugar, transferimos un "Chunk" de múltiples paquetes a la vez.
+ * 
+ * Usamos PACKETS_PER_TRANSFER = 8 (equivale a 8ms de audio a 48kHz).
+ * Esto le da al CPU 8 milisegundos enteros para gestionar la siguiente 
+ * transferencia en segundo plano mientras consume la memoria local.
+ */
 #define PACKETS_PER_TRANSFER 8
 #define IPC_BUFFER_SIZE_IN_BYTES (384 * PACKETS_PER_TRANSFER)
+
+// Buffer ping-pong (Doble buffer local) para guardar las ráfagas leídas del DSP
 uint8_t ipc_rx_buffer[2][IPC_BUFFER_SIZE_IN_BYTES] __attribute__((aligned(32)));
-volatile uint8_t ipc_read_idx = 0;
-volatile uint8_t ipc_write_idx = 0;
+volatile uint8_t ipc_read_idx = 0;   // Índice del buffer que está leyendo el USB
+volatile uint8_t ipc_write_idx = 0;  // Índice del buffer en el que está escribiendo el DMA
 volatile bool ipc_data_ready = false;
 volatile bool ipc_transfer_in_progress = false;
 
@@ -135,9 +149,10 @@ volatile uint32_t g_sof_count = 0;
 volatile int g_usb_err_count = 0;
 volatile int g_ipc_err_count = 0;
 
-static uint8_t local_packet_index = 0;
-static uint8_t current_reading_buffer = 0;
-static bool has_local_data = false;
+/* Variables para el consumo gradual del Chunk local en el endpoint USB */
+static uint8_t local_packet_index = 0;      // Qué paquete (0 a 7) estamos enviando actualmente
+static uint8_t current_reading_buffer = 0;  // Qué cara del ping-pong estamos consumiendo
+static bool has_local_data = false;         // Si tenemos un Chunk local listo para consumirse
 
 static void tripleAck() {
 
@@ -301,17 +316,26 @@ static void USBAudio_HandleOutPacket(const uint8_t *data, uint32_t len) {
 /*
  * USBAudio_SendCapture
  *
- * FIX 2: Only send isochronous IN data when the capture interface (Interface 2)
- * has been activated by the host (alt-setting == 1).
- * Previously this ran unconditionally, which kept EP_IN busy even before the
- * host opened the capture stream, causing aplay to report the device as busy.
+ * Esta función es llamada por la interrupción SOF (Start-of-Frame).
+ * 
+ * CONSIDERACIONES DE DISEÑO (High-Speed USB vs Full-Speed USB):
+ * - En High-Speed USB, el SOF se dispara 8 veces por milisegundo (cada 125us).
+ * - Sin embargo, el host (Linux/ALSA) sólo está configurado para consumir 
+ *   1 paquete de 48 samples por milisegundo (bInterval = 4).
+ * - Si consumiéramos un paquete local cada 125us, agotaríamos los datos
+ *   8 veces más rápido de lo que el DSP los produce, saltándonos frames.
+ * - Por eso, *solo* avanzamos nuestro puntero local (local_packet_index)
+ *   si la función USBEndpointDataPut es exitosa (lo que significa que el host
+ *   efectivamente leyó el FIFO del endpoint de nuestro envío anterior).
  */
 static void USBAudio_SendCapture(void) {
 
     if (!isConfigured || g_interfaceAltSetting[IFACE_CAPTURE] != 1)
         return;
 
-    /* 1. If we have fresh data, convert it from 32-bit DSP format to 16-bit USB format */
+    /* 1. Cambio de Buffer (Doble Buffering)
+     * Si nos quedamos sin datos locales, revisamos si el IPC en segundo plano
+     * ya terminó de traernos el siguiente Chunk de 8 paquetes. */
     if (!has_local_data) {
         if (ipc_data_ready) {
             current_reading_buffer = ipc_read_idx;
@@ -321,31 +345,43 @@ static void USBAudio_SendCapture(void) {
         }
     }
 
+    /* 2. Conversión y Envío */
     if (has_local_data) {
+        // Obtenemos un puntero al paquete específico (offset) dentro del chunk actual
         int32_t *src = (int32_t *)(&ipc_rx_buffer[current_reading_buffer][local_packet_index * 384]);
         int16_t *dst = (int16_t *)g_audioInPacket;
+        
+        // El DSP usa enteros fraccionales de 32 bits, los trunamos a 16-bits para el host
         for (int i = 0; i < 48; i++) {
             dst[i*2 + 0] = (int16_t)(src[i*2 + 0] >> 16); 
             dst[i*2 + 1] = (int16_t)(src[i*2 + 1] >> 16);
         }
 
-        /* 2. Put the 16-bit converted data into hardware FIFO */
+        /* Intentamos colocar los datos convertidos en el FIFO de hardware del USB */
         if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, g_audioInPacket, AUDIO_EP_MAX_PACKET_SIZE) == 0) {
             USBEndpointDataSend(USB0_BASE, AUDIO_EP_IN, USB_TRANS_IN);
             
-            // Éxito: el host consumió el paquete anterior y hay lugar. Avanzamos el puntero!
+            // ÉXITO: El host consumió el paquete anterior y había lugar en el FIFO.
+            // Avanzamos el puntero local al siguiente paquete.
             local_packet_index++;
+            
+            // Si ya consumimos los 8 paquetes de esta ráfaga, marcamos que necesitamos más datos.
             if (local_packet_index >= PACKETS_PER_TRANSFER) {
                 has_local_data = false;
             }
         } else {
-            // El FIFO está lleno (el host todavía no leyó). 
-            // En High-Speed USB el SOF ocurre 8 veces por ms, pero el host lee 1 vez por ms.
-            // No avanzamos el puntero, lo reintentaremos en la próxima interrupción SOF.
+            // FALLO: El FIFO está lleno porque el host todavía no lo leyó. 
+            // En High-Speed USB esto sucederá 7 de cada 8 veces.
+            // Simplemente sumamos al contador de errores y retornamos. 
+            // En la próxima interrupción SOF (dentro de 125us) volveremos a intentarlo
+            // con el mismo paquete, sin haber perdido información.
             g_usb_err_count++;
         }
     }
 
+    /* 3. Mantenimiento del IPC en Background
+     * Llama a la máquina de estados. Si no hay transferencia en progreso y 
+     * ya vaciamos la flag ipc_data_ready, se iniciará la descarga del siguiente Chunk */
     get_dsp_data();
 }
 
@@ -701,15 +737,25 @@ void USB0DeviceIntHandler(void) {
 
 
 // usar double buffer aca para no bloquear la llamada 
+/*
+ * get_dsp_data
+ * 
+ * Inicia la petición asíncrona de un "Chunk" de datos (8 paquetes / 8ms) al DSP
+ * a través de la interfaz HostDMA/EMIFA (dev_dsp_ipc_read).
+ *
+ * El diseño garantiza que la lectura DMA ocurra completamente en background.
+ * Mientras el DSP envía los 8ms de audio a través del bus, el CPU tiene tiempo 
+ * de sobra para consumirlos localmente de su buffer alterno en el SOF.
+ */
 void get_dsp_data(){
     const uint32_t dsp_ring_buffer_address = 0x00000060;
 
-    // Si ya hay una transferencia pendiente o datos listos, no empezamos otra
+    // Si ya hay una transferencia pendiente o datos listos (Chunk sin consumir), no empezamos otra
     if (ipc_data_ready || ipc_transfer_in_progress) return; 
 
     ipc_transfer_in_progress = true;
 
-    // g_dsp_buffer_index está en bloques de 384 bytes
+    // Calculamos de dónde leer en el buffer anular del DSP (en bloques de 384 bytes)
     uint32_t dsp_address = dsp_ring_buffer_address + (g_dsp_buffer_index * 384);
 
     t_ipc_status status = dev_dsp_ipc_read(
@@ -726,22 +772,31 @@ void get_dsp_data(){
     }
 }
 
-// llamado cuando termina la transferencia de datos del ipc
+/*
+ * ipc_callback
+ * 
+ * Callback invocado por el hardware cuando la ráfaga de HostDMA ha terminado 
+ * de poblar nuestro ipc_rx_buffer[ipc_write_idx] de forma segura.
+ */
 void ipc_callback(void *ctx, t_ipc_status status) {
     ipc_transfer_in_progress = false;
 
     if (status == IPC_SUCCESS) {
-        // Indicamos que el buffer actual está listo para ser leído
+        // Marcamos el índice actual de escritura como listo para ser leído por el hilo USB.
         ipc_read_idx = ipc_write_idx;
         ipc_data_ready = true;
         
-        // Avanzamos el índice del DSP (1000 bloques de 48 muestras = 48000 muestras)
+        // Avanzamos el índice del DSP para la *siguiente* petición en el background.
+        // Avanzamos 8 paquetes de golpe (PACKETS_PER_TRANSFER).
+        // El anillo del DSP aloja 96000 muestras estéreo continuas. El host las procesa 
+        // de a bloques de 48, dando lugar a un buffer circular conceptual de 1000 bloques.
+        // Por eso, la envoltura ocurre matemáticamente perfecta al llegar a 1000.
         g_dsp_buffer_index += PACKETS_PER_TRANSFER;
         if (g_dsp_buffer_index >= 1000) {
             g_dsp_buffer_index = 0;
         }
 
-        // Alternamos el buffer de escritura para la próxima petición
+        // Alternamos el rol de nuestro doble-buffer local
         ipc_write_idx = (ipc_write_idx + 1) % 2;
     } else {
         g_ipc_err_count++;
