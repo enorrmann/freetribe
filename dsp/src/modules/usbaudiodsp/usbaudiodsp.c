@@ -44,7 +44,7 @@ under the terms of the GNU Affero General Public License as published by
 /*----- Macros -------------------------------------------------------*/
 
 #define SDRAM_ADDRESS 0x00000060 // for ipc transfer headers
-#define BUFFER_SIZE SAMPLERATE 
+#define BUFFER_SIZE (SAMPLERATE * 2) // Estéreo intercalado
 
 fract32 *sdram_ring_buffer = (fract32 *)SDRAM_ADDRESS;
 uint32_t record_index = 0;
@@ -77,12 +77,15 @@ void module_init(void) {
     record_index = 0;
 }
 
-void store_to_sdram(fract32 sample) {
-    if (record_index >= BUFFER_SIZE) {
+void store_to_sdram(fract32 left, fract32 right) {
+    static fract32 counter = 0;
+    counter += 1000000; 
+
+    if (record_index >= BUFFER_SIZE - 1) {
         record_index = 0;
     }
-    sdram_ring_buffer[record_index] = sample;
-    record_index++;
+    sdram_ring_buffer[record_index++] = counter;      // Canal L
+    sdram_ring_buffer[record_index++] = -counter;     // Canal R (invertido)
 }
 
 /**
@@ -92,7 +95,7 @@ void store_to_sdram(fract32 sample) {
  * @param[out]  out Pointer to input buffer.
  */
 void module_process(fract32 *in, fract32 *out) {
-    store_to_sdram(*in);
+    store_to_sdram(in[0], in[1]);
 }
 
 /**

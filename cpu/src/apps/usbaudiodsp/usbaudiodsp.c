@@ -104,11 +104,12 @@
 void USB0DeviceIntHandler(void) ;
 void USBAudio_SetFrequency(uint32_t frequency);
 
-#define IPC_BUFFER_SIZE_IN_BYTES (192)
+#define IPC_BUFFER_SIZE_IN_BYTES (192 * 2)
 uint8_t ipc_rx_buffer[2][IPC_BUFFER_SIZE_IN_BYTES] __attribute__((aligned(4)));
 volatile uint8_t ipc_read_idx = 0;
 volatile uint8_t ipc_write_idx = 0;
 volatile bool ipc_data_ready = false;
+volatile bool ipc_transfer_in_progress = false;
 
 uint32_t g_dsp_buffer_index = 0;
 
@@ -672,8 +673,10 @@ void USB0DeviceIntHandler(void) {
 void get_dsp_data(){
     const uint32_t dsp_ring_buffer_address = 0x00000060;
 
-    // Si ya hay una transferencia pendiente, no empezamos otra
-    if (ipc_data_ready) return; 
+    // Si ya hay una transferencia pendiente o datos listos, no empezamos otra
+    if (ipc_data_ready || ipc_transfer_in_progress) return; 
+
+    ipc_transfer_in_progress = true;
 
     // Calculamos el offset en bytes
     uint32_t dsp_address = dsp_ring_buffer_address + (g_dsp_buffer_index * IPC_BUFFER_SIZE_IN_BYTES);
@@ -687,32 +690,33 @@ void get_dsp_data(){
     );
 
     if (status != IPC_SUCCESS) {
+        ipc_transfer_in_progress = false;
         g_ipc_err_count++;
     }
 }
 
 // llamado cuando termina la transferencia de datos del ipc
 void ipc_callback(void *ctx, t_ipc_status status) {
+    ipc_transfer_in_progress = false;
 
     if (status == IPC_SUCCESS) {
-        // Convertimos de 32-bit MONO a 16-bit STEREO
+        // Convertimos de 32-bit STEREO INTERLEAVED a 16-bit STEREO para USB
         int32_t *src = (int32_t *)ipc_rx_buffer[ipc_write_idx];
         int16_t *dst = (int16_t *)g_audioInPacket;
         
         g_last_dsp_sample = src[0];
         
         for (int i = 0; i < 48; i++) {
-            // Tomamos los 16 bits superiores (suponiendo Q31)
-            int16_t sample16 = (int16_t)(src[i] >> 16);
-            dst[i*2 + 0] = sample16; // Canal L
-            dst[i*2 + 1] = sample16; // Canal R
+            // src[i*2] es L, src[i*2 + 1] es R
+            dst[i*2 + 0] = (int16_t)(src[i*2 + 0] >> 16); 
+            dst[i*2 + 1] = (int16_t)(src[i*2 + 1] >> 16);
         }
 
         // Indicamos que el buffer actual está listo para ser leído
         ipc_read_idx = ipc_write_idx;
         ipc_data_ready = true;
         
-        // Avanzamos el índice del DSP (1000 bloques de 48 muestras = 48000 muestras)
+        // Avanzamos el índice del DSP (circular de 1000 bloques de 96 muestras)
         g_dsp_buffer_index ++;
         if (g_dsp_buffer_index >= 1000) {
             g_dsp_buffer_index = 0;
@@ -720,5 +724,7 @@ void ipc_callback(void *ctx, t_ipc_status status) {
 
         // Alternamos el buffer de escritura para la próxima petición
         ipc_write_idx = (ipc_write_idx + 1) % 2;
+    } else {
+        g_ipc_err_count++;
     }
 }
