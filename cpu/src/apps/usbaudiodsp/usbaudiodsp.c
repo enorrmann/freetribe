@@ -296,21 +296,22 @@ static void USBAudio_SendCapture(void) {
     if (!isConfigured || g_interfaceAltSetting[IFACE_CAPTURE] != 1)
         return;
 
-    /* 1. Generate audio in the buffer using current phase and LUT */
-    //uint32_t nextPhase = USBAudio_FillFromLUT(g_squarePhase);
+    /* 1. If we have fresh data, convert it from 32-bit DSP format to 16-bit USB format */
+    if (ipc_data_ready) {
+        int32_t *src = (int32_t *)ipc_rx_buffer[ipc_read_idx];
+        int16_t *dst = (int16_t *)g_audioInPacket;
+        for (int i = 0; i < 48; i++) {
+            dst[i*2 + 0] = (int16_t)(src[i*2 + 0] >> 16); 
+            dst[i*2 + 1] = (int16_t)(src[i*2 + 1] >> 16);
+        }
+        ipc_data_ready = false; // Consumed
+    }
 
-    /* 2. Try to put data into hardware FIFO */
-    uint8_t *pData = ipc_data_ready ? ipc_rx_buffer[ipc_read_idx] : g_audioInPacket;
-    
-    if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, pData, AUDIO_EP_MAX_PACKET_SIZE) == 0) {
-        /* 3. ONLY IF SUCCESSFUL, advance the global phase */
-        //g_squarePhase = nextPhase;
+    /* 2. Put the 16-bit converted data into hardware FIFO */
+    if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, g_audioInPacket, AUDIO_EP_MAX_PACKET_SIZE) == 0) {
         USBEndpointDataSend(USB0_BASE, AUDIO_EP_IN, USB_TRANS_IN);
-        ipc_data_ready = false; // Consumido
     } else {
         g_usb_err_count++;
-        // Si el USB está ocupado, descartamos este paquete de IPC para no bloquear el flujo
-        ipc_data_ready = false; 
     }
 
     get_dsp_data();
@@ -698,18 +699,6 @@ void ipc_callback(void *ctx, t_ipc_status status) {
     ipc_transfer_in_progress = false;
 
     if (status == IPC_SUCCESS) {
-        // Convertimos de 32-bit STEREO INTERLEAVED a 16-bit STEREO para USB
-        int32_t *src = (int32_t *)ipc_rx_buffer[ipc_write_idx];
-        int16_t *dst = (int16_t *)g_audioInPacket;
-        
-        g_last_dsp_sample = src[0];
-        
-        for (int i = 0; i < 48; i++) {
-            // src[i*2] es L, src[i*2 + 1] es R
-            dst[i*2 + 0] = (int16_t)(src[i*2 + 0] >> 16); 
-            dst[i*2 + 1] = (int16_t)(src[i*2 + 1] >> 16);
-        }
-
         // Indicamos que el buffer actual está listo para ser leído
         ipc_read_idx = ipc_write_idx;
         ipc_data_ready = true;
