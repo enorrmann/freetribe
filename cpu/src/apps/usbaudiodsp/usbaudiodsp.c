@@ -239,6 +239,16 @@ static void USBDeactivatePlayback(void) {
 static void USBActivateCapture(void) {
     g_squarePhase = 0;
     g_audioOutLen = 0;
+
+    /* Sincronización CPU-DSP: 
+     * Reseteamos el puntero de escritura del DSP (en la dir 0x5C) a 0.
+     * Ponemos el puntero de lectura del CPU a 500 (la mitad del buffer).
+     * Esto garantiza que los punteros estén separados por 0.5 segundos 
+     * y no se crucen causando saltos de fase / glitches.
+     */
+    static uint32_t zero = 0;
+    dev_dsp_ipc_transfer(0x0000005C, &zero, 1, NULL, NULL);
+    g_dsp_buffer_index = 500;
 }
 
 static void USBDeactivateCapture(void) {
@@ -298,13 +308,16 @@ static void USBAudio_SendCapture(void) {
 
     /* 1. If we have fresh data, convert it from 32-bit DSP format to 16-bit USB format */
     if (ipc_data_ready) {
-        int32_t *src = (int32_t *)ipc_rx_buffer[ipc_read_idx];
+        // Leemos el índice actual y limpiamos el flag ANTES de convertir para evitar race conditions
+        uint8_t local_idx = ipc_read_idx;
+        ipc_data_ready = false; 
+
+        int32_t *src = (int32_t *)ipc_rx_buffer[local_idx];
         int16_t *dst = (int16_t *)g_audioInPacket;
         for (int i = 0; i < 48; i++) {
             dst[i*2 + 0] = (int16_t)(src[i*2 + 0] >> 16); 
             dst[i*2 + 1] = (int16_t)(src[i*2 + 1] >> 16);
         }
-        ipc_data_ready = false; // Consumed
     }
 
     /* 2. Put the 16-bit converted data into hardware FIFO */
