@@ -104,13 +104,13 @@
 void USB0DeviceIntHandler(void) ;
 void USBAudio_SetFrequency(uint32_t frequency);
 
-#define IPC_BUFFER_SIZE (192)
-uint32_t ipc_rx_buffer[IPC_BUFFER_SIZE];
+#define IPC_BUFFER_SIZE_IN_BYTES (192)
+uint8_t ipc_rx_buffer[2][IPC_BUFFER_SIZE_IN_BYTES] __attribute__((aligned(4)));
+volatile uint8_t ipc_read_idx = 0;
+volatile uint8_t ipc_write_idx = 0;
+volatile bool ipc_data_ready = false;
 
-
-        extern volatile uint32_t g_isrCount;
-        extern volatile uint32_t g_sofCount;
-        extern volatile uint32_t g_lastIntrSrc;
+uint32_t g_dsp_buffer_index = 0;
 
 /*----- Types ---------------------------------------------------------*/
 
@@ -124,25 +124,14 @@ typedef struct __attribute__((packed)) {
 
 
 void ipc_callback(void *ctx, t_ipc_status status);
+void get_dsp_data(void);
 
 
-void get_dsp_data(){
-    const uint32_t dsp_ring_buffer_address = 0x00000060;
 
-    dev_dsp_ipc_read(
-        dsp_ring_buffer_address, // address in dsp memory
-        ipc_rx_buffer, // destination buffer in cpu memory
-        IPC_BUFFER_SIZE, // number of 32-bit words to read
-        ipc_callback, // callback function when read is complete
-        (void *)0x23AC1D23 // arbitrary user context value for testing
-    );
-
-}
-
-// llamado cuando termina la transferencia de datos del ipc
-void ipc_callback(void *ctx, t_ipc_status status) {
-    ft_printf("IPC transfer status : %i, data %u", (int)status, ipc_rx_buffer[0]);
-}
+volatile int32_t g_last_dsp_sample = 0;
+volatile uint32_t g_sof_count = 0;
+volatile int g_usb_err_count = 0;
+volatile int g_ipc_err_count = 0;
 
 static void tripleAck() {
 
@@ -165,10 +154,9 @@ static const uint8_t *g_pEP0Data = 0;
 static uint32_t g_uEP0Len = 0;
 
 static uint8_t isConfigured = 0;
-
 static uint8_t g_audioOutPacket[AUDIO_EP_MAX_PACKET_SIZE];
 static uint32_t g_audioOutLen = 0;
-static uint8_t g_audioInPacket[AUDIO_EP_MAX_PACKET_SIZE];
+static uint8_t g_audioInPacket[AUDIO_EP_MAX_PACKET_SIZE] __attribute__((aligned(4)));
 static uint32_t g_squarePhase = 0;
 
 /* Wavetable / NCO State */
@@ -303,18 +291,28 @@ static void USBAudio_HandleOutPacket(const uint8_t *data, uint32_t len) {
  * host opened the capture stream, causing aplay to report the device as busy.
  */
 static void USBAudio_SendCapture(void) {
+
     if (!isConfigured || g_interfaceAltSetting[IFACE_CAPTURE] != 1)
         return;
 
     /* 1. Generate audio in the buffer using current phase and LUT */
-    uint32_t nextPhase = USBAudio_FillFromLUT(g_squarePhase);
+    //uint32_t nextPhase = USBAudio_FillFromLUT(g_squarePhase);
 
     /* 2. Try to put data into hardware FIFO */
-    if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, g_audioInPacket, AUDIO_EP_MAX_PACKET_SIZE) == 0) {
+    uint8_t *pData = ipc_data_ready ? ipc_rx_buffer[ipc_read_idx] : g_audioInPacket;
+    
+    if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, pData, AUDIO_EP_MAX_PACKET_SIZE) == 0) {
         /* 3. ONLY IF SUCCESSFUL, advance the global phase */
-        g_squarePhase = nextPhase;
+        //g_squarePhase = nextPhase;
         USBEndpointDataSend(USB0_BASE, AUDIO_EP_IN, USB_TRANS_IN);
+        ipc_data_ready = false; // Consumido
+    } else {
+        g_usb_err_count++;
+        // Si el USB está ocupado, descartamos este paquete de IPC para no bloquear el flujo
+        ipc_data_ready = false; 
     }
+
+    get_dsp_data();
 }
 
 /*
@@ -382,8 +380,8 @@ void EP0IntHandler(uint32_t wrapperSrc) {
 
     /* SOF - Start of Frame (wrapper bit 19) */
     if (wrapperSrc & WRAPPER_SOF_BIT) {
-        g_sofCount++;
         /* Send isochronous audio each 1ms frame */
+        g_sof_count++;
         USBAudio_SendCapture();
     }
 
@@ -626,19 +624,21 @@ void app_run(void) {
         static int ledState = 0;
         ledState = !ledState;
         ft_set_led(LED_PLAY, ledState ? 255 : 0);
-        get_dsp_data();
-        g_lastIntrSrc = 0;
     }
 
     if (per_gpio_get_indexed(GPIO_POWER_BUTTON) == 0) {
         ft_shutdown();
     }
-}
 
-/* Diagnostic counters – written in ISR, read in app_run */
-volatile uint32_t g_isrCount = 0;
-volatile uint32_t g_sofCount = 0;
-volatile uint32_t g_lastIntrSrc = 0;
+    static int debug_timer = 0;
+    debug_timer++;
+    if (debug_timer >= 100000) {
+        debug_timer = 0;
+        ft_printf("D:0x%08x I:%d R:%d S:%d U:%d P:%d\n", 
+            (unsigned int)g_last_dsp_sample, (int)g_dsp_buffer_index, (int)ipc_data_ready, 
+            (unsigned int)g_sof_count, g_usb_err_count, g_ipc_err_count);
+    }
+}
 
 /**
  * @brief  Top-level USB interrupt handler (registered with AINTC).
@@ -654,7 +654,6 @@ volatile uint32_t g_lastIntrSrc = 0;
  *      write EOI to release the interrupt line.
  */
 void USB0DeviceIntHandler(void) {
-    g_isrCount++;
 
     /* Read wrapper INTR_SRC — reliable source for all interrupt events */
     uint32_t wrapperSrc = HWREG(USB_0_OTGBASE + USB_0_INTR_SRC);
@@ -662,10 +661,64 @@ void USB0DeviceIntHandler(void) {
     /* Read & discard Mentor INTRUSB to clear core-level bits */
     (void)HWREGB(USB0_BASE + USB_0_IS);
 
-    /* Accumulate for diagnostics (reset by app_run heartbeat) */
-    g_lastIntrSrc |= wrapperSrc;
 
     EP0IntHandler(wrapperSrc);
     USBAudio_ProcessOut();
     tripleAck();
+}
+
+
+// usar double buffer aca para no bloquear la llamada 
+void get_dsp_data(){
+    const uint32_t dsp_ring_buffer_address = 0x00000060;
+
+    // Si ya hay una transferencia pendiente, no empezamos otra
+    if (ipc_data_ready) return; 
+
+    // Calculamos el offset en bytes
+    uint32_t dsp_address = dsp_ring_buffer_address + (g_dsp_buffer_index * IPC_BUFFER_SIZE_IN_BYTES);
+
+    t_ipc_status status = dev_dsp_ipc_read(
+        dsp_address, 
+        (uint32_t *)ipc_rx_buffer[ipc_write_idx], 
+        IPC_BUFFER_SIZE_IN_BYTES / 4, 
+        ipc_callback, 
+        (void *)0x23AC1D23 
+    );
+
+    if (status != IPC_SUCCESS) {
+        g_ipc_err_count++;
+    }
+}
+
+// llamado cuando termina la transferencia de datos del ipc
+void ipc_callback(void *ctx, t_ipc_status status) {
+
+    if (status == IPC_SUCCESS) {
+        // Convertimos de 32-bit MONO a 16-bit STEREO
+        int32_t *src = (int32_t *)ipc_rx_buffer[ipc_write_idx];
+        int16_t *dst = (int16_t *)g_audioInPacket;
+        
+        g_last_dsp_sample = src[0];
+        
+        for (int i = 0; i < 48; i++) {
+            // Tomamos los 16 bits superiores (suponiendo Q31)
+            int16_t sample16 = (int16_t)(src[i] >> 16);
+            dst[i*2 + 0] = sample16; // Canal L
+            dst[i*2 + 1] = sample16; // Canal R
+        }
+
+        // Indicamos que el buffer actual está listo para ser leído
+        ipc_read_idx = ipc_write_idx;
+        ipc_data_ready = true;
+        
+        // Avanzamos el índice del DSP (1000 bloques de 48 muestras = 48000 muestras)
+        g_dsp_buffer_index ++;
+        if (g_dsp_buffer_index >= 1000) {
+            g_dsp_buffer_index = 0;
+        }
+
+        // Alternamos el buffer de escritura para la próxima petición
+        ipc_write_idx = (ipc_write_idx + 1) % 2;
+    }
 }
