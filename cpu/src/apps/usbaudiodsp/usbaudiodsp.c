@@ -635,9 +635,7 @@ void app_run(void) {
     debug_timer++;
     if (debug_timer >= 100000) {
         debug_timer = 0;
-        ft_printf("D:0x%08x I:%d R:%d S:%d U:%d P:%d\n", 
-            (unsigned int)g_last_dsp_sample, (int)g_dsp_buffer_index, (int)ipc_data_ready, 
-            (unsigned int)g_sof_count, g_usb_err_count, g_ipc_err_count);
+        //ft_printf("D:0x%08x I:%d R:%d S:%d U:%d P:%d\n",             (unsigned int)g_last_dsp_sample, (int)g_dsp_buffer_index, (int)ipc_data_ready,             (unsigned int)g_sof_count, g_usb_err_count, g_ipc_err_count);
     }
 }
 
