@@ -117,7 +117,8 @@ void USBAudio_SetFrequency(uint32_t frequency);
  * transferencia en segundo plano mientras consume la memoria local.
  */
 #define PACKETS_PER_TRANSFER 8
-#define IPC_BUFFER_SIZE_IN_BYTES (384 * PACKETS_PER_TRANSFER)
+#define TRANSFER_BLOCK_SIZE_IN_BYTES  384
+#define IPC_BUFFER_SIZE_IN_BYTES (TRANSFER_BLOCK_SIZE_IN_BYTES * PACKETS_PER_TRANSFER)
 
 // Buffer ping-pong (Doble buffer local) para guardar las ráfagas leídas del DSP
 uint8_t ipc_rx_buffer[2][IPC_BUFFER_SIZE_IN_BYTES] __attribute__((aligned(32)));
@@ -348,7 +349,7 @@ static void USBAudio_SendCapture(void) {
     /* 2. Conversión y Envío */
     if (has_local_data) {
         // Obtenemos un puntero al paquete específico (offset) dentro del chunk actual
-        int32_t *src = (int32_t *)(&ipc_rx_buffer[current_reading_buffer][local_packet_index * 384]);
+        int32_t *src = (int32_t *)(&ipc_rx_buffer[current_reading_buffer][local_packet_index * TRANSFER_BLOCK_SIZE_IN_BYTES]);
         int16_t *dst = (int16_t *)g_audioInPacket;
         
         // El DSP usa enteros fraccionales de 32 bits, los trunamos a 16-bits para el host
@@ -755,13 +756,13 @@ void get_dsp_data(){
 
     ipc_transfer_in_progress = true;
 
-    // Calculamos de dónde leer en el buffer anular del DSP (en bloques de 384 bytes)
-    uint32_t dsp_address = dsp_ring_buffer_address + (g_dsp_buffer_index * 384);
+    // Calculamos de dónde leer en el buffer anular del DSP (en bloques de TRANSFER_BLOCK_SIZE_IN_BYTES bytes)
+    uint32_t dsp_address = dsp_ring_buffer_address + (g_dsp_buffer_index * TRANSFER_BLOCK_SIZE_IN_BYTES);
 
     t_ipc_status status = dev_dsp_ipc_read(
         dsp_address, 
         (uint32_t *)ipc_rx_buffer[ipc_write_idx], 
-        IPC_BUFFER_SIZE_IN_BYTES / 4, 
+        IPC_BUFFER_SIZE_IN_BYTES / 4, // /4 porque buffer esta en bytes pero la función espera cantidad de palabras de 32 bits
         ipc_callback, 
         (void *)0x23AC1D23 
     );
