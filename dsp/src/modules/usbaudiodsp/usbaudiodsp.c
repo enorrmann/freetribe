@@ -44,7 +44,7 @@ under the terms of the GNU Affero General Public License as published by
 /*----- Macros -------------------------------------------------------*/
 
 #define SDRAM_ADDRESS 0x00000060 // for ipc transfer headers
-#define BUFFER_SIZE (SAMPLERATE * 2) // Estéreo intercalado
+#define DSP_BUFFER_SIZE_IN_32_BIT_WORDS (48000 * 2) // must be the same on the cpu side
 
 fract32 *sdram_ring_buffer = (fract32 *)SDRAM_ADDRESS;
 uint32_t record_index = 0;
@@ -83,15 +83,15 @@ void store_to_sdram(fract32 left, fract32 right) {
     static fract32 counter = 0;
     counter += 1000000 * 8; 
 
-    if (*g_record_index_ptr >= BUFFER_SIZE - 1) {
+    if (*g_record_index_ptr >= DSP_BUFFER_SIZE_IN_32_BIT_WORDS - 1) {
         *g_record_index_ptr = 0;
     }
     
     uint32_t idx = *g_record_index_ptr;
-    //sdram_ring_buffer[idx++] = counter;      // Canal L
-    //sdram_ring_buffer[idx++] = -counter;     // Canal R (invertido)
-    sdram_ring_buffer[idx++] = left;      // Canal L
-    sdram_ring_buffer[idx++] = right;     // Canal R (invertido)
+    sdram_ring_buffer[idx++] = counter;      // Canal L
+    sdram_ring_buffer[idx++] = -counter;     // Canal R (invertido)
+    //sdram_ring_buffer[idx++] = left;      // Canal L
+    //sdram_ring_buffer[idx++] = right;     // Canal R (invertido)
 
     *g_record_index_ptr = idx;
 }

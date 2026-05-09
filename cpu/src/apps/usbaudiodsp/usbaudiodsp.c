@@ -108,6 +108,9 @@ void USBAudio_SetFrequency(uint32_t frequency);
 #define IPC_BUFFER_SIZE_IN_32_BIT_WORDS (IPC_BUFFER_SIZE_IN_BYTES / 4)
 #define BUFFER_DELAY_IN_MS 50
 
+#define DSP_BUFFER_SIZE_IN_32_BIT_WORDS (48000 * 2) // must be the same on the dsp side
+#define MAX_DSP_BUFFER_INDEX (DSP_BUFFER_SIZE_IN_32_BIT_WORDS / IPC_BUFFER_SIZE_IN_32_BIT_WORDS)
+
 // Buffer ping-pong (Doble buffer local) para guardar las ráfagas leídas del DSP
 uint8_t ipc_rx_buffer[2][IPC_BUFFER_SIZE_IN_BYTES] __attribute__((aligned(32)));
 volatile uint8_t ipc_read_idx = 0;   // Índice del buffer que está leyendo el USB
@@ -690,7 +693,7 @@ void app_run(void) {
     debug_timer++;
     if (debug_timer >= 100000) {
         debug_timer = 0;
-        //ft_printf("D:0x%08x I:%d R:%d S:%d U:%d P:%d\n",             (unsigned int)g_last_dsp_sample, (int)g_dsp_buffer_index, (int)ipc_data_ready,             (unsigned int)g_sof_count, g_usb_err_count, g_ipc_err_count);
+        //ft_printf("D:0x%08x I:%d R:%d S:%d U:%d P:%d\n",             (unsigned int)g_last_dsp_sample, (int)g_dsp_buffer_index * IPC_BUFFER_SIZE_IN_BYTES, (int)ipc_data_ready,             (unsigned int)g_sof_count, g_usb_err_count, g_ipc_err_count);
     }
 }
 
@@ -773,7 +776,7 @@ void ipc_callback(void *ctx, t_ipc_status status) {
         ipc_data_ready = true;
         
         g_dsp_buffer_index += 1;
-        if (g_dsp_buffer_index >= 1000) { // WHY 1000 ?
+        if (g_dsp_buffer_index >= MAX_DSP_BUFFER_INDEX) {
             g_dsp_buffer_index = 0;
         }
 
