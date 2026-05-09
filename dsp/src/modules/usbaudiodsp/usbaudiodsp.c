@@ -81,15 +81,18 @@ void module_init(void) {
 
 void store_to_sdram(fract32 left, fract32 right) {
     static fract32 counter = 0;
-    counter += 1000000; 
+    counter += 1000000 * 8; 
 
     if (*g_record_index_ptr >= BUFFER_SIZE - 1) {
         *g_record_index_ptr = 0;
     }
     
     uint32_t idx = *g_record_index_ptr;
-    sdram_ring_buffer[idx++] = counter;      // Canal L
-    sdram_ring_buffer[idx++] = -counter;     // Canal R (invertido)
+//    sdram_ring_buffer[idx++] = counter;      // Canal L
+    //sdram_ring_buffer[idx++] = -counter;     // Canal R (invertido)
+    sdram_ring_buffer[idx++] = left;      // Canal L
+    sdram_ring_buffer[idx++] = right;     // Canal R (invertido)
+
     *g_record_index_ptr = idx;
 }
 
