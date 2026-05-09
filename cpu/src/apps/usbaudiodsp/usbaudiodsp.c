@@ -104,21 +104,7 @@
 void USB0DeviceIntHandler(void) ;
 void USBAudio_SetFrequency(uint32_t frequency);
 
-/* 
- * ============================================================================
- * ARQUITECTURA DE AUDIO IPC (Double-Buffering por Ráfagas)
- * ============================================================================
- * Para ocultar la latencia de la interfaz EMIFA y los tiempos de procesamiento 
- * del bucle principal, no leemos los paquetes de a uno (48 samples = 1ms). 
- * En su lugar, transferimos un "Chunk" de múltiples paquetes a la vez.
- * 
- * Usamos PACKETS_PER_TRANSFER = 8 (equivale a 8ms de audio a 48kHz).
- * Esto le da al CPU 8 milisegundos enteros para gestionar la siguiente 
- * transferencia en segundo plano mientras consume la memoria local.
- */
-#define PACKETS_PER_TRANSFER 8
-#define TRANSFER_BLOCK_SIZE_IN_BYTES  384
-#define IPC_BUFFER_SIZE_IN_BYTES (TRANSFER_BLOCK_SIZE_IN_BYTES * PACKETS_PER_TRANSFER)
+#define IPC_BUFFER_SIZE_IN_BYTES (AUDIO_EP_MAX_PACKET_SIZE * 2)
 #define IPC_BUFFER_SIZE_IN_32_BIT_WORDS (IPC_BUFFER_SIZE_IN_BYTES / 4)
 
 // Buffer ping-pong (Doble buffer local) para guardar las ráfagas leídas del DSP
@@ -350,7 +336,7 @@ static void USBAudio_SendCapture(void) {
     /* 2. Conversión y Envío */
     if (has_local_data) {
         // Obtenemos un puntero al paquete específico (offset) dentro del chunk actual
-        int32_t *src = (int32_t *)(&ipc_rx_buffer[current_reading_buffer][local_packet_index * TRANSFER_BLOCK_SIZE_IN_BYTES]);
+        int32_t *src = (int32_t *)(&ipc_rx_buffer[current_reading_buffer][local_packet_index * IPC_BUFFER_SIZE_IN_BYTES]);
         int16_t *dst = (int16_t *)g_audioInPacket;
         
         // El DSP usa enteros fraccionales de 32 bits, los trunamos a 16-bits para el host
@@ -366,11 +352,8 @@ static void USBAudio_SendCapture(void) {
             // ÉXITO: El host consumió el paquete anterior y había lugar en el FIFO.
             // Avanzamos el puntero local al siguiente paquete.
             local_packet_index++;
+            has_local_data = false;
             
-            // Si ya consumimos los 8 paquetes de esta ráfaga, marcamos que necesitamos más datos.
-            if (local_packet_index >= PACKETS_PER_TRANSFER) {
-                has_local_data = false;
-            }
         } else {
             // FALLO: El FIFO está lleno porque el host todavía no lo leyó. 
             // En High-Speed USB esto sucederá 7 de cada 8 veces.
@@ -757,8 +740,8 @@ void get_dsp_data(){
 
     ipc_transfer_in_progress = true;
 
-    // Calculamos de dónde leer en el buffer anular del DSP (en bloques de TRANSFER_BLOCK_SIZE_IN_BYTES bytes)
-    uint32_t dsp_address = dsp_ring_buffer_address + (g_dsp_buffer_index * TRANSFER_BLOCK_SIZE_IN_BYTES);
+    // Calculamos de dónde leer en el buffer anular del DSP (en bloques de IPC_BUFFER_SIZE_IN_BYTES bytes)
+    uint32_t dsp_address = dsp_ring_buffer_address + (g_dsp_buffer_index * IPC_BUFFER_SIZE_IN_BYTES);
 
     t_ipc_status status = dev_dsp_ipc_read(
         dsp_address, 
@@ -788,13 +771,8 @@ void ipc_callback(void *ctx, t_ipc_status status) {
         ipc_read_idx = ipc_write_idx;
         ipc_data_ready = true;
         
-        // Avanzamos el índice del DSP para la *siguiente* petición en el background.
-        // Avanzamos 8 paquetes de golpe (PACKETS_PER_TRANSFER).
-        // El anillo del DSP aloja 96000 muestras estéreo continuas. El host las procesa 
-        // de a bloques de 48, dando lugar a un buffer circular conceptual de 1000 bloques.
-        // Por eso, la envoltura ocurre matemáticamente perfecta al llegar a 1000.
-        g_dsp_buffer_index += PACKETS_PER_TRANSFER;
-        if (g_dsp_buffer_index >= 1000) {
+        g_dsp_buffer_index += 1;
+        if (g_dsp_buffer_index >= 1000) { // WHY 1000 ?
             g_dsp_buffer_index = 0;
         }
 
