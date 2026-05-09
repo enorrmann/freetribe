@@ -119,6 +119,7 @@ void USBAudio_SetFrequency(uint32_t frequency);
 #define PACKETS_PER_TRANSFER 8
 #define TRANSFER_BLOCK_SIZE_IN_BYTES  384
 #define IPC_BUFFER_SIZE_IN_BYTES (TRANSFER_BLOCK_SIZE_IN_BYTES * PACKETS_PER_TRANSFER)
+#define IPC_BUFFER_SIZE_IN_32_BIT_WORDS (IPC_BUFFER_SIZE_IN_BYTES / 4)
 
 // Buffer ping-pong (Doble buffer local) para guardar las ráfagas leídas del DSP
 uint8_t ipc_rx_buffer[2][IPC_BUFFER_SIZE_IN_BYTES] __attribute__((aligned(32)));
@@ -762,7 +763,7 @@ void get_dsp_data(){
     t_ipc_status status = dev_dsp_ipc_read(
         dsp_address, 
         (uint32_t *)ipc_rx_buffer[ipc_write_idx], 
-        IPC_BUFFER_SIZE_IN_BYTES / 4, // /4 porque buffer esta en bytes pero la función espera cantidad de palabras de 32 bits
+        IPC_BUFFER_SIZE_IN_32_BIT_WORDS, //  cantidad de palabras de 32 bits
         ipc_callback, 
         (void *)0x23AC1D23 
     );
