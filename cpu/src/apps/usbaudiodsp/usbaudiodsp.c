@@ -106,6 +106,7 @@ void USBAudio_SetFrequency(uint32_t frequency);
 
 #define IPC_BUFFER_SIZE_IN_BYTES (AUDIO_EP_MAX_PACKET_SIZE * 2)
 #define IPC_BUFFER_SIZE_IN_32_BIT_WORDS (IPC_BUFFER_SIZE_IN_BYTES / 4)
+#define BUFFER_DELAY_IN_MS 50
 
 // Buffer ping-pong (Doble buffer local) para guardar las ráfagas leídas del DSP
 uint8_t ipc_rx_buffer[2][IPC_BUFFER_SIZE_IN_BYTES] __attribute__((aligned(32)));
@@ -250,13 +251,13 @@ static void USBActivateCapture(void) {
 
     /* Sincronización CPU-DSP: 
      * Reseteamos el puntero de escritura del DSP (en la dir 0x5C) a 0.
-     * Ponemos el puntero de lectura del CPU a 500 (la mitad del buffer).
-     * Esto garantiza que los punteros estén separados por 0.5 segundos 
+     * Ponemos el puntero de lectura del CPU a BUFFER_DELAY_IN_MS
+     * Esto garantiza que los punteros estén separados por BUFFER_DELAY_IN_MS
      * y no se crucen causando saltos de fase / glitches.
      */
     static uint32_t zero = 0;
     dev_dsp_ipc_transfer(0x0000005C, &zero, 1, NULL, NULL);
-    g_dsp_buffer_index = 500;
+    g_dsp_buffer_index = BUFFER_DELAY_IN_MS;
 }
 
 static void USBDeactivateCapture(void) {
