@@ -83,7 +83,7 @@ void store_to_sdram(fract32 left, fract32 right) {
     static fract32 counter = 0;
     counter += 1000000 * 8; 
 
-    if (*g_record_index_ptr >= BUFFER_SIZE - 1) { /// esto nunca se cumple porque la piso desde el CPU antes
+    if (*g_record_index_ptr >= BUFFER_SIZE - 1) {
         *g_record_index_ptr = 0;
     }
     
