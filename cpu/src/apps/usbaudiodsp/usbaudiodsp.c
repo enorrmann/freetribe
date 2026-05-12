@@ -141,10 +141,7 @@ volatile uint32_t g_sof_count = 0;
 volatile int g_usb_err_count = 0;
 volatile int g_ipc_err_count = 0;
 
-/* Variables para el consumo gradual del Chunk local en el endpoint USB */
-static uint8_t local_packet_index = 0;      // Qué paquete (0 a 7) estamos enviando actualmente
-static uint8_t current_reading_buffer = 0;  // Qué cara del ping-pong estamos consumiendo
-static bool has_local_data = false;         // Si tenemos un Chunk local listo para consumirse
+
 
 static void tripleAck() {
 
@@ -322,28 +319,29 @@ static void USBAudio_HandleOutPacket(const uint8_t *data, uint32_t len) {
  */
 static void USBAudio_SendCapture(void) {
 
+    static uint8_t current_reading_buffer = 0;  // Qué cara del ping-pong estamos consumiendo
+    static bool has_local_data = false;         // Si tenemos un Chunk local listo para consumirse
+
     if (!isConfigured || g_interfaceAltSetting[IFACE_CAPTURE] != 1)
         return;
 
     /* 1. Cambio de Buffer (Doble Buffering)
      * Si nos quedamos sin datos locales, revisamos si el IPC en segundo plano
      * ya terminó de traernos el siguiente Chunk de 8 paquetes. */
-    if (!has_local_data) {
-        if (ipc_data_ready) {
-            current_reading_buffer = ipc_read_idx;
-            ipc_data_ready = false; 
-            has_local_data = true;
-            local_packet_index = 0;
-        }
+    if (!has_local_data && ipc_data_ready) {
+        current_reading_buffer = ipc_read_idx; // snapshot of the index del buffer que el DMA llenó
+        ipc_data_ready = false; 
+        has_local_data = true;
+
     }
 
     /* 2. Conversión y Envío */
     if (has_local_data) {
         // Obtenemos un puntero al paquete específico (offset) dentro del chunk actual
-        int32_t *src = (int32_t *)(&ipc_rx_buffer[current_reading_buffer][local_packet_index * IPC_BUFFER_SIZE_IN_BYTES]);
+        int32_t *src = (int32_t *)(&ipc_rx_buffer[current_reading_buffer]);
         int16_t *dst = (int16_t *)g_audioInPacket;
         
-        // El DSP usa enteros fraccionales de 32 bits, los trunamos a 16-bits para el host
+        // El DSP usa enteros fraccionales de 32 bits, los truncamos a 16-bits para el host
         for (int i = 0; i < 48; i++) {
             dst[i*2 + 0] = (int16_t)(src[i*2 + 0] >> 16); 
             dst[i*2 + 1] = (int16_t)(src[i*2 + 1] >> 16);
@@ -355,7 +353,7 @@ static void USBAudio_SendCapture(void) {
             
             // ÉXITO: El host consumió el paquete anterior y había lugar en el FIFO.
             // Avanzamos el puntero local al siguiente paquete.
-            local_packet_index++;
+
             has_local_data = false;
             
         } else {
