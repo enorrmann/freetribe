@@ -102,7 +102,7 @@
 #define IFACE_CAPTURE 2  /* Interface 2: device → host */
 
 void USB0DeviceIntHandler(void) ;
-void USBAudio_SetFrequency(uint32_t frequency);
+
 
 #define IPC_BUFFER_SIZE_IN_BYTES (AUDIO_EP_MAX_PACKET_SIZE * 2)
 #define IPC_BUFFER_SIZE_IN_32_BIT_WORDS (IPC_BUFFER_SIZE_IN_BYTES / 4)
@@ -167,12 +167,8 @@ static uint8_t isConfigured = 0;
 static uint8_t g_audioOutPacket[AUDIO_EP_MAX_PACKET_SIZE];
 static uint32_t g_audioOutLen = 0;
 static uint8_t g_audioInPacket[AUDIO_EP_MAX_PACKET_SIZE] __attribute__((aligned(4)));
-static uint32_t g_squarePhase = 0;
 
-/* Wavetable / NCO State */
-#define WAVETABLE_SIZE 1024
-static int16_t g_wavetable[WAVETABLE_SIZE];
-static uint32_t g_phaseIncrement = 0;
+
 
 static uint16_t pendingAddress = 0;
 static uint8_t pendingSetAddress = 0;
@@ -246,7 +242,6 @@ static void USBDeactivatePlayback(void) {
  * the device from sending IN packets when the interface is at alt=0.
  */
 static void USBActivateCapture(void) {
-    g_squarePhase = 0;
     g_audioOutLen = 0;
 
     /* Sincronización CPU-DSP: 
@@ -266,34 +261,7 @@ static void USBDeactivateCapture(void) {
     g_audioOutLen = 0;
 }
 
-/*----- Audio helpers ------------------------------*/
-/**
- * Fills the audio buffer from the pre-calculated wavetable.
- * Uses a 32-bit NCO for high precision and returns the next phase.
- */
-static uint32_t USBAudio_FillFromLUT(uint32_t phase) {
-    for (uint32_t i = 0; i < 48; i++) {
-        /* Index is the top 10 bits of our 32-bit phase (32 - log2(1024) = 22) */
-        uint16_t idx = (uint16_t)(phase >> 22);
-        int16_t sample = g_wavetable[idx];
 
-        g_audioInPacket[i * 4 + 0] = (uint8_t)(sample & 0xFF);
-        g_audioInPacket[i * 4 + 1] = (uint8_t)((sample >> 8) & 0xFF);
-        g_audioInPacket[i * 4 + 2] = g_audioInPacket[i * 4 + 0];
-        g_audioInPacket[i * 4 + 3] = g_audioInPacket[i * 4 + 1];
-
-        phase += g_phaseIncrement;
-    }
-    return phase;
-}
-
-/**
- * Updates the oscillator frequency in real-time.
- */
-void USBAudio_SetFrequency(uint32_t frequency) {
-    /* increment = (f / fs) * 2^32 */
-    g_phaseIncrement = (uint32_t)(((unsigned long long)frequency << 32) / 48000);
-}
 
 static void USBAudio_HandleOutPacket(const uint8_t *data, uint32_t len) {
     if (len > AUDIO_EP_MAX_PACKET_SIZE)
@@ -599,23 +567,6 @@ void EP0IntHandler(uint32_t wrapperSrc) {
 
 /*----- Application entry points --------------------------------------*/
 
-void fillLutTableSquare(){
-    /* Initialize Wavetable with a square wave */
-    int i;
-    for (i = 0; i < WAVETABLE_SIZE; i++) {
-        g_wavetable[i] = (i < (WAVETABLE_SIZE / 2)) ? 0x4000 : -0x4000;
-    }
-
-}
-
-void fillLutTableSaw(){
-    /* Initialize Wavetable with a descending sawtooth wave */
-    int i;
-    for (i = 0; i < WAVETABLE_SIZE; i++) {
-        // La fórmula interpola de 0x4000 (i=0) a -0x4000 (i=WAVETABLE_SIZE-1)
-        g_wavetable[i] = 0x4000 - (0x8000 * i / WAVETABLE_SIZE);
-    }
-}
 t_status app_init(void) {
     PSCModuleControl(SOC_PSC_1_REGS, HW_PSC_USB0, 0, PSC_MDCTL_NEXT_ENABLE);
     UsbPhyOn();
@@ -646,11 +597,8 @@ t_status app_init(void) {
     USBIntEnableEndpoint(USB0_BASE, USB_INTEP_ALL);
 
     //fillLutTable();
-    fillLutTableSaw();
+    //fillLutTableSaw();
     
-    /* Pre-calculate phase increment for 480 Hz @ 48 kHz */
-    USBAudio_SetFrequency(480/4);
-
     USBDevConnect(USB0_BASE);
 
     /*
