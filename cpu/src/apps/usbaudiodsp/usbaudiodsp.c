@@ -108,7 +108,10 @@ void get_audio_packet_16bit(uint8_t *dst_buffer, uint8_t current_reading_buffer)
 #define IPC_BUFFER_SIZE_IN_BYTES AUDIO_EP_MAX_PACKET_SIZE
 #define IPC_BUFFER_SIZE_IN_32_BIT_WORDS (IPC_BUFFER_SIZE_IN_BYTES / 4)
 
-#define DSP_BUFFER_SIZE_IN_SAMPLES (48000 * 2) // 96000 fract16 samples, must match DSP side
+
+#define DSP_BUFFER_SIZE_IN_SAMPLES (192*4)
+
+
 #define DSP_BUFFER_SIZE_IN_BYTES   (DSP_BUFFER_SIZE_IN_SAMPLES * 2)
 #define MAX_DSP_BUFFER_INDEX       (DSP_BUFFER_SIZE_IN_BYTES / IPC_BUFFER_SIZE_IN_BYTES)
 

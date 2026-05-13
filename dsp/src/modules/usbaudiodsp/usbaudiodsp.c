@@ -44,7 +44,7 @@ under the terms of the GNU Affero General Public License as published by
 /*----- Macros -------------------------------------------------------*/
 
 #define SDRAM_ADDRESS 0x00000060 // for ipc transfer headers
-#define DSP_BUFFER_SIZE_IN_SAMPLES (48000 * 2) // 96000 fract16 samples, must match CPU side
+#define DSP_BUFFER_SIZE_IN_SAMPLES (192*4)
 
 fract16 *sdram_ring_buffer_16 = (fract16 *)SDRAM_ADDRESS;
 uint32_t record_index = 0;
