@@ -70,30 +70,31 @@ typedef enum {
 
 /*----- Extern function implementations ------------------------------*/
 
-volatile uint32_t *g_record_index_ptr = (volatile uint32_t *)0x0000005C;
+//volatile uint32_t *g_record_index_ptr = (volatile uint32_t *)0x0000005C;
+ uint32_t g_record_index_ptr = 0;
 
 /**
  * @brief   Initialise module.
  */
 void module_init(void) {
-    *g_record_index_ptr = 0;
+    g_record_index_ptr = 0;
 }
 
 void store_to_sdram(fract32 left, fract32 right) {
     static fract32 counter = 0;
     counter += 1000000 * 8; 
 
-    if (*g_record_index_ptr >= DSP_BUFFER_SIZE_IN_32_BIT_WORDS - 1) {
-        *g_record_index_ptr = 0;
+    if (g_record_index_ptr >= DSP_BUFFER_SIZE_IN_32_BIT_WORDS - 1) {
+        g_record_index_ptr = 0;
     }
     
-    uint32_t idx = *g_record_index_ptr;
+    uint32_t idx = g_record_index_ptr;
     sdram_ring_buffer[idx++] = counter;      // Canal L
     sdram_ring_buffer[idx++] = -counter;     // Canal R (invertido)
     //sdram_ring_buffer[idx++] = left;      // Canal L
     //sdram_ring_buffer[idx++] = right;     // Canal R (invertido)
 
-    *g_record_index_ptr = idx;
+    g_record_index_ptr = idx;
 }
 
 /**
