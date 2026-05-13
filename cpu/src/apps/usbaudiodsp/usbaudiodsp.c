@@ -102,7 +102,6 @@
 #define IFACE_CAPTURE 2  /* Interface 2: device → host */
 
 void USB0DeviceIntHandler(void) ;
-void get_audio_packet(uint8_t *dst_buffer, uint8_t current_reading_buffer) ;
 void get_audio_packet_16bit(uint8_t *dst_buffer, uint8_t current_reading_buffer);
 
 
@@ -295,7 +294,6 @@ static void USBAudio_SendCapture(void) {
     /* 2. Conversión y Envío */
     if (has_local_data) {
          uint8_t audioInPacket[AUDIO_EP_MAX_PACKET_SIZE] __attribute__((aligned(4)));
-
          get_audio_packet_16bit(audioInPacket, current_reading_buffer);
 
         /* Intentamos colocar los datos convertidos en el FIFO de hardware del USB */
@@ -716,30 +714,6 @@ void ipc_callback(void *ctx, t_ipc_status status) {
     }
 }
 
-
-/**
- * @brief Convierte los datos del buffer de lectura actual (32-bit) 
- *        al formato de salida de 16-bit en el buffer de audio.
- * 
- * @param dst_buffer Puntero al array donde se guardarán los datos (audioInPacket).
- * @param current_reading_buffer Índice del buffer de lectura actual (0 o 1) en ipc_rx_buffer.
- */
-void get_audio_packet(uint8_t *dst_buffer, uint8_t current_reading_buffer) {
-    // Origen: Buffer global de RX en la posición del chunk actual
-    int32_t *src = (int32_t *)(&ipc_rx_buffer[current_reading_buffer]);
-    
-    // Destino: Interpretamos el buffer de salida como enteros de 16 bits
-    int16_t *dst = (int16_t *)dst_buffer;
-    
-    // El DSP usa enteros fraccionales de 32 bits (Q31). 
-    // Desplazamos 16 posiciones a la derecha para obtener la parte alta (Q15 / int16).
-    for (int i = 0; i < 48; i++) {
-        // Canal Izquierdo
-        dst[i*2 + 0] = (int16_t)(src[i*2 + 0] >> 16); 
-        // Canal Derecho
-        dst[i*2 + 1] = (int16_t)(src[i*2 + 1] >> 16);
-    }
-}
 
 /**
  * @brief Copia los datos de audio de 16-bit del buffer de RX al buffer de salida.
