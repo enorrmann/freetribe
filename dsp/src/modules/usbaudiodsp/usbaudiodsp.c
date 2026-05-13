@@ -47,6 +47,7 @@ under the terms of the GNU Affero General Public License as published by
 #define DSP_BUFFER_SIZE_IN_32_BIT_WORDS (48000 * 2) // must be the same on the cpu side
 
 fract32 *sdram_ring_buffer = (fract32 *)SDRAM_ADDRESS;
+fract16 *sdram_ring_buffer_16 = (fract16 *)SDRAM_ADDRESS;
 uint32_t record_index = 0;
 
 
@@ -97,6 +98,23 @@ void store_to_sdram(fract32 left, fract32 right) {
     g_record_index_ptr = idx;
 }
 
+void store_to_sdram_16(fract32 left, fract32 right) {
+    static fract32 counter = 0;
+    counter += 1000000 * 8; 
+
+    if (g_record_index_ptr >= DSP_BUFFER_SIZE_IN_32_BIT_WORDS - 1) {
+        g_record_index_ptr = 0;
+    }
+    
+    uint32_t idx = g_record_index_ptr;
+    sdram_ring_buffer_16[idx++] = counter;      // Canal L
+    sdram_ring_buffer_16[idx++] = -counter;     // Canal R (invertido)
+    //sdram_ring_buffer_16[idx++] = left;      // Canal L
+    //sdram_ring_buffer_16[idx++] = right;     // Canal R (invertido)
+
+    g_record_index_ptr = idx;
+}
+
 /**
  * @brief   Process audio.
  *
@@ -105,6 +123,7 @@ void store_to_sdram(fract32 left, fract32 right) {
  */
 void module_process(fract32 *in, fract32 *out) {
     store_to_sdram(in[0], in[1]);
+    //store_to_sdram_16(in[0], in[1]);
 }
 
 /**

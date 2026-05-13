@@ -166,9 +166,6 @@ static uint32_t g_uEP0Len = 0;
 static uint8_t isConfigured = 0;
 static uint8_t g_audioOutPacket[AUDIO_EP_MAX_PACKET_SIZE];
 static uint32_t g_audioOutLen = 0;
-static uint8_t g_audioInPacket[AUDIO_EP_MAX_PACKET_SIZE] __attribute__((aligned(4)));
-
-
 
 static uint16_t pendingAddress = 0;
 static uint8_t pendingSetAddress = 0;
@@ -295,18 +292,21 @@ static void USBAudio_SendCapture(void) {
 
     /* 2. Conversión y Envío */
     if (has_local_data) {
+         uint8_t audioInPacket[AUDIO_EP_MAX_PACKET_SIZE] __attribute__((aligned(4)));
+
         // Obtenemos un puntero al paquete específico (offset) dentro del chunk actual
         int32_t *src = (int32_t *)(&ipc_rx_buffer[current_reading_buffer]);
-        int16_t *dst = (int16_t *)g_audioInPacket;
+        int16_t *dst = (int16_t *)audioInPacket;
         
         // El DSP usa enteros fraccionales de 32 bits, los truncamos a 16-bits para el host
         for (int i = 0; i < 48; i++) {
             dst[i*2 + 0] = (int16_t)(src[i*2 + 0] >> 16); 
             dst[i*2 + 1] = (int16_t)(src[i*2 + 1] >> 16);
         }
+        
 
         /* Intentamos colocar los datos convertidos en el FIFO de hardware del USB */
-        if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, g_audioInPacket, AUDIO_EP_MAX_PACKET_SIZE) == 0) {
+        if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, audioInPacket, AUDIO_EP_MAX_PACKET_SIZE) == 0) {
             USBEndpointDataSend(USB0_BASE, AUDIO_EP_IN, USB_TRANS_IN);
             
             // ÉXITO: El host consumió el paquete anterior y había lugar en el FIFO.
