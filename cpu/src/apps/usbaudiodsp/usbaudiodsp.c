@@ -102,11 +102,11 @@
 #define IFACE_CAPTURE 2  /* Interface 2: device → host */
 
 void USB0DeviceIntHandler(void) ;
+void get_audio_packet(uint8_t *dst_buffer, uint8_t current_reading_buffer) ;
 
 
 #define IPC_BUFFER_SIZE_IN_BYTES (AUDIO_EP_MAX_PACKET_SIZE * 2)
 #define IPC_BUFFER_SIZE_IN_32_BIT_WORDS (IPC_BUFFER_SIZE_IN_BYTES / 4)
-#define BUFFER_DELAY_IN_MS 50
 
 #define DSP_BUFFER_SIZE_IN_32_BIT_WORDS (48000 * 2) // must be the same on the dsp side
 #define MAX_DSP_BUFFER_INDEX (DSP_BUFFER_SIZE_IN_32_BIT_WORDS / IPC_BUFFER_SIZE_IN_32_BIT_WORDS)
@@ -294,16 +294,7 @@ static void USBAudio_SendCapture(void) {
     if (has_local_data) {
          uint8_t audioInPacket[AUDIO_EP_MAX_PACKET_SIZE] __attribute__((aligned(4)));
 
-        // Obtenemos un puntero al paquete específico (offset) dentro del chunk actual
-        int32_t *src = (int32_t *)(&ipc_rx_buffer[current_reading_buffer]);
-        int16_t *dst = (int16_t *)audioInPacket;
-        
-        // El DSP usa enteros fraccionales de 32 bits, los truncamos a 16-bits para el host
-        for (int i = 0; i < 48; i++) {
-            dst[i*2 + 0] = (int16_t)(src[i*2 + 0] >> 16); 
-            dst[i*2 + 1] = (int16_t)(src[i*2 + 1] >> 16);
-        }
-        
+         get_audio_packet(audioInPacket, current_reading_buffer);
 
         /* Intentamos colocar los datos convertidos en el FIFO de hardware del USB */
         if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, audioInPacket, AUDIO_EP_MAX_PACKET_SIZE) == 0) {
@@ -720,5 +711,30 @@ void ipc_callback(void *ctx, t_ipc_status status) {
         ipc_write_idx = (ipc_write_idx + 1) % 2;
     } else {
         g_ipc_err_count++;
+    }
+}
+
+
+/**
+ * @brief Convierte los datos del buffer de lectura actual (32-bit) 
+ *        al formato de salida de 16-bit en el buffer de audio.
+ * 
+ * @param dst_buffer Puntero al array donde se guardarán los datos (audioInPacket).
+ * @param current_reading_buffer Índice del buffer de lectura actual (0 o 1) en ipc_rx_buffer.
+ */
+void get_audio_packet(uint8_t *dst_buffer, uint8_t current_reading_buffer) {
+    // Origen: Buffer global de RX en la posición del chunk actual
+    int32_t *src = (int32_t *)(&ipc_rx_buffer[current_reading_buffer]);
+    
+    // Destino: Interpretamos el buffer de salida como enteros de 16 bits
+    int16_t *dst = (int16_t *)dst_buffer;
+    
+    // El DSP usa enteros fraccionales de 32 bits (Q31). 
+    // Desplazamos 16 posiciones a la derecha para obtener la parte alta (Q15 / int16).
+    for (int i = 0; i < 48; i++) {
+        // Canal Izquierdo
+        dst[i*2 + 0] = (int16_t)(src[i*2 + 0] >> 16); 
+        // Canal Derecho
+        dst[i*2 + 1] = (int16_t)(src[i*2 + 1] >> 16);
     }
 }

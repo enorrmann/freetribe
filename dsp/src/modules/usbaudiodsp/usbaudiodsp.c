@@ -98,7 +98,10 @@ void store_to_sdram(fract32 left, fract32 right) {
     g_record_index_ptr = idx;
 }
 
-void store_to_sdram_16(fract32 left, fract32 right) {
+void store_to_sdram_16(fract32 *in, fract32 *out) {
+    fract32 in_left = in[0];
+    fract32 in_right = in[1];
+    
     static fract32 counter = 0;
     counter += 1000000 * 8; 
 
@@ -109,6 +112,11 @@ void store_to_sdram_16(fract32 left, fract32 right) {
     uint32_t idx = g_record_index_ptr;
     sdram_ring_buffer_16[idx++] = counter;      // Canal L
     sdram_ring_buffer_16[idx++] = -counter;     // Canal R (invertido)
+    
+    out[0] =  counter; // Canal L
+    out[1] = -counter; // Canal R 
+
+
     //sdram_ring_buffer_16[idx++] = left;      // Canal L
     //sdram_ring_buffer_16[idx++] = right;     // Canal R (invertido)
 
@@ -123,7 +131,7 @@ void store_to_sdram_16(fract32 left, fract32 right) {
  */
 void module_process(fract32 *in, fract32 *out) {
     store_to_sdram(in[0], in[1]);
-    //store_to_sdram_16(in[0], in[1]);
+    //store_to_sdram_16( in, out);
 }
 
 /**
