@@ -44,9 +44,8 @@ under the terms of the GNU Affero General Public License as published by
 /*----- Macros -------------------------------------------------------*/
 
 #define SDRAM_ADDRESS 0x00000060 // for ipc transfer headers
-#define DSP_BUFFER_SIZE_IN_32_BIT_WORDS (48000 * 2) // must be the same on the cpu side
+#define DSP_BUFFER_SIZE_IN_SAMPLES (48000 * 2) // 96000 fract16 samples, must match CPU side
 
-fract32 *sdram_ring_buffer = (fract32 *)SDRAM_ADDRESS;
 fract16 *sdram_ring_buffer_16 = (fract16 *)SDRAM_ADDRESS;
 uint32_t record_index = 0;
 
@@ -85,40 +84,35 @@ void store_to_sdram(fract32 left, fract32 right) {
     static fract32 counter = 0;
     counter += 1000000 * 8; 
 
-    if (g_record_index_ptr >= DSP_BUFFER_SIZE_IN_32_BIT_WORDS - 1) {
+    if (g_record_index_ptr >= DSP_BUFFER_SIZE_IN_SAMPLES - 1) {
         g_record_index_ptr = 0;
     }
     
     uint32_t idx = g_record_index_ptr;
-    sdram_ring_buffer[idx++] = counter;      // Canal L
-    sdram_ring_buffer[idx++] = -counter;     // Canal R (invertido)
-    //sdram_ring_buffer[idx++] = left;      // Canal L
-    //sdram_ring_buffer[idx++] = right;     // Canal R (invertido)
+    // Q31 -> Q15: shift right 16 to get upper 16 bits
+    sdram_ring_buffer_16[idx++] = (fract16)(counter >> 16);      // Canal L
+    sdram_ring_buffer_16[idx++] = (fract16)((-counter) >> 16);   // Canal R (invertido)
+    //sdram_ring_buffer_16[idx++] = (fract16)(left >> 16);       // Canal L
+    //sdram_ring_buffer_16[idx++] = (fract16)(right >> 16);      // Canal R
 
     g_record_index_ptr = idx;
 }
 
 void store_to_sdram_16(fract32 *in, fract32 *out) {
-    fract32 in_left = in[0];
-    fract32 in_right = in[1];
-    
     static fract32 counter = 0;
     counter += 1000000 * 8; 
 
-    if (g_record_index_ptr >= DSP_BUFFER_SIZE_IN_32_BIT_WORDS - 1) {
+    if (g_record_index_ptr >= DSP_BUFFER_SIZE_IN_SAMPLES - 1) {
         g_record_index_ptr = 0;
     }
     
     uint32_t idx = g_record_index_ptr;
-    sdram_ring_buffer_16[idx++] = counter;      // Canal L
-    sdram_ring_buffer_16[idx++] = -counter;     // Canal R (invertido)
+    // Q31 -> Q15: shift right 16 to get upper 16 bits
+    sdram_ring_buffer_16[idx++] = (fract16)(counter >> 16);      // Canal L
+    sdram_ring_buffer_16[idx++] = (fract16)((-counter) >> 16);   // Canal R (invertido)
     
-    out[0] =  counter; // Canal L
+    out[0] =  counter; // Canal L (passthrough to codec, still 32-bit)
     out[1] = -counter; // Canal R 
-
-
-    //sdram_ring_buffer_16[idx++] = left;      // Canal L
-    //sdram_ring_buffer_16[idx++] = right;     // Canal R (invertido)
 
     g_record_index_ptr = idx;
 }
@@ -130,8 +124,8 @@ void store_to_sdram_16(fract32 *in, fract32 *out) {
  * @param[out]  out Pointer to input buffer.
  */
 void module_process(fract32 *in, fract32 *out) {
-    store_to_sdram(in[0], in[1]);
-    //store_to_sdram_16( in, out);
+    //store_to_sdram(in[0], in[1]);
+    store_to_sdram_16(in, out);
 }
 
 /**

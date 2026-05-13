@@ -106,11 +106,12 @@ void get_audio_packet(uint8_t *dst_buffer, uint8_t current_reading_buffer) ;
 void get_audio_packet_16bit(uint8_t *dst_buffer, uint8_t current_reading_buffer);
 
 
-#define IPC_BUFFER_SIZE_IN_BYTES (AUDIO_EP_MAX_PACKET_SIZE * 2)
+#define IPC_BUFFER_SIZE_IN_BYTES AUDIO_EP_MAX_PACKET_SIZE
 #define IPC_BUFFER_SIZE_IN_32_BIT_WORDS (IPC_BUFFER_SIZE_IN_BYTES / 4)
 
-#define DSP_BUFFER_SIZE_IN_32_BIT_WORDS (48000 * 2) // must be the same on the dsp side
-#define MAX_DSP_BUFFER_INDEX (DSP_BUFFER_SIZE_IN_32_BIT_WORDS / IPC_BUFFER_SIZE_IN_32_BIT_WORDS)
+#define DSP_BUFFER_SIZE_IN_SAMPLES (48000 * 2) // 96000 fract16 samples, must match DSP side
+#define DSP_BUFFER_SIZE_IN_BYTES   (DSP_BUFFER_SIZE_IN_SAMPLES * 2)
+#define MAX_DSP_BUFFER_INDEX       (DSP_BUFFER_SIZE_IN_BYTES / IPC_BUFFER_SIZE_IN_BYTES)
 
 // Buffer ping-pong (Doble buffer local) para guardar las ráfagas leídas del DSP
 uint8_t ipc_rx_buffer[2][IPC_BUFFER_SIZE_IN_BYTES] __attribute__((aligned(32)));
@@ -295,8 +296,7 @@ static void USBAudio_SendCapture(void) {
     if (has_local_data) {
          uint8_t audioInPacket[AUDIO_EP_MAX_PACKET_SIZE] __attribute__((aligned(4)));
 
-         get_audio_packet(audioInPacket, current_reading_buffer);
-         //get_audio_packet_16bit(audioInPacket, current_reading_buffer);
+         get_audio_packet_16bit(audioInPacket, current_reading_buffer);
 
         /* Intentamos colocar los datos convertidos en el FIFO de hardware del USB */
         if (USBEndpointDataPut(USB0_BASE, AUDIO_EP_IN, audioInPacket, AUDIO_EP_MAX_PACKET_SIZE) == 0) {
@@ -743,23 +743,11 @@ void get_audio_packet(uint8_t *dst_buffer, uint8_t current_reading_buffer) {
 
 /**
  * @brief Copia los datos de audio de 16-bit del buffer de RX al buffer de salida.
+ *        El DSP ya almacena en formato Q15 (16-bit), no se necesita conversión.
  * 
  * @param dst_buffer Puntero al array de salida (audioInPacket).
  * @param current_reading_buffer Índice del buffer de lectura actual (0 o 1) en ipc_rx_buffer.
  */
 void get_audio_packet_16bit(uint8_t *dst_buffer, uint8_t current_reading_buffer) {
-    // Origen: Ahora interpretamos el buffer global de RX directamente como int16_t
-    int16_t *src = (int16_t *)(&ipc_rx_buffer[current_reading_buffer]);
-    
-    // Destino: Interpretamos el buffer de salida como int16_t
-    int16_t *dst = (int16_t *)dst_buffer;
-    
-    // Procesamos 48 muestras estéreo (96 valores en total)
-    // Al ser ambos de 16 bits, es una copia directa de valores.
-    for (int i = 0; i < 48; i++) {
-        // Canal Izquierdo
-        dst[i*2 + 0] = src[i*2 + 0]; 
-        // Canal Derecho
-        dst[i*2 + 1] = src[i*2 + 1];
-    }
+    memcpy(dst_buffer, ipc_rx_buffer[current_reading_buffer], AUDIO_EP_MAX_PACKET_SIZE);
 }
