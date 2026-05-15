@@ -52,3 +52,37 @@ void fillLutTableSaw(){
         g_wavetable[i] = 0x4000 - (0x8000 * i / WAVETABLE_SIZE);
     }
 }
+
+/* interrupt manager */
+#define WRAPPER_SOF_BIT    0x00080000  /* Bit 19: Ocurre cada 125us */
+#define EP1_TX_BIT         0x00000002  /* Bit 1: Fin de transmisión (Capture) */
+#define EP2_RX_BIT         0x00000400  /* Bit 10: Llegó paquete del Host (Playback) */
+
+/* Leer el registro de interrupciones enmascarado del Wrapper */
+uint32_t wrapperSrc = HWREG(SOC_USB_0_REGS + USB_0_INTR_SRC_MASKED);
+
+/* 1. MANEJO DE SOF (Cada 125us) */
+if (wrapperSrc & WRAPPER_SOF_BIT) { 
+    g_sof_count++;
+    // Aquí NO envíes audio. Solo úsalo si necesitas sincronizar relojes 
+    // o para telemetría/debug.
+}
+
+/* 2. CAPTURE / GRABACIÓN (Hacia la PC) - Ocurre cada 1ms por bInterval=4 */
+if (wrapperSrc & EP1_TX_BIT) { 
+    g_tx_end_count++;
+    
+    /* El Host ya se llevó los últimos datos. 
+       Es el momento seguro para cargar los próximos 192 bytes en el FIFO */
+    USBAudio_SendCapture(); 
+}
+
+/* 3. PLAYBACK / REPRODUCCIÓN (Desde la PC) - Ocurre según el bInterval del OUT */
+if (wrapperSrc & EP2_RX_BIT) {
+    g_rx_count++;
+    
+    /* El FIFO del EP2 está lleno con muestras nuevas enviadas por la PC.
+       Aquí debes llamar a la función que extraiga esos bytes del FIFO 
+       y los mande a tu buffer de audio / DSP */
+    USBAudio_ProcessPlayback(); 
+}

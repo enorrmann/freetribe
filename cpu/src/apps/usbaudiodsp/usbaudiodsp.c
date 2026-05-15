@@ -121,8 +121,11 @@ volatile uint8_t ipc_read_idx = 0;   // Índice del buffer que está leyendo el 
 volatile uint8_t ipc_write_idx = 0;  // Índice del buffer en el que está escribiendo el DMA
 volatile bool ipc_data_ready = false;
 volatile bool ipc_transfer_in_progress = false;
-
 uint32_t g_dsp_buffer_index = 0;
+
+#define MAX_DETECTED_INTERRUPTS 64
+uint32_t detected_interrupt[MAX_DETECTED_INTERRUPTS];
+uint32_t detected_interrupt_count =  0;
 
 /*----- Types ---------------------------------------------------------*/
 
@@ -137,6 +140,8 @@ typedef struct __attribute__((packed)) {
 
 void ipc_callback(void *ctx, t_ipc_status status);
 void get_dsp_data(void);
+void print_detected_interrupts() ;
+void add_to_detected_interrupts(uint32_t interrupt);
 
 
 
@@ -144,7 +149,7 @@ volatile int32_t g_last_dsp_sample = 0;
 volatile uint32_t g_sof_count = 0;
 volatile int g_usb_err_count = 0;
 volatile int g_ipc_err_count = 0;
-
+int g_tx_end_count = 0;
 
 
 static void tripleAck() {
@@ -323,7 +328,7 @@ static void USBAudio_SendCapture(void) {
      * ya vaciamos la flag ipc_data_ready, se iniciará la descarga del siguiente Chunk */
     get_dsp_data();
 }
-
+uint32_t USBAudio_ProcessOutCount = 0;
 /*
  * USBAudio_ProcessOut
  *
@@ -332,6 +337,7 @@ static void USBAudio_SendCapture(void) {
  * (see app_run notes below).
  */
 static void USBAudio_ProcessOut(void) {
+    USBAudio_ProcessOutCount++;
     /* FIX 5: respect the USB Audio Class lifecycle */
     if (g_interfaceAltSetting[IFACE_PLAYBACK] != 1)
         return;
@@ -363,6 +369,7 @@ static void USBAudio_ProcessOut(void) {
  */
 #define WRAPPER_RESET_BIT  0x00040000  /* INTR_SRC bit 18 */
 #define WRAPPER_SOF_BIT    0x00080000  /* INTR_SRC bit 19 */
+#define EP1_TX_BIT         0x00000002  /* Bit 1: Endpoint 1 Transmit Complete */
 
 void EP0IntHandler(uint32_t wrapperSrc);
 
@@ -376,6 +383,11 @@ void EP0IntHandler(uint32_t wrapperSrc) {
 
     /* Read endpoint status to clear pending EP interrupt bits */
     (void)USBIntStatusEndpoint(USB0_BASE);
+    
+    if (wrapperSrc & EP1_TX_BIT) { // solo contar si es un end transmission
+        g_tx_end_count++;
+
+    }
 
     if (wrapperSrc & WRAPPER_RESET_BIT) {
         pendingAddress = 0;
@@ -605,6 +617,9 @@ t_status app_init(void) {
 
 #define GPIO_POWER_BUTTON 128
 
+
+
+
 void app_run(void) {
     static int heartbeat = 0;
     heartbeat++;
@@ -621,9 +636,30 @@ void app_run(void) {
 
     static int debug_timer = 0;
     debug_timer++;
-    if (debug_timer >= 100000) {
+    if (debug_timer >= 1000000) { 
         debug_timer = 0;
-        //ft_printf("D:0x%08x I:%d R:%d S:%d U:%d P:%d\n",             (unsigned int)g_last_dsp_sample, (int)g_dsp_buffer_index * IPC_BUFFER_SIZE_IN_BYTES, (int)ipc_data_ready,             (unsigned int)g_sof_count, g_usb_err_count, g_ipc_err_count);
+        //ft_printf("SOF count: %u, USB send errors: %d, g_tx_end_count: %d", g_sof_count, g_usb_err_count, g_tx_end_count);
+        print_detected_interrupts();
+    }
+}
+
+
+void print_detected_interrupts() {
+    ft_printf("Detected interrupts (total %u):", detected_interrupt_count);
+    for (uint32_t i = 0; i < detected_interrupt_count; i++) {
+        ft_printf("  0x%08X", detected_interrupt[i]);
+    }
+
+}
+void add_to_detected_interrupts(uint32_t interrupt) {
+    int i;
+    for ( i = 0; i < detected_interrupt_count; i++) {
+        if (detected_interrupt[i] == interrupt) {
+            return; // Ya está registrado, no lo agregamos de nuevo
+        }
+    }
+    if (detected_interrupt_count < MAX_DETECTED_INTERRUPTS) {
+        detected_interrupt[detected_interrupt_count++] = interrupt;
     }
 }
 
@@ -647,6 +683,8 @@ void USB0DeviceIntHandler(void) {
 
     /* Read & discard Mentor INTRUSB to clear core-level bits */
     (void)HWREGB(USB0_BASE + USB_0_IS);
+
+    add_to_detected_interrupts(wrapperSrc);
 
 
     EP0IntHandler(wrapperSrc);
