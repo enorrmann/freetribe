@@ -108,11 +108,11 @@ void store_to_sdram_16(fract32 *in, fract32 *out) {
     
     uint32_t idx = g_record_index_ptr;
     // Q31 -> Q15: shift right 16 to get upper 16 bits
-    //sdram_ring_buffer_16[idx++] = (fract16)(counter >> 16);      // Canal L
-    //sdram_ring_buffer_16[idx++] = (fract16)((-counter) >> 16);   // Canal R (invertido)
+    sdram_ring_buffer_16[idx++] = (fract16)(counter >> 16);      // Canal L
+    sdram_ring_buffer_16[idx++] = (fract16)((-counter) >> 16);   // Canal R (invertido)
 
-    sdram_ring_buffer_16[idx++] = (fract16)(in[0] >> 16);       // Canal L
-    sdram_ring_buffer_16[idx++] = (fract16)(in[1] >> 16);      // Canal R
+    //sdram_ring_buffer_16[idx++] = (fract16)(in[0] >> 16);       // Canal L
+    //sdram_ring_buffer_16[idx++] = (fract16)(in[1] >> 16);      // Canal R
 
     
 

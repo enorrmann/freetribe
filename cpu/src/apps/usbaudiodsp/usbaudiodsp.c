@@ -148,13 +148,14 @@ void add_to_detected_interrupts(uint32_t interrupt);
 
 volatile int32_t g_last_dsp_sample = 0;
 volatile uint32_t g_sof_count = 0;
-volatile int g_usb_err_count = 0;
-volatile int g_ipc_err_count = 0;
-int g_tx_end_count = 0;
-int g_rx_end_count = 0;
+volatile uint32_t g_usb_err_count = 0;
+volatile uint32_t g_ipc_err_count = 0;
+uint32_t g_tx_end_count = 0;
+uint32_t g_rx_end_count = 0;
+volatile uint32_t g_usb_rx_err_count = 0;
 
 
-static void tripleAck() {
+static void tripleAck(uint32_t wrapperSrc) {
 
     // . LIMPIAR EL AINTC (Nivel 3 - Sistema)
     IntSystemStatusClear(SYS_INT_USB0);
@@ -166,7 +167,9 @@ static void tripleAck() {
     // . LIMPIAR EL WRAPPER DE TI (Nivel 2)
     // El registro INTR_SRC_CLEAR (0x28) requiere escribir 1s para limpiar
     // Le pasamos statusCtrl para limpiar los bits de RESET, SUSPEND, etc.
-    HWREG(USB_0_OTGBASE + USB_0_INTR_SRC_CLEAR) = 0xFFFFFFFF;
+    //HWREG(USB_0_OTGBASE + USB_0_INTR_SRC_CLEAR) = 0xFFFFFFFF;
+    HWREG(USB_0_OTGBASE + USB_0_INTR_SRC_CLEAR) = wrapperSrc; /* Limpiar solo los bits que realmente se detectaron, para no perder eventos que lleguen durante el procesamiento del ISR */
+    
 }
 
 /*----- State ---------------------------------------------------------*/
@@ -210,7 +213,7 @@ static void EP0SendData(void) {
  */
 static void USBSetDeviceType(void) {
     USBDevEndpointConfigSet(USB0_BASE, AUDIO_EP_IN, AUDIO_EP_MAX_PACKET_SIZE, USB_EP_MODE_ISOC | USB_EP_DEV_IN | USB_EP_AUTO_SET);
-    USBDevEndpointConfigSet(USB0_BASE, AUDIO_EP_OUT, AUDIO_EP_MAX_PACKET_SIZE, USB_EP_MODE_ISOC | USB_EP_DEV_OUT | USB_EP_AUTO_REQUEST | USB_EP_AUTO_CLEAR);
+    USBDevEndpointConfigSet(USB0_BASE, AUDIO_EP_OUT, AUDIO_EP_MAX_PACKET_SIZE, USB_EP_MODE_ISOC | USB_EP_DEV_OUT  );
 
     /* Enable EP2 RX interrupt */
     USBIntEnableEndpoint(USB0_BASE, (1 << 18));
@@ -229,7 +232,7 @@ static void USBSetDeviceType(void) {
  * alt=1 → re-arm the endpoint for isochronous OUT transfers.
  */
 static void USBActivatePlayback(void) {
-    USBDevEndpointConfigSet(USB0_BASE, AUDIO_EP_OUT, AUDIO_EP_MAX_PACKET_SIZE, USB_EP_MODE_ISOC | USB_EP_DEV_OUT | USB_EP_AUTO_REQUEST | USB_EP_AUTO_CLEAR);
+    USBDevEndpointConfigSet(USB0_BASE, AUDIO_EP_OUT, AUDIO_EP_MAX_PACKET_SIZE, USB_EP_MODE_ISOC | USB_EP_DEV_OUT  );
     g_audioOutLen = 0;
 }
 
@@ -331,52 +334,101 @@ static void USBAudio_SendCapture(void) {
     get_dsp_data();
 }
 uint32_t USBAudio_ProcessOutCount = 0;
-/*
- * USBAudio_ProcessOut
- *
- * FIX 3 + FIX 5: Only read the OUT endpoint when the playback interface
- * (Interface 1) has alt-setting == 1.  Also removed duplicate call path
- * (see app_run notes below).
- */
 static void USBAudio_ProcessOut(void) {
+
     USBAudio_ProcessOutCount++;
-    /* FIX 5: respect the USB Audio Class lifecycle */
+
     if (g_interfaceAltSetting[IFACE_PLAYBACK] != 1)
         return;
 
-    uint32_t count = USBEndpointDataAvail(USB0_BASE, AUDIO_EP_OUT);
-    if (count == 0){
-        USBDevEndpointDataAck(USB0_BASE, AUDIO_EP_OUT, false);
+    uint32_t len = AUDIO_EP_MAX_PACKET_SIZE;
+
+    int ret = USBEndpointDataGet(
+        USB0_BASE,
+        AUDIO_EP_OUT,
+        g_audioOutPacket,
+        &len
+    );
+
+    if (ret == 0) {
+
+        if (len != AUDIO_EP_MAX_PACKET_SIZE) {
+            g_usb_rx_err_count++;
+        }
+
+        //USBAudio_HandleOutPacket(g_audioOutPacket, len);
+
     } else {
-        g_USBEndpointDataAvailCount=count; // last count
+
+        g_usb_rx_err_count++;
     }
 
-    uint32_t len = count;
-    if (len > AUDIO_EP_MAX_PACKET_SIZE)
-        len = AUDIO_EP_MAX_PACKET_SIZE;
-
-    if (USBEndpointDataGet(USB0_BASE, AUDIO_EP_OUT, g_audioOutPacket, &len) == 0) {
-        USBAudio_HandleOutPacket(g_audioOutPacket, len);
-    }
+    g_USBEndpointDataAvailCount = len;
 
     USBDevEndpointDataAck(USB0_BASE, AUDIO_EP_OUT, false);
 }
 
+
 /*----- USB Device interrupt handler ----------------------------------*/
 
 /*
- * Wrapper INTR_SRC maps INTRUSB bits to bits [23:16]:
- *   Bit 16 = Suspend,  Bit 17 = Resume,  Bit 18 = Reset,
- *   Bit 19 = SOF,      Bit 20 = Connect, Bit 21 = Disconnect
+ * AM1808 USB Wrapper – INTR_SRC register bit map
+ * (empirically verified from 8 captured interrupt values)
  *
- * The Mentor core INTRUSB register at 0x0A is unreliable on this silicon
- * (only returns data sporadically). Use wrapper INTR_SRC instead.
+ * The wrapper INTR_SRC (OTG_BASE + 0x20) aggregates three Mentor-core
+ * interrupt registers into a single 32-bit word with NON-OVERLAPPING fields:
+ *
+ *   Bits [7:0]   – INTRTX  : TX-complete per endpoint
+ *                    bit 0  = EP0  TX/control  (0x00000001)
+ *                    bit 1  = EP1  TX           (0x00000002)  ← confirmed: 0x00000002
+ *                    bit 2  = EP2  TX           (0x00000004)
+ *                    bit 3  = EP3  TX           (0x00000008)
+ *                    bit 4  = EP4  TX           (0x00000010)
+ *
+ *   Bits [15:8]  – INTRRX  : RX-complete per endpoint (EP index + 8)
+ *                    bit 9  = EP1  RX           (0x00000200)
+ *                    bit 10 = EP2  RX           (0x00000400)  ← confirmed: 0x00080400 = SOF|EP2_RX
+ *                    bit 11 = EP3  RX           (0x00000800)
+ *                    bit 12 = EP4  RX           (0x00001000)
+ *
+ *   Bits [23:16] – INTRUSB : bus/global events
+ *                    bit 16 = Suspend           (0x00010000)  ← confirmed: 0x00050000 = Reset|Suspend
+ *                    bit 17 = Resume            (0x00020000)
+ *                    bit 18 = Reset             (0x00040000)  ← confirmed: 0x00040000 standalone × 2
+ *                    bit 19 = SOF               (0x00080000)  ← confirmed: 0x00080000 standalone
+ *                    bit 20 = Connect           (0x00100000)
+ *                    bit 21 = Disconnect        (0x00200000)
+ *
+ * NOTE: EP2_RX_BIT (0x00000400) and WRAPPER_RESET_BIT (0x00040000) are
+ * DIFFERENT bits.  The previous incorrect definition EP2_RX_BIT=0x00040000
+ * caused g_rx_end_count to count USB Resets instead of audio OUT packets.
  */
-#define WRAPPER_RESET_BIT  0x00040000  /* INTR_SRC bit 18 */
-#define WRAPPER_SOF_BIT    0x00080000  /* INTR_SRC bit 19 */
-#define EP1_TX_BIT         0x00000002  /* Bit 1: Endpoint 1 Transmit Complete */
-#define EP2_RX_BIT         0x00000400  /* bit 10: INTRRX EP2 → bits [15:8] del wrapper */
 
+/* --- INTRTX bits [7:0] -------------------------------------------------- */
+#define EP0_TX_BIT         0x00000001  /* bit  0: EP0 control TX complete     */
+#define EP1_TX_BIT         0x00000002  /* bit  1: EP1 IN  (audio capture) TX  */
+#define EP2_TX_BIT         0x00000004  /* bit  2: EP2 TX  (unused in UAC1)    */
+#define EP3_TX_BIT         0x00000008  /* bit  3: EP3 TX                      */
+#define EP4_TX_BIT         0x00000010  /* bit  4: EP4 TX                      */
+
+/* --- INTRRX bits [15:8] ------------------------------------------------- */
+#define EP1_RX_BIT         0x00000200  /* bit  9: EP1 RX  (unused in UAC1)    */
+#define EP2_RX_BIT         0x00000400  /* bit 10: EP2 OUT (audio playback) RX */
+#define EP3_RX_BIT         0x00000800  /* bit 11: EP3 RX                      */
+#define EP4_RX_BIT         0x00001000  /* bit 12: EP4 RX                      */
+
+/* --- INTRUSB bits [23:16] ----------------------------------------------- */
+#define WRAPPER_SUSPEND_BIT    0x00010000  /* bit 16: USB Suspend              */
+#define WRAPPER_RESUME_BIT     0x00020000  /* bit 17: USB Resume               */
+#define WRAPPER_RESET_BIT      0x00040000  /* bit 18: USB Reset                */
+#define WRAPPER_SOF_BIT        0x00080000  /* bit 19: Start of Frame (1 ms)    */
+#define WRAPPER_CONNECT_BIT    0x00100000  /* bit 20: USB Connect              */
+#define WRAPPER_DISCONNECT_BIT 0x00200000  /* bit 21: USB Disconnect           */
+
+/* --- Convenience masks -------------------------------------------------- */
+#define INTRTX_MASK        0x000000FF  /* All TX endpoint bits                */
+#define INTRRX_MASK        0x0000FF00  /* All RX endpoint bits                */
+#define INTRUSB_MASK       0x00FF0000  /* All bus-event bits                  */
 
 void EP0IntHandler(uint32_t wrapperSrc);
 
@@ -644,7 +696,7 @@ void app_run(void) {
     debug_timer++;
     if (debug_timer >= 100000) { 
         debug_timer = 0;
-        ft_printf("SOF count: %u, g_USBEndpointDataAvailCount: %d, g_tx_end_count: %d, g_rx_end_count: %d", g_sof_count, g_USBEndpointDataAvailCount, g_tx_end_count, g_rx_end_count);
+        //ft_printf("SOF count: %u, g_USBEndpointDataAvailCount: %u, g_tx_end_count: %u, g_rx_end_count: %u, g_usb_rx_err_count: %u", g_sof_count, g_USBEndpointDataAvailCount, g_tx_end_count, g_rx_end_count,g_usb_rx_err_count);
         //print_detected_interrupts();
     }
 }
@@ -690,15 +742,24 @@ void USB0DeviceIntHandler(void) {
     /* Read & discard Mentor INTRUSB to clear core-level bits */
     (void)HWREGB(USB0_BASE + USB_0_IS);
 
-    add_to_detected_interrupts(wrapperSrc);
+    //add_to_detected_interrupts(wrapperSrc);
+
 
     EP0IntHandler(wrapperSrc);
-    // Solo procesar OUT cuando realmente llegó un paquete EP2:
+
+    /* Only drain the OUT FIFO when EP2 actually received a packet.
+     * EP2_RX_BIT (0x00000400, bit 10) is INTRRX[2] in the wrapper — it is
+     * distinct from WRAPPER_RESET_BIT (0x00040000, bit 18, INTRUSB[2]).
+     * Calling ProcessOut on every interrupt caused the RX FIFO to back up
+     * (RXCOUNT reaching 8190) because reads happened without a real packet. */
+    // contar acas
+
     if (wrapperSrc & EP2_RX_BIT) {
+        g_rx_end_count++;
         USBAudio_ProcessOut();
     }
 
-    tripleAck();
+    tripleAck(wrapperSrc);
 }
 
 
