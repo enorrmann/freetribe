@@ -150,8 +150,8 @@ volatile int32_t g_last_dsp_sample = 0;
 volatile uint32_t g_sof_count = 0;
 volatile uint32_t g_usb_err_count = 0;
 volatile uint32_t g_ipc_err_count = 0;
-uint32_t g_tx_end_count = 0;
-uint32_t g_rx_end_count = 0;
+volatile uint32_t g_tx_end_count = 0;
+volatile uint32_t g_rx_end_count = 0;
 volatile uint32_t g_usb_rx_err_count = 0;
 
 
@@ -443,9 +443,6 @@ void EP0IntHandler(uint32_t wrapperSrc) {
     /* Read endpoint status to clear pending EP interrupt bits */
     (void)USBIntStatusEndpoint(USB0_BASE);
     
-    if (wrapperSrc & EP1_TX_BIT) { // solo contar si es un end transmission
-        g_tx_end_count++;
-    }
 
     if (wrapperSrc & WRAPPER_RESET_BIT) {
         pendingAddress = 0;
@@ -457,12 +454,6 @@ void EP0IntHandler(uint32_t wrapperSrc) {
         USBDevAddrSet(USB0_BASE, 0);
     }
 
-    /* SOF - Start of Frame (wrapper bit 19) */
-    if (wrapperSrc & WRAPPER_SOF_BIT) {
-        /* Send isochronous audio each 1ms frame */
-        g_sof_count++;
-        USBAudio_SendCapture();
-    }
 
     /* EP0 handling */
     if (csrl0 & 0x01) { /* RXRDY */
@@ -758,6 +749,18 @@ void USB0DeviceIntHandler(void) {
         g_rx_end_count++;
         USBAudio_ProcessOut();
     }
+
+    if (wrapperSrc & EP1_TX_BIT) { // solo contar si es un end transmission
+        g_tx_end_count++;
+    }
+
+    /* SOF - Start of Frame (wrapper bit 19) */
+    if (wrapperSrc & WRAPPER_SOF_BIT) {
+        /* Send isochronous audio each 1ms frame */
+        g_sof_count++;
+        USBAudio_SendCapture();
+    }
+
 
     tripleAck(wrapperSrc);
 }
