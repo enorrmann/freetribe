@@ -126,6 +126,7 @@ uint32_t g_dsp_buffer_index = 0;
 #define MAX_DETECTED_INTERRUPTS 64
 uint32_t detected_interrupt[MAX_DETECTED_INTERRUPTS];
 uint32_t detected_interrupt_count =  0;
+uint32_t g_USBEndpointDataAvailCount = 0;
 
 /*----- Types ---------------------------------------------------------*/
 
@@ -150,6 +151,7 @@ volatile uint32_t g_sof_count = 0;
 volatile int g_usb_err_count = 0;
 volatile int g_ipc_err_count = 0;
 int g_tx_end_count = 0;
+int g_rx_end_count = 0;
 
 
 static void tripleAck() {
@@ -343,8 +345,11 @@ static void USBAudio_ProcessOut(void) {
         return;
 
     uint32_t count = USBEndpointDataAvail(USB0_BASE, AUDIO_EP_OUT);
-    if (count == 0)
-        return;
+    if (count == 0){
+        USBDevEndpointDataAck(USB0_BASE, AUDIO_EP_OUT, false);
+    } else {
+        g_USBEndpointDataAvailCount=count; // last count
+    }
 
     uint32_t len = count;
     if (len > AUDIO_EP_MAX_PACKET_SIZE)
@@ -370,6 +375,8 @@ static void USBAudio_ProcessOut(void) {
 #define WRAPPER_RESET_BIT  0x00040000  /* INTR_SRC bit 18 */
 #define WRAPPER_SOF_BIT    0x00080000  /* INTR_SRC bit 19 */
 #define EP1_TX_BIT         0x00000002  /* Bit 1: Endpoint 1 Transmit Complete */
+#define EP2_RX_BIT         0x00000400  /* bit 10: INTRRX EP2 → bits [15:8] del wrapper */
+
 
 void EP0IntHandler(uint32_t wrapperSrc);
 
@@ -386,7 +393,6 @@ void EP0IntHandler(uint32_t wrapperSrc) {
     
     if (wrapperSrc & EP1_TX_BIT) { // solo contar si es un end transmission
         g_tx_end_count++;
-
     }
 
     if (wrapperSrc & WRAPPER_RESET_BIT) {
@@ -636,10 +642,10 @@ void app_run(void) {
 
     static int debug_timer = 0;
     debug_timer++;
-    if (debug_timer >= 1000000) { 
+    if (debug_timer >= 100000) { 
         debug_timer = 0;
-        //ft_printf("SOF count: %u, USB send errors: %d, g_tx_end_count: %d", g_sof_count, g_usb_err_count, g_tx_end_count);
-        print_detected_interrupts();
+        ft_printf("SOF count: %u, g_USBEndpointDataAvailCount: %d, g_tx_end_count: %d, g_rx_end_count: %d", g_sof_count, g_USBEndpointDataAvailCount, g_tx_end_count, g_rx_end_count);
+        //print_detected_interrupts();
     }
 }
 
@@ -686,9 +692,12 @@ void USB0DeviceIntHandler(void) {
 
     add_to_detected_interrupts(wrapperSrc);
 
-
     EP0IntHandler(wrapperSrc);
-    USBAudio_ProcessOut();
+    // Solo procesar OUT cuando realmente llegó un paquete EP2:
+    if (wrapperSrc & EP2_RX_BIT) {
+        USBAudio_ProcessOut();
+    }
+
     tripleAck();
 }
 
