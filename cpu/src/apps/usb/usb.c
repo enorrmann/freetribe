@@ -10,6 +10,8 @@
  * @file    usb.c
  *
  * @brief   Minimal bare-metal USB CDC (Serial) example application for Freetribe.
+ * tested with tio /dev/ttyACM0
+ * 
  */
 
 /*----- Includes -----------------------------------------------------*/
