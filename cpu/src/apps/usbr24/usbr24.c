@@ -93,14 +93,6 @@ typedef struct __attribute__((packed)) {
     uint16_t wLength;
 } USB_SetupPacket;
 
-// EP definitions
-// NOTE: EP1 is configured as BULK OUT (host -> device) and
-//       EP2 is configured as BULK IN (device -> host). Keep these
-//       macros consistent with USB_REQ_SET_CONFIGURATION below and
-//       with configDescriptor's endpoint addresses (0x01 OUT, 0x82 IN).
-#define CDC_EP_OUT USB_EP_1
-#define CDC_EP_IN USB_EP_2
-#define CDC_EP_INT USB_EP_3
 
 USB_SetupPacket g_setup_packets[100];
 
