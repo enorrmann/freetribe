@@ -104,73 +104,130 @@ typedef struct __attribute__((packed)) {
 
 USB_SetupPacket g_setup_packets[100];
 
-/// este no lo todo
-static const uint8_t devQualDescriptor[] = {10, 6, 0x00, 0x02, 0x02, 0x00, 0x00, 64, 1, 0};
 
-static const uint8_t deviceDescriptor[] = {
-    18,   // bLength
-    0x01, // DEVICE
+/* begin device descriptors */
 
-    0x00, 0x02, // USB 2.0
-
-    0xFF, // Vendor Specific
-    0x00, 0x00,
-
-    64, // EP0
-
-    0x86, 0x16, // VID = 0x1686
-    0xDE, 0x00, // PID = 0x00DE
-
-    0x00, 0x00, // bcdDevice
-
-    1, // Manufacturer String
-    2, // Product String
-    3, // Serial String
-
-    1 // Num Configurations
+// ---------------------------------------------------------
+// DEVICE QUALIFIER DESCRIPTOR
+// ---------------------------------------------------------
+static const uint8_t devQualDescriptor[] = {
+    10,         // bLength: 10 bytes
+    0x06,       // bDescriptorType: DEVICE_QUALIFIER (6)
+    0x00, 0x02, // bcdUSB: 0x0200 (USB 2.0)
+    0xFF,       // bDeviceClass: Vendor Specific (Ajustado de 0x02 a 0xFF)
+    0x00,       // bDeviceSubClass: 0
+    0x00,       // bDeviceProtocol: 0
+    64,         // bMaxPacketSize0: 64 bytes
+    1,          // bNumConfigurations: 1
+    0           // bReserved: 0
 };
+// ---------------------------------------------------------
+// DESCRIPTOR DE DISPOSITIVO
+// ---------------------------------------------------------
+static const uint8_t deviceDescriptor[] = {
+    18,         // bLength: 18
+    0x01,       // bDescriptorType: DEVICE
+    0x00, 0x02, // bcdUSB: 0x0200
+    0xFF,       // bDeviceClass: Vendor Specific (0xff)
+    0x00,       // bDeviceSubClass: 0
+    0x00,       // bDeviceProtocol: 0
+    64,         // bMaxPacketSize0: 64
+    0x86, 0x16, // idVendor: 0x1686 (ZOOM Corporation)
+    0xDE, 0x00, // idProduct: 0x00de
+    0x00, 0x00, // bcdDevice: 0x0000
+    1,          // iManufacturer: 1
+    2,          // iProduct: 2
+    3,          // iSerialNumber: 3
+    1           // bNumConfigurations: 1
+};
+
+// ---------------------------------------------------------
+// DESCRIPTOR DE CONFIGURACIÓN Y ENDPOINTS
+// ---------------------------------------------------------
 static const uint8_t configDescriptor[] = {
+    // CONFIGURATION DESCRIPTOR
+    9,          // bLength: 9
+    2,          // bDescriptorType: CONFIGURATION (0x02)
+    46, 0,      // wTotalLength: 46
+    1,          // bNumInterfaces: 1
+    1,          // bConfigurationValue: 1
+    0,          // iConfiguration: 0
+    0x80,       // Configuration bmAttributes: 0x80
+    0xF0,       // bMaxPower: 240 (480mA)
 
-    // Configuration Descriptor
-    9,     // bLength
-    2,     // CONFIGURATION
-    46, 0, // Total length
-    1,     // Interfaces
-    1,     // Configuration value
-    0,     // String index
-    0x80,  // Bus powered
-    0xF0,  // 480 mA
+    // INTERFACE DESCRIPTOR (0.0)
+    9,          // bLength: 9
+    4,          // bDescriptorType: INTERFACE (0x04)
+    0,          // bInterfaceNumber: 0
+    0,          // bAlternateSetting: 0
+    4,          // bNumEndpoints: 4
+    0xFF,       // bInterfaceClass: Vendor Specific (0xff)
+    0xFF,       // bInterfaceSubClass: 0xff
+    0x00,       // bInterfaceProtocol: 0x00
+    0,          // iInterface: 0
 
-    // Interface Descriptor
-    9, 4,
-    0, // Interface number
-    0,
-    4, // Four endpoints
+    // ENDPOINT DESCRIPTOR (EP1 OUT)
+    7,          // bLength: 7
+    5,          // bDescriptorType: ENDPOINT (0x05)
+    0x01,       // bEndpointAddress: 0x01 OUT
+    0x02,       // bmAttributes: Bulk-Transfer (0x02)
+    0x00, 0x02, // wMaxPacketSize: 512
+    0,          // bInterval: 0
 
-    0xFF, // Vendor Specific
-    0xFF, 0x00,
+    // ENDPOINT DESCRIPTOR (EP2 IN)
+    7,          // bLength: 7
+    5,          // bDescriptorType: ENDPOINT (0x05)
+    0x82,       // bEndpointAddress: 0x82 IN
+    0x02,       // bmAttributes: Bulk-Transfer (0x02)
+    0x00, 0x02, // wMaxPacketSize: 512
+    0,          // bInterval: 0
 
-    0,
+    // ENDPOINT DESCRIPTOR (EP3 OUT)
+    7,          // bLength: 7
+    5,          // bDescriptorType: ENDPOINT (0x05)
+    0x03,       // bEndpointAddress: 0x03 OUT
+    0x03,       // bmAttributes: Interrupt-Transfer (0x03)
+    0x40, 0x00, // wMaxPacketSize: 64
+    16,         // bInterval: 16
 
- // Endpoint 1 OUT Bulk
-    7, 5, 0x01, 0x02, 0x40, 0x00, 0,
+    // ENDPOINT DESCRIPTOR (EP4 IN)
+    7,          // bLength: 7
+    5,          // bDescriptorType: ENDPOINT (0x05)
+    0x84,       // bEndpointAddress: 0x84 IN
+    0x03,       // bmAttributes: Interrupt-Transfer (0x03)
+    0x40, 0x00, // wMaxPacketSize: 64
+    16          // bInterval: 16
+};
 
-    // Endpoint 2 IN Bulk
-    7, 5, 0x82, 0x02, 0x40, 0x00, 0,
+// ---------------------------------------------------------
+// STRINGS (Formato UTF-16 Little Endian)
+// ---------------------------------------------------------
+// Idioma (Inglés)
+static const uint8_t string0[] = {4, 3, 0x09, 0x04}; 
 
-    // Endpoint 3 OUT Interrupt
-    7, 5, 0x03, 0x03, 0x40, 0x00, 16,
+// iManufacturer (1): "ZOOM Corporation"
+static const uint8_t string1[] = {
+    34, 3, 
+    'Z', 0, 'O', 0, 'O', 0, 'M', 0, ' ', 0, 'C', 0, 'o', 0, 'r', 0, 
+    'p', 0, 'o', 0, 'r', 0, 'a', 0, 't', 0, 'i', 0, 'o', 0, 'n', 0
+}; 
 
-    // Endpoint 4 IN Interrupt
-    7, 5, 0x84, 0x03, 0x40, 0x00, 16};
+// iProduct (2): "R24"
+static const uint8_t string2[] = {
+    8, 3, 
+    'R', 0, '2', 0, '4', 0
+}; 
 
-static const uint8_t string0[] = {4, 3, 0x09, 0x04};
-static const uint8_t string1[] = {20, 3, 'F', 0, 'r', 0, 'e', 0, 'e', 0, 't', 0, 'r', 0, 'i', 0, 'b', 0, 'e', 0};
-static const uint8_t string2[] = {16, 3, 'C', 0, 'D', 0, 'C', 0, ' ', 0, 'A', 0, 'C', 0, 'M', 0};
-static const uint8_t string3[] = {10, 3, '1', 0, '2', 0, '3', 0, '4', 0};
+// iSerialNumber (3): "0" (Genérico, ya que no está en la captura)
+static const uint8_t string3[] = {
+    4, 3, 
+    '0', 0
+};
 
 static const uint8_t *const strings[] = {string0, string1, string2, string3};
 static const uint8_t stringLens[] = {sizeof(string0), sizeof(string1), sizeof(string2), sizeof(string3)};
+
+/* end strings*/
 
 static uint16_t pendingAddress = 0;
 static uint8_t pendingSetAddress = 0;
@@ -197,8 +254,12 @@ void USB0DeviceIntHandler(void) {
         isConfigured = 0;
         USBDevAddrSet(USB0_BASE, 0);
     }
-
+static uint32_t last_statusEp = 0;
     uint32_t statusEp = USBIntStatusEndpoint(USB0_BASE);
+    if (last_statusEp!=statusEp) {
+        last_statusEp=statusEp;
+         ft_printf("USB: EP status=%08x\n", statusEp);
+    }
 
     // EP0 handling
     if (csrl0 & 0x01) { // RXRDY
@@ -263,12 +324,12 @@ void USB0DeviceIntHandler(void) {
                     //
                     // EP1 OUT - Bulk
                     //
-                    USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, 64, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
+                    USBDevEndpointConfigSet(USB0_BASE, USB_EP_1, 512, USB_EP_MODE_BULK | USB_EP_DEV_OUT);
 
                     //
                     // EP2 IN - Bulk
                     //
-                    USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, 64, USB_EP_MODE_BULK | USB_EP_DEV_IN);
+                    USBDevEndpointConfigSet(USB0_BASE, USB_EP_2, 512, USB_EP_MODE_BULK | USB_EP_DEV_IN);
 
                     //
                     // EP3 OUT - Interrupt
@@ -385,9 +446,8 @@ t_status app_init(void) {
     cfgchip2 = HWREG(SOC_SYSCFG_0_REGS + SYSCFG0_CFGCHIP2);
     ////ft_printff("USB: PHY ON & Configured (CFGCHIP2=%08x)\n", cfgchip2);
 
-    // Force Full Speed (disable High Speed)
-    HWREGB(USB0_BASE + USB_0_POWER) &= ~0x20;
-    ////ft_printff("USB: Forced Full Speed\n");
+    // Enable High Speed
+    HWREGB(USB0_BASE + USB_0_POWER) |= 0x20;
 
     IntRegister(SYS_INT_USB0, USB0DeviceIntHandler);
     IntChannelSet(SYS_INT_USB0, 2);
@@ -418,6 +478,7 @@ void app_run(void) {
         ledState = !ledState;
         ft_set_led(LED_PLAY, ledState ? 255 : 0);
         ft_printf("USB: RXRDY count=%u , CSR0 count=%u, last CSR0=%04x, rxrdy_ep1_count=%u", rxrdy_count, csrl0Count, g_last_csrl0, rxrdy_ep1_count);
+
     }
 
     // Manual poll (safer than current interrupt config which causes hangs)
