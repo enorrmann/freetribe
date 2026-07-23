@@ -43,14 +43,11 @@ uint32_t rxrdy_count = 0;
 uint32_t csrl0Count = 0;
 uint16_t g_last_csrl0 = 0;
 
-/*----- USB Serial Buffer --------------------------------------------*/
-
-#define USB_SERIAL_BUF_SIZE 512
-static uint8_t g_usbRxBuf[USB_SERIAL_BUF_SIZE];
-static uint32_t g_usbRxHead = 0;
-static uint32_t g_usbRxTail = 0;
+static uint32_t rxrdy_ep1_count = 0;
 
 static uint8_t isConfigured = 0;
+
+static void ProcessCommand(char *cmd);
 
 static void EP0SendData(void) {
     uint32_t sendLen = (g_uEP0Len > 64) ? 64 : g_uEP0Len;
@@ -97,8 +94,12 @@ typedef struct __attribute__((packed)) {
 } USB_SetupPacket;
 
 // EP definitions
-#define CDC_EP_IN USB_EP_1
-#define CDC_EP_OUT USB_EP_2
+// NOTE: EP1 is configured as BULK OUT (host -> device) and
+//       EP2 is configured as BULK IN (device -> host). Keep these
+//       macros consistent with USB_REQ_SET_CONFIGURATION below and
+//       with configDescriptor's endpoint addresses (0x01 OUT, 0x82 IN).
+#define CDC_EP_OUT USB_EP_1
+#define CDC_EP_IN USB_EP_2
 #define CDC_EP_INT USB_EP_3
 
 USB_SetupPacket g_setup_packets[100];
@@ -151,11 +152,11 @@ static const uint8_t configDescriptor[] = {
 
     0,
 
-    // Endpoint 1 OUT Bulk
-    7, 5, 0x01, 0x02, 0x00, 0x02, 0,
+ // Endpoint 1 OUT Bulk
+    7, 5, 0x01, 0x02, 0x40, 0x00, 0,
 
     // Endpoint 2 IN Bulk
-    7, 5, 0x82, 0x02, 0x00, 0x02, 0,
+    7, 5, 0x82, 0x02, 0x40, 0x00, 0,
 
     // Endpoint 3 OUT Interrupt
     7, 5, 0x03, 0x03, 0x40, 0x00, 16,
@@ -242,6 +243,17 @@ void USB0DeviceIntHandler(void) {
                     }
                     break;
                 }
+                case USB_REQ_GET_STATUS: {
+                    static const uint8_t statusResp[2] = {0x00, 0x00}; // bus-powered, no remote wakeup
+                    if (setup.wLength >= 2) {
+                        g_pEP0Data = statusResp;
+                        g_uEP0Len = 2;
+                        EP0SendData();
+                    } else {
+                        USBDevEndpointDataAck(USB0_BASE, USB_EP_0, true);
+                    }
+                    break;
+                }
                 case USB_REQ_SET_ADDRESS:
                     pendingAddress = setup.wValue;
                     pendingSetAddress = 1;
@@ -314,19 +326,21 @@ void USB0DeviceIntHandler(void) {
 
     last_csrl0 = csrl0;
 
-    if (HWREGH(USB0_BASE + USB_0_RXCSRL2) & 0x01) { // RXRDY
+    // ---- Bulk OUT data from host arrives on EP1 (RXCSRL1 / RXCOUNT1) ----
+    // EP2 is configured as BULK IN (device -> host), so it never has
+    // incoming data; polling RXCSRL2 here was the bug that made the
+    // host hang (it filled EP1's OUT FIFO and nobody ever drained it).
+    if (HWREGH(USB0_BASE + USB_0_RXCSRL1) & 0x01) { // RXRDY on EP1 OUT
 
-        // USBSerial_Printf("RX IRQ\r\n");  //acas1
-
-        uint32_t count = HWREGH(USB0_BASE + USB_0_RXCOUNT2);
+        uint32_t count = HWREGH(USB0_BASE + USB_0_RXCOUNT1);
+        rxrdy_ep1_count++;
 
         for (uint32_t i = 0; i < count; i++) {
-            uint8_t c = HWREGB(USB0_BASE + 0x20 + (2 * 4));
-           // usb_rx_push(c);
+            uint8_t c = HWREGB(USB0_BASE + 0x20 + (1 * 4));
         }
 
         // Clear RXRDY AFTER reading FIFO
-        HWREGH(USB0_BASE + USB_0_RXCSRL2) &= ~0x01;
+        HWREGH(USB0_BASE + USB_0_RXCSRL1) &= ~0x01;
     }
 
     // Clear interrupt in AINTC and OTG wrapper to prevent infinite loop
@@ -336,35 +350,7 @@ void USB0DeviceIntHandler(void) {
 
 /*----- Command Processing -------------------------------------------*/
 
-static void ProcessCommand(char *cmd) {
-    if (strlen(cmd) == 0)
-        return;
-
-    if (strcmp(cmd, "help") == 0) {
-        USBSerial_Printf("Available commands:\r\n");
-        USBSerial_Printf("  help          - Show this help\r\n");
-        USBSerial_Printf("  info          - Show device info\r\n");
-        USBSerial_Printf("  echo <msg>    - Echo message\r\n");
-        USBSerial_Printf("  led <val>     - Set Play LED brightness (0-255)\r\n");
-        USBSerial_Printf("  reboot        - Shutdown system\r\n");
-    } else if (strcmp(cmd, "info") == 0) {
-        USBSerial_Printf("Manufacturer: Freetribe\r\n");
-        USBSerial_Printf("Product: CDC ACM Command Service\r\n");
-        USBSerial_Printf("Serial: 1234\r\n");
-    } else if (strncmp(cmd, "echo ", 5) == 0) {
-        USBSerial_Printf("%s\r\n", cmd + 5);
-    } else if (strncmp(cmd, "led ", 4) == 0) {
-        int val = atoi(cmd + 4);
-        ft_set_led(LED_PLAY, (uint8_t)val);
-        USBSerial_Printf("LED Play set to %d\r\n", val);
-    } else if (strcmp(cmd, "reboot") == 0) {
-        USBSerial_Printf("Rebooting...\r\n");
-        ft_shutdown();
-    } else {
-        USBSerial_Printf("Unknown command: %s\r\n", cmd);
-    }
-    USBSerial_Printf("> ");
-}
+static void ProcessCommand(char *cmd) {}
 
 #define BUTTON_PLAY 0x2
 
@@ -431,8 +417,7 @@ void app_run(void) {
         static int ledState = 0;
         ledState = !ledState;
         ft_set_led(LED_PLAY, ledState ? 255 : 0);
-        //            USBSerial_Printf("TEST"); // este funciona
-        ft_printf("USB: RXRDY count=%u , CSR0 count=%u, last CSR0=%04x", rxrdy_count, csrl0Count, g_last_csrl0);
+        ft_printf("USB: RXRDY count=%u , CSR0 count=%u, last CSR0=%04x, rxrdy_ep1_count=%u", rxrdy_count, csrl0Count, g_last_csrl0, rxrdy_ep1_count);
     }
 
     // Manual poll (safer than current interrupt config which causes hangs)
