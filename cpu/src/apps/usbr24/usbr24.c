@@ -44,6 +44,8 @@ uint32_t csrl0Count = 0;
 uint16_t g_last_csrl0 = 0;
 
 static uint32_t rxrdy_ep1_count = 0;
+uint32_t csrl2Count = 0;
+uint32_t csrl3Count = 0;
 
 static uint8_t isConfigured = 0;
 
@@ -225,8 +227,20 @@ static uint16_t pendingAddress = 0;
 static uint8_t pendingSetAddress = 0;
 static uint8_t cdcLineCoding[7] = {0x00, 0xC2, 0x01, 0x00, 0, 0, 8}; // 115200 8N1
 
+static void tripleAck() ;
 void USB0DeviceIntHandler(void) {
     uint16_t csrl0 = HWREGH(USB0_BASE + USB_0_CSRL0);
+
+    uint16_t csrl2 = HWREGH(USB0_BASE + USB_0_RXCSRL2); // read USB Receive Control and Status Endpoint 2 Low
+
+    if (csrl2 & USB_RXCSRL2_RXRDY) { 
+        csrl2Count++;
+    }// vino algo por el ep 2
+    if (csrl2 & USB_RXCSRL3_RXRDY) { 
+        csrl3Count++;
+    }// vino algo por el ep 3
+
+
     g_last_csrl0 = csrl0;
     static uint16_t last_csrl0 = 0;
 
@@ -469,14 +483,30 @@ void app_run(void) {
         static int ledState = 0;
         ledState = !ledState;
         ft_set_led(LED_PLAY, ledState ? 255 : 0);
-        ft_printf("USB: RXRDY count=%u , CSR0 count=%u, last CSR0=%04x, rxrdy_ep1_count=%u", rxrdy_count, csrl0Count, g_last_csrl0, rxrdy_ep1_count);
+        //ft_printf("USB: RXRDY count=%u , CSR0 count=%u, last CSR0=%04x, rxrdy_ep1_count=%u", rxrdy_count, csrl0Count, g_last_csrl0, rxrdy_ep1_count);
+        ft_printf("USB: CSR2 count=%u , CSR3 count=%u", csrl2Count, csrl3Count);
 
     }
 
     // Manual poll (safer than current interrupt config which causes hangs)
     USB0DeviceIntHandler();
+    tripleAck();
 
     if (per_gpio_get_indexed(GPIO_POWER_BUTTON) == 0) {
         ft_shutdown();
     }
+}
+static void tripleAck() {
+
+    // . LIMPIAR EL AINTC (Nivel 3 - Sistema)
+    IntSystemStatusClear(SYS_INT_USB0);
+
+    // . EOI (End Of Interrupt) - EL "KICK" FINAL
+    // Sin esto, el Wrapper nunca libera la línea de IRQ hacia el CPU
+    HWREG(USB_0_OTGBASE + USB_0_END_OF_INTR) = 0;
+
+    // . LIMPIAR EL WRAPPER DE TI (Nivel 2)
+    // El registro INTR_SRC_CLEAR (0x28) requiere escribir 1s para limpiar
+    // Le pasamos statusCtrl para limpiar los bits de RESET, SUSPEND, etc.
+    HWREG(USB_0_OTGBASE + USB_0_INTR_SRC_CLEAR) = 0xFFFFFFFF;
 }
