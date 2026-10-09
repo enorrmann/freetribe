@@ -4,6 +4,7 @@ binary/
 build/
 scripts/
 docs/
+!cpu/src/apps/tracker/docs/
 dsp/src/common/*
 TODO.txt
 .cache
